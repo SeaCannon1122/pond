@@ -1,17 +1,15 @@
-#include <pond/pond.hpp>
-#include <gst/gst.h>
-#include <gst/app/gstappsrc.h>
+#pragma once
 
-class GstServer : public pond::ModuleBase
+#include <pond/pond.hpp>
+
+class TemplateModule : public pond::ModuleBase
 {
 public:
-    GstServer();
     virtual pond_result onStartup() override;
     virtual void onShutdown() override;
     virtual pond_result onActivate() override;
     virtual void onDeactivate() override;
     virtual void onFrame() override;
 private:
-    GstElement* pipeline;
-    GstElement* appsrc;
+
 };

@@ -54,6 +54,10 @@ public:
         if (free_index > slot) free_index = slot;
     }
 
+    uint32_t get_length() { return capacity; }
+
+    bool is_used(uint32_t slot) { return elements[slot].in_use;}
+
 private:
     uint32_t capacity;  
     _SlotArrayElement<T>* elements;

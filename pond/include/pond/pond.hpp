@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <memory>
 #include <functional>
 #include "ring_buffer_queue.hpp"
 #include "pond.h"
@@ -23,7 +24,7 @@ namespace pond
         void distribute(void* data);
     private:
         int32_t _id;
-        pond_module_api _p_m_api; 
+        pond_api _pond_api; 
     };
 
     class Receiver
@@ -33,8 +34,8 @@ namespace pond
         void destroy();
     private:
         int32_t _id;
-        pond_module_api _p_m_api;
-        std::function<void(void*)> _callback;
+        pond_api _pond_api;
+        std::unique_ptr<std::function<void(void*)>> _callback;
     };
 
     class ModuleBase
@@ -47,48 +48,52 @@ namespace pond
         virtual void onFrame();
         void shutdown();
         Distributor createDistributor(const std::string& topic);
-        Receiver createReceiver(const std::string& topic, std::function<void(void*)>);
+        Receiver createReceiver(const std::string& topic, std::function<void(void*)> callback);
 
-        pond_module_api _p_m_api; 
+        pond_api _pond_api; 
     };
-
 }
 
-#define POND_MODULE_CPP_DECLARE(cls)\
-namespace pond\
-{\
-pond_result pond_module_on_startup(pond_module_api* api)\
+#define POND_LOG(format, ...) _pond_api.log(_pond_api.ctx, (uint8_t*)format, ##__VA_ARGS__)
+
+#define POND_MODULE_CPP_DECLARE(cls, _name, _info)\
+pond_result pond_module_##cls##_on_startup(pond_api* api)\
 {\
     cls* module = new cls();\
     api->module_set_user_ptr(api->ctx, module);\
-    module->_p_m_api = *api;\
+    module->_pond_api = *api;\
     return module->onStartup();\
 }\
 \
-void pond_module_on_shutdown(pond_module_api* api)\
+void pond_module_##cls##_on_shutdown(pond_api* api)\
 {\
     cls* module = (cls*)api->module_get_user_ptr(api->ctx);\
     module->onShutdown();\
     delete module;\
 }\
 \
-pond_result pond_module_on_activate(pond_module_api* api)\
+pond_result pond_module_##cls##_on_activate(pond_api* api)\
 {\
     cls* module = (cls*)api->module_get_user_ptr(api->ctx);\
     return module->onActivate();\
 }\
 \
-void pond_module_on_deactivate(pond_module_api* api)\
+void pond_module_##cls##_on_deactivate(pond_api* api)\
 {\
     cls* module = (cls*)api->module_get_user_ptr(api->ctx);\
     module->onDeactivate();\
 }\
 \
-void pond_module_on_frame(pond_module_api* api)\
+void pond_module_##cls##_on_frame(pond_api* api)\
 {\
     cls* module = (cls*)api->module_get_user_ptr(api->ctx);\
     module->onFrame();\
 }\
+POND_MODULE_DECLARE(cls, _name, _info)
+
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION() \
+namespace pond\
+{\
 \
 pond_result ModuleBase::onStartup() {return POND_SUCCESS;}\
 void ModuleBase::onShutdown() {}\
@@ -98,50 +103,45 @@ void ModuleBase::onFrame() {}\
 \
 void ModuleBase::shutdown()\
 {\
-    _p_m_api.module_shutdown(_p_m_api.ctx);\
+    _pond_api.module_shutdown(_pond_api.ctx);\
 }\
 \
 Distributor ModuleBase::createDistributor(const std::string& topic)\
 {\
     Distributor d;\
-    d._p_m_api = _p_m_api;\
-    d._id = _p_m_api.create_distributor(_p_m_api.ctx, (uint8_t*)topic.c_str());\
+    d._pond_api = _pond_api;\
+    d._id = _pond_api.create_distributor(_pond_api.ctx, (uint8_t*)topic.c_str());\
     return d;\
 }\
 \
 void Distributor::destroy()\
 {\
-    _p_m_api.destroy_distributor(_p_m_api.ctx, _id);\
+    _pond_api.destroy_distributor(_pond_api.ctx, _id);\
 }\
 \
 void Distributor::distribute(void* data)\
 {\
-    _p_m_api.distribute(_p_m_api.ctx, _id, data);\
+    _pond_api.distribute(_pond_api.ctx, _id, data);\
 }\
 \
-
-void pond_cpp_callback(pond_module_api* api, void* callback_pointer, void* data)
-{
-
-}
-
-struct
-
-Receiver ModuleBase::createReceiver(const std::string& topic, std::function<void(void*)>)\
+void pond_cpp_callback(pond_api* api, void* callback_pointer, void* data)\
+{\
+    auto* callback = static_cast<std::function<void(void*)>*>(callback_pointer);\
+    (*callback)(data);\
+}\
+\
+Receiver ModuleBase::createReceiver(const std::string& topic, std::function<void(void*)> callback)\
 {\
     Receiver r;\
-    r._p_m_api = _p_m_api;\
-    r._id = _p_m_api.create_receiver(_p_m_api.ctx, (uint8_t*)topic.c_str(), pond_cpp_callback);\
-    return d;\
-}\
-Receiver ModuleBase::createReceiver(const std::string& topic)\
-{\
-    Distributor d;\
-    
+    r._pond_api = _pond_api;\
+    r._callback = std::make_unique<std::function<void(void*)>>(std::move(callback));\
+    r._id = _pond_api.create_receiver(_pond_api.ctx, (uint8_t*)topic.c_str(), pond_cpp_callback, r._callback.get());\
+    return r;\
 }\
 \
 void Receiver::destroy()\
 {\
-    _p_m_api.destroy_receiver(_p_m_api.ctx, _id);\
+    _pond_api.destroy_receiver(_pond_api.ctx, _id);\
+    _callback.reset();\
 }\
 }
