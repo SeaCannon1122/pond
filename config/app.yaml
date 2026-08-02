@@ -1,0 +1,12 @@
+pond:
+  camera_gripper_modules:
+    module_count: 3
+    max_fps: 40
+    module0:
+      type: realsense_streamer
+      name: camera_gripper_driver
+    module1:
+      type: camera_gstreamer
+      name: camera_gripper_gstreamer
+    
+  
