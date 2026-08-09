@@ -16,17 +16,37 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-1.0)
 pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
 find_package(realsense2 REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(depthai REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(Pangolin REQUIRED)
+
+set(ORB_SLAM3_DIR ~/lib/ORB_SLAM3)
 
 add_library(quac_modules SHARED
   src/bundle.cpp
   src/gst_server.cpp
   src/realsense_driver.cpp
   src/usb_cam_driver.cpp
+  src/depthai_driver.cpp
+  src/orbslam3_module.cpp
+  src/ros2_bridge.cpp
 )
 
 target_include_directories(quac_modules PRIVATE
+
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/
+
   ${OPENCV_INCLUDE_DIRS}
   ${GST_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+
+  ${ORB_SLAM3_DIR}
+  ${ORB_SLAM3_DIR}/include
+  ${ORB_SLAM3_DIR}/include/CameraModels
+
+  ${ORB_SLAM3_DIR}/Thirdparty/Sophus
 )
 
 target_link_libraries(quac_modules
@@ -34,4 +54,27 @@ target_link_libraries(quac_modules
   ${GST_LIBRARIES}
   ${GST_APP_LIBRARIES}
   realsense2
+
+  ORB_SLAM3
+
+  realsense2
+  depthai::core
+  Eigen3::Eigen
+
+  pango_display
+  pango_windowing
+  pango_core
+
+  OpenGL::GL
+  GLEW::GLEW
+
+  pthread
+)
+
+target_link_directories(quac_modules PRIVATE
+  ${ORB_SLAM3_DIR}/lib
+)
+
+target_link_options(quac_modules PRIVATE
+  -Wl,--no-undefined
 )

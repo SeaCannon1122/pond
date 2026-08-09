@@ -1,13 +1,13 @@
 #include <pond/pond.hpp>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
-#include "wrapped_image_frame.hpp"
+#include <quac_modules/interfaces/wrapped_image_frame.hpp>
 
 class GstServer : public pond::ModuleBase
 {
 public:
-    virtual pond_result onActivate() override;
-    virtual void onDeactivate() override;
+    virtual pond_result onStartup() override;
+    virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
     GstElement* pipeline;
@@ -17,10 +17,10 @@ private:
 
 POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
 
-pond_result GstServer::onActivate()
+pond_result GstServer::onStartup()
 {
     POND_LOG("activating ...");
-    receiver = createReceiver("color", [this](void* data)
+    receiver = createReceiver("in", [this](void* data)
         {
             WrappedImageFrame* frame = (WrappedImageFrame*)data;
 
@@ -28,11 +28,13 @@ pond_result GstServer::onActivate()
         }
     );
 
+    gst_init(0, NULL);
+
     POND_LOG("activated");
     return POND_SUCCESS;
 }
 
-void GstServer::onDeactivate()
+void GstServer::onShutdown()
 {
     POND_LOG("deactivating ...");
     receiver.destroy();

@@ -1,28 +1,25 @@
-#include "template_module.hpp"
+#include <pond/pond.hpp>
 
-pond_result TemplateModule::onShutdown()
+class TemplateModule : public pond::ModuleBase
+{
+public:
+    virtual pond_result onStartup() override;
+    virtual void onShutdown() override;
+    virtual void onFrame() override;
+private:
+};
+
+POND_MODULE_CPP_DECLARE(TemplateModule, "template_module", "template info")
+
+pond_result TemplateModule::onStartup()
 {
     return POND_SUCCESS;
 }
 
 void TemplateModule::onShutdown()
 {
-    
-}
-
-pond_result TemplateModule::onActivate()
-{
-    return POND_SUCCESS;
-}
-
-void TemplateModule::onDeactivate()
-{
-
 }
 
 void TemplateModule::onFrame()
 {
-    
 }
-
-POND_MODULE_CPP_DECLARE(TemplateModule)

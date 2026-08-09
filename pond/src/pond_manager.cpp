@@ -1,11 +1,12 @@
 #include "pond_manager.hpp"
 
+
 PondManager::PondManager()
 {
     topics.create(32);
     distributor_topic_indicies.create(32);
 
-    printf("[POND MANAGER] Started\n"); fflush(stdout);
+    log("Started");
 }
 
 PondManager::~PondManager()
@@ -13,20 +14,11 @@ PondManager::~PondManager()
     topics.destroy();
     distributor_topic_indicies.destroy();
 
-    printf("[POND MANAGER] Stopped\n"); fflush(stdout);
+    log("Stopped");
 }
 
-void PondManager::load_module(
-    const std::string& runtime_name,
-    const std::string& bundle_name,
-    const std::string& module_name,
-    const std::string& thread_name
-)
+void PondManager::log(const std::string& message)
 {
-
-}
-
-void PondManager::unload_module(const std::string& runtime_name)
-{
-    
+    printf(("[POND_MANAGER] " + message + "\n").c_str());
+    fflush(stdout);
 }

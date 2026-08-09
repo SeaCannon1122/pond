@@ -1,0 +1,16 @@
+pond:
+  main_thread:
+    max_fps: 40
+    module0:
+      type: quac_modules/usb_cam_driver
+      name: usb_cam_driver
+      mappings:
+        "out": "image"
+      agrs: "0 640 480"
+      
+    module1:
+      type: quac_modules/gst_server
+      name: streaming_server
+      mappings:
+        "in": "127.0.0.1 5000 640 480"
+  

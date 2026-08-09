@@ -37,7 +37,7 @@ public:
         if (free_index == capacity)
         {
             capacity *= 2;
-            elements = realloc(elements, capacity);
+            elements = (_SlotArrayElement<T>*)realloc(elements, capacity);
             for (uint32_t i = free_index; i < capacity; i++) elements[i].in_use = false;
         }
 

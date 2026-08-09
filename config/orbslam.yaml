@@ -1,0 +1,13 @@
+pond:
+  camera_gripper_thread:
+    max_fps: 40
+    module0:
+      type: quac_modules/realsense_driver
+      name: camera_gripper_driver
+      mappings:
+    module1:
+      type: quac_modules/gst_server
+      name: camera_gripper_streaming_server
+      mappings:
+        "in": "camera_gripper/stereo_left"
+  
