@@ -1,7 +1,8 @@
+#include <memory>
 #include <pond/pond.hpp>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
-#include <quac_modules/interfaces/wrapped_image_frame.hpp>
+#include <pond/data_types.hpp>
 
 class GstServer : public pond::ModuleBase
 {
@@ -12,7 +13,7 @@ public:
 private:
     GstElement* pipeline;
     GstElement* appsrc;
-    pond::Receiver receiver;
+    pond::Receiver<ImgFrameSPtr> receiver;
 };
 
 POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
@@ -20,10 +21,10 @@ POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
 pond_result GstServer::onStartup()
 {
     POND_LOG("activating ...");
-    receiver = createReceiver("in", [this](void* data)
+    receiver = createReceiver<ImgFrameSPtr>(
+        {"in"},
+        [this](ImgFrameSPtr& frame)
         {
-            WrappedImageFrame* frame = (WrappedImageFrame*)data;
-
             POND_LOG("width %d height %d", frame->width, frame->height);
         }
     );

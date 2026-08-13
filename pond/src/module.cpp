@@ -31,9 +31,9 @@ void* _pond_get_user_ptr(pond_internal::ModuleContext* ctx)
     return ctx->manager->api_module_get_user_ptr(ctx->module);
 }
 
-int32_t _pond_create_distributor(pond_internal::ModuleContext* ctx, uint8_t* topic)
+int32_t _pond_create_distributor(pond_internal::ModuleContext* ctx, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names)
 {
-    return ctx->manager->api_create_distributor(ctx->module, topic);
+    return ctx->manager->api_create_distributor(ctx->module, topics, topic_count, topic_type_names);
 }
 
 void _pond_destroy_distributor(pond_internal::ModuleContext* ctx, uint32_t distributor)
@@ -41,14 +41,14 @@ void _pond_destroy_distributor(pond_internal::ModuleContext* ctx, uint32_t distr
     ctx->manager->api_destroy_distributor(ctx->module, distributor);
 }
 
-void _pond_distribute(pond_internal::ModuleContext* ctx, uint32_t distributor, void* data)
+void _pond_distribute(pond_internal::ModuleContext* ctx, uint32_t distributor, void** data)
 {
     ctx->manager->api_distribute(ctx->module,distributor, data);
 }
 
-int32_t _pond_create_receiver(pond_internal::ModuleContext* ctx, uint8_t* topic, pfn_pond_receiver_callback callback, void* callback_pointer)
+int32_t _pond_create_receiver(pond_internal::ModuleContext* ctx, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names, pfn_pond_receiver_callback callback, void* callback_pointer)
 {
-    return ctx->manager->api_create_receiver(ctx->module, topic, callback, callback_pointer);
+    return ctx->manager->api_create_receiver(ctx->module, topics, topic_count, topic_type_names, callback, callback_pointer);
 }
 
 void _pond_destroy_receiver(pond_internal::ModuleContext* ctx, uint32_t receiver)
@@ -152,7 +152,7 @@ void PondManager::load_module(
         thread_names_map[thread_name] = thread_id;
         pond_internal::Thread* thread = new pond_internal::Thread();
         thread->name = thread_name;
-        thread->thread = std::thread(&PondManager::thread_function, this, thread);
+        //thread->thread = std::thread(&PondManager::thread_function, this, thread);
 
         threads[thread_id] = thread;
     }

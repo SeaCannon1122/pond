@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define POND_MAX_SYNCHRONOUS_TOPIC_COUNT 16
+
 typedef enum pond_result
 {
     POND_SUCCESS,
@@ -78,7 +80,7 @@ typedef struct pond_api
     pfn_pond_destroy_receiver destroy_receiver;
 } pond_api;
 
-typedef pond_result (*pfn_pond_module_on_startup)(pond_api* api, uint32_t argc, uint8_t** argv);
+typedef pond_result (*pfn_pond_module_on_startup)(pond_api* api);
 typedef void (*pfn_pond_module_on_shutdown)(pond_api* api);
 
 typedef void (*pfn_pond_module_on_frame)(pond_api* api);

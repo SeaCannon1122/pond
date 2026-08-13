@@ -36,8 +36,6 @@ add_library(quac_modules SHARED
 
 target_include_directories(quac_modules PRIVATE
 
-  ${CMAKE_CURRENT_SOURCE_DIR}/include/
-
   ${OPENCV_INCLUDE_DIRS}
   ${GST_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}

@@ -1,5 +1,6 @@
 #include <pond/pond.hpp>
 #include <opencv2/opencv.hpp>
+#include <quac_modules/interfaces/wrapped_image_frame.hpp>
 
 class UsbCamDriver : public pond::ModuleBase
 {
@@ -9,7 +10,7 @@ public:
     virtual void onFrame() override;
 private:
     cv::VideoCapture cap;
-    pond::Distributor distributor;
+    pond::Distributor<std::shared_ptr<WrappedImageFrame>> distributor;
 };
 
 POND_MODULE_CPP_DECLARE(UsbCamDriver, "usb_cam_driver", "simple driver bridge for a usb camera")

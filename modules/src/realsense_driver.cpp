@@ -1,13 +1,13 @@
 #include <pond/pond.hpp>
 #include <librealsense2/rs.hpp>
-#include <quac_modules/interfaces//wrapped_image_frame.hpp>
+#include <quac_modules/interfaces/img_frame.hpp>
 #include <memory>
 
-class RealSenseWrappedImageFrame : public WrappedImageFrame
+class RealSenseImgFrame : public ImgFrame
 {
 public:
 
-    explicit RealSenseWrappedImageFrame(rs2::video_frame& frame_, const std::string& format_) : frame(frame_)
+    explicit RealSenseImgFrame(rs2::video_frame& frame_, const std::string& format_) : frame(frame_)
     {
 
         data = frame.get_data();
@@ -30,9 +30,7 @@ public:
 private:
     rs2::pipeline pipe;
     rs2::config cfg;
-    pond::Distributor color_distributor;
-    pond::Distributor left_distributor;
-    pond::Distributor right_distributor;
+    pond::Distributor<ImgFrameSPtr, ImgFrameSPtr, ImgFrameSPtr, ImgFrameSPtr> distributor;
 };
 
 POND_MODULE_CPP_DECLARE(RealsenseDriver, "realsense_driver", "driver for the intel realsense d435")
@@ -41,21 +39,18 @@ pond_result RealsenseDriver::onStartup()
 {
     POND_LOG("activating ...");
 
-    color_distributor = createDistributor("color");
-    left_distributor = createDistributor("left");
-    right_distributor = createDistributor("right");
+    distributor = createDistributor<ImgFrameSPtr, ImgFrameSPtr, ImgFrameSPtr, ImgFrameSPtr>({"color", "depth", "mono_left", "mono_right"});
     
-    uint32_t color_width = *parameter("color.width").getInt(1280);
-    uint32_t color_height = *parameter("color.height").getInt(720);
-    uint32_t mono_width = *parameter("mono.width").getInt(640);
-    uint32_t mono_height = *parameter("mono.height").getInt(480);
+    std::vector<int32_t> color_dims = *parameter("color.dims").getIntArray({1280, 720}, 2, 2);
+    std::vector<int32_t> depth_dims = *parameter("depth.dims").getIntArray({640, 480}, 2, 2);
+    std::vector<int32_t> mono_dims = *parameter("mono.dims").getIntArray({640, 480}, 2, 2);
     uint32_t fps = *parameter("fps").getInt(30);
 
     cfg.enable_stream(
         RS2_STREAM_INFRARED,
         1,
-        mono_width,
-        mono_height,
+        mono_dims[0],
+        mono_dims[1],
         RS2_FORMAT_Y8,
         fps
     );
@@ -63,19 +58,27 @@ pond_result RealsenseDriver::onStartup()
     cfg.enable_stream(
         RS2_STREAM_INFRARED,
         2,
-        mono_width,
-        mono_height,
+        mono_dims[0],
+        mono_dims[1],
         RS2_FORMAT_Y8,
         fps
     );
 
     cfg.enable_stream(
         RS2_STREAM_COLOR, 
-        color_width, 
-        color_height, 
+        color_dims[0], 
+        color_dims[1], 
         RS2_FORMAT_RGB8,
         fps
-    );        
+    );
+
+    cfg.enable_stream(
+        RS2_STREAM_DEPTH,
+        depth_dims[0],
+        depth_dims[1],
+        RS2_FORMAT_Z16,
+        fps
+    );
         
     rs2::pipeline_profile profile = pipe.start(cfg);
 
@@ -90,29 +93,24 @@ pond_result RealsenseDriver::onStartup()
 
 void RealsenseDriver::onShutdown()
 {
-    POND_LOG("deactivating ...");
+    POND_LOG("shutting down ...");
     pipe.stop();
-    color_distributor.destroy();
-    left_distributor.destroy();
-    right_distributor.destroy();
-    POND_LOG("deactivated");
+    distributor.destroy();
+    POND_LOG("shut down");
 }
 
 void RealsenseDriver::onFrame()
 {
     rs2::frameset frames = pipe.wait_for_frames();
     rs2::video_frame color_frame = frames.get_color_frame();
+    rs2::depth_frame depth_frame = frames.get_depth_frame();
     rs2::video_frame left_frame = frames.get_infrared_frame(1);
     rs2::video_frame right_frame = frames.get_infrared_frame(2);
 
+    ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, "rgb8");
+    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, "mono16");
+    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, "mono8");
+    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, "mono8");
 
-    //distributor
-    auto color_msg = std::make_shared<RealSenseWrappedImageFrame>(color_frame, "rgb8");
-    color_distributor.distribute(static_cast<void*>(&color_msg));
-
-    auto left_msg = std::make_shared<RealSenseWrappedImageFrame>(left_frame, "mono8");
-    left_distributor.distribute(static_cast<void*>(&left_msg));
-
-    auto right_msg = std::make_shared<RealSenseWrappedImageFrame>(right_frame, "mono8");
-    right_distributor.distribute(static_cast<void*>(&right_msg));
+    distributor.distribute(color_msg, depth_msg, left_msg, right_msg);
 }

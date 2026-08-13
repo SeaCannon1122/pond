@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <pond/pond.h>
 #include "slot_array.hpp"
 #include <string>
@@ -17,6 +18,38 @@ typedef struct PondManager PondManager;
 
 namespace pond_internal
 {
+
+struct Receiver
+{
+    std::string module_name;
+    std::vector<std::string> topics;
+    std::vector<std::string> topic_types;
+
+    std::shared_mutex mutex;
+    std::atomic<bool> active;
+    pfn_pond_receiver_callback callback;
+    void* callback_pointer;
+};
+
+struct ReceiverConnection
+{
+    std::shared_ptr<Receiver> receiver;
+    std::vector<uint32_t> indices;
+    std::vector<void*> handle_array;
+};
+
+struct Distributor
+{
+    std::string module_name;
+    std::vector<std::string> topics;
+    std::vector<std::string> topic_types;
+    uint32_t discovery_id;
+
+    SlotArray<ReceiverConnection> connections;
+
+    std::mutex new_connections_mutex;
+    SlotArray<ReceiverConnection> new_connections;
+};
 
 struct Module;
 
@@ -39,8 +72,8 @@ struct Module
     pond_module_metadata module_api;
     
     // thread managed
-    std::set<int32_t> distributors;
-    std::set<int32_t> receivers;
+    SlotArray<std::shared_ptr<Distributor>> distributors;
+    SlotArray<std::shared_ptr<Receiver>> receivers;
 
     // state
     std::atomic<bool> should_shutdown;
@@ -55,24 +88,6 @@ struct Thread
     std::set<uint32_t> modules;
 };
 
-struct Distributor
-{
-    std::string name;
-};
-
-struct Receiver
-{
-    std::string name;
-    pfn_pond_receiver_callback callback;
-    void* callback_pointer;
-};
-
-struct Topic
-{
-    int distributor_count;
-    std::string name;
-    SlotArray<uint32_t> subscriber_indicies;
-};
 }
 
 class PondManager
@@ -96,11 +111,11 @@ public:
     void api_module_set_user_ptr(pond_internal::Module* module, void* ptr);
     void* api_module_get_user_ptr(pond_internal::Module* module);
 
-    int32_t api_create_distributor(pond_internal::Module* module, uint8_t* topic);
+    int32_t api_create_distributor(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names);
     void api_destroy_distributor(pond_internal::Module* module, uint32_t distributor);
-    void api_distribute(pond_internal::Module* module, uint32_t distributor, void* data);
+    void api_distribute(pond_internal::Module* module, uint32_t distributor, void** data);
 
-    int32_t api_create_receiver(pond_internal::Module* module, uint8_t* topic, pfn_pond_receiver_callback callback, void* callback_pointer);
+    int32_t api_create_receiver(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names, pfn_pond_receiver_callback callback, void* callback_pointer);
     void api_destroy_receiver(pond_internal::Module* module, uint32_t receiver);
 
 private:
@@ -113,15 +128,20 @@ private:
 
     void unload_module_library(pond_internal::Module* module);
 
+    bool try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections);
     void thread_function(pond_internal::Thread* thread);
 
-    std::shared_mutex distrubution_mutex;
-    SlotArray<pond_internal::Topic*> topics;
-    SlotArray<pond_internal::Receiver> receivers;
-    SlotArray<uint32_t> distributor_topic_indicies;
+    struct
+    {
+        std::shared_mutex receiver_mutex;
+        SlotArray<std::shared_ptr<pond_internal::Receiver>> receivers;
+
+        std::shared_mutex distributor_mutex;
+        SlotArray<std::shared_ptr<pond_internal::Distributor>> distributors;
+    } discovery;
     
-    SlotArray<pond_internal::Module*> modules;
-    SlotArray<pond_internal::Thread*> threads;
+    SlotArray<std::shared_ptr<pond_internal::Module>> modules;
+    SlotArray<std::shared_ptr<pond_internal::Thread>> threads;
     std::unordered_map<std::string, uint32_t> thread_names_map;
     std::unordered_map<std::string, uint32_t> module_names_map;
 };

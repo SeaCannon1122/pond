@@ -12,11 +12,6 @@
 
 namespace pond
 {
-    class Message
-    {
-    public:
-        virtual ~Message() = default;
-    };
 
     class _UntypedParameterBase
     {
@@ -66,7 +61,10 @@ namespace pond
     {
     friend class ModuleBase;
     public:
-        void destroy();
+        void destroy()
+        {
+            api->destroy_distributor(api->ctx, id);
+        }
 
         void distribute(Args&... args)
         {
@@ -79,19 +77,40 @@ namespace pond
     };
 
     template<typename... Args>
+    class ReceiverCallback
+    {
+    public:
+        explicit ReceiverCallback(std::function<void(Args&...)> callback) : callback_(std::move(callback)) {}
+
+        static void trampoline(pond_api* api, void* callback_pointer, void** data)
+        {
+            static_cast<ReceiverCallback*>(callback_pointer)->invoke(data, std::index_sequence_for<Args...>{});
+        }
+
+    private:
+        std::function<void(Args&...)> callback_;
+
+        template<std::size_t... I>
+        void invoke(void** data, std::index_sequence<I...>)
+        {
+            callback_(*static_cast<std::remove_reference_t<Args>*>(data[I])...);
+        }
+    };
+
+    template<typename... Args>
     class Receiver
     {
     friend class ModuleBase;
     public:
-        void destroy();
+        void destroy()
+        {
+            api->destroy_receiver(api->ctx, id);
+        }
     private:
         int32_t id;
         pond_api* api;
-        std::unique_ptr<std::function<void(Args& ...)>> callback;
-        std::unique_ptr<std::function<void(void**)>> sub_callback;
+        std::shared_ptr<ReceiverCallback<Args...>> callback;
     };
-
-    void pond_cpp_callback(pond_api* api, void* callback_pointer, void** data);
 
     class ModuleBase
     {
@@ -108,8 +127,8 @@ namespace pond
         \
         for (int i = 0; i < sizeof...(Args); i++)\
         {\
-            topic_names[i] = topics[i].c_str();\
-            type_names[i] = type_name_strings[i].c_str();\
+            topic_names[i] = (uint8_t*)topics[i].c_str();\
+            type_names[i] = (uint8_t*)type_name_strings[i].c_str();\
         }
 
         template<typename... Args>
@@ -123,30 +142,27 @@ namespace pond
             return d;
         }
 
-        template<typename... Args>
-        Receiver<Args...> createReceiver(const std::array<std::string, sizeof...(Args)>& topics, std::function<void(Args& ...)> callback)
+        template<typename... Args, typename Callback>
+        Receiver<Args...> createReceiver(const std::array<std::string, sizeof...(Args)>& topics, Callback&& callback)
         {
             CREATE_TOPIC_ARRAYS
 
             Receiver<Args...> r;
 
             r.api = &_pond_api;
-            r.callback = std::make_unique<std::function<void(Args& ...)>>(std::move(callback));
-            r.sub_callback = std::make_unique<std::function<void(void**)>>([callback = &(*r.callback)](void** data){
-            
-                auto call_callback = [&]<std::size_t... I>(std::index_sequence<I...>) {
-                    *callback(*static_cast<Args*>(data[I])...);
-                };
-                call_callback(std::index_sequence_for<Args...>{});
-            });
+            r.callback =  std::make_shared<ReceiverCallback<Args...>>(
+                std::function<void(Args&...)>(
+                    std::forward<Callback>(callback)
+                )
+            );
 
             r.id = r.api->create_receiver(
                 r.api->ctx, 
                 topic_names.data(), 
                 sizeof...(Args), 
                 type_names.data(), 
-                pond_cpp_callback,
-                &(*r.sub_callback)
+                ReceiverCallback<Args...>::trampoline,
+                &(*r.callback)
             );
             return r;
         }
