@@ -197,6 +197,7 @@ void pond_module_##cls##_on_frame(pond_api* api)\
     cls* module = (cls*)api->get_user_ptr(api->ctx);\
     module->onFrame();\
 }\
+POND_MODULE_DECLARE(cls, _name, _info)
 
 #ifdef POND_MODULE_CPP_MAKE_IMPLEMENTATION
 namespace pond

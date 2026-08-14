@@ -96,6 +96,7 @@ public:
     [[nodiscard]]
     bool is_used(uint32_t slot) const noexcept
     {
+        if (slot >= elements.size()) return false;
         return elements[slot].has_value();
     }
 

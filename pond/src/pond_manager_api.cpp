@@ -2,28 +2,39 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <type_traits>
+#include <string>
 #include <vector>
 
-void PondManager::api_module_shutdown(pond_internal::Module* module)
+void PondManager::api_shutdown(pond_internal::Module* module)
+{
+    module->should_shutdown.store(true);
+}
+
+void PondManager::api_log(pond_internal::Module* module, uint8_t* format, va_list args)
 {
 
 }
 
-void PondManager::api_module_log(pond_internal::Module* module, uint8_t* format, va_list args)
+void PondManager::api_set_user_ptr(pond_internal::Module* module, void* ptr)
+{
+    module->user_pointer = ptr;
+}
+
+void* PondManager::api_get_user_ptr(pond_internal::Module* module)
+{
+    return module->user_pointer;
+}
+
+void PondManager::api_set_parameter(pond_internal::Module* module, uint8_t* name, pond_parameter* parameter)
 {
 
 }
 
-void PondManager::api_module_set_user_ptr(pond_internal::Module* module, void* ptr)
+pond_parameter* PondManager::api_get_parameter(pond_internal::Module* module, uint8_t* name)
 {
-
+    return NULL;
 }
 
-void* PondManager::api_module_get_user_ptr(pond_internal::Module* module)
-{
-
-}
 
 bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections)
 {
@@ -39,16 +50,14 @@ bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributo
 
             if (d->topics[j] == r->topics[i])
             {
-                if (d->topic_types[j] == r->topic_types[i])
-                {
-                    connection.indices[i] = j;
-                    break;
-                }
-                else
+                if (d->topic_types[j] != "" && r->topic_types[i] != "" && d->topic_types[j] != r->topic_types[i])
                 {
                     log("Mismatch of types on topic '" + d->topics[j] + "': '" + d->module_name + "' (" + d->topic_types[j] + ") -> '" + r->module_name + "' (" + r->topic_types[j] + ")");
                     return false;
                 }
+                
+                connection.indices[i] = j;
+                break;
             }
         }
     }
@@ -75,6 +84,7 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, uint8
     for (int i = 0; i < topic_count; i++)
     {
         d->topics[i] = std::string((char*)topics[i]);
+        for (auto& t : module->topic_mappings) if (d->topics[i] == t.first) d->topics[i] = t.second;
         d->topic_types[i] = std::string((char*)topic_type_names[i]);
     }
 
@@ -83,29 +93,53 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, uint8
         for (auto& r : discovery.receivers) try_connect_receiver(d, r, false);
     }
 
-    discovery.distributor_mutex.lock();
-    d->discovery_id = discovery.distributors.insert(d);
-    discovery.distributor_mutex.unlock();
+    {
+        std::lock_guard<std::shared_mutex> lock(discovery.distributor_mutex);
+        d->discovery_id = discovery.distributors.insert(d);
+    }
+
+    return (int32_t)module->distributors.emplace(d);
 }
 
 void PondManager::api_destroy_distributor(pond_internal::Module* module, uint32_t distributor)
 {
-    discovery.distributor_mutex.lock();
-    discovery.distributor_mutex.unlock();
+    if (!module->distributors.is_used(distributor))
+    {
+        log("Invalid distributor " + std::to_string(distributor) + " in module '" + module->name + "'");
+        return;
+    }
+    auto d = &*module->distributors[distributor];
+
+    {
+        std::lock_guard<std::shared_mutex> lock(discovery.distributor_mutex);
+        discovery.distributors.release_slot(d->discovery_id);
+    }
+
+    module->distributors.release_slot(distributor);
 }
 
 void PondManager::api_distribute(pond_internal::Module* module, uint32_t distributor, void** data)
 {
-    auto d = module->distributors[distributor];
+    if (!module->distributors.is_used(distributor))
+    {
+        log("Invalid distributor " + std::to_string(distributor) + " in module '" + module->name + "'");
+        return;
+    }
+    auto d = &*module->distributors[distributor];
 
     {
         std::lock_guard<std::mutex> lock(d->new_connections_mutex);
-        for ()
+        for (auto& connection : d->new_connections) d->connections.insert(connection);
     }
 
-    d->connections_mutex.lock_shared();
-    auto connections = d->connections;
-    d->connections_mutex.unlock_shared();
+    for (auto& connection : d->connections)
+    {
+        for (int i = 0; i < d->topics.size(); i++) connection.handle_array[i] = data[connection.indices[i]];
+        
+        std::shared_lock<std::shared_mutex> lock(connection.receiver->mutex);
+        if (!connection.receiver->active.load()) continue;
+        connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array.data());
+    }
 }
 
 int32_t PondManager::api_create_receiver(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names, pfn_pond_receiver_callback callback, void* callback_pointer)
@@ -114,22 +148,44 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, uint8_t*
     r->topics.resize(topic_count);
     r->topic_types.resize(topic_count);
     r->module_name = module->name;
+    r->api = &module->native_api;
 
     for (int i = 0; i < topic_count; i++)
     {
         r->topics[i] = std::string((char*)topics[i]);
+        for (auto& t : module->topic_mappings) if (r->topics[i] == t.first) r->topics[i] = t.second;
         r->topic_types[i] = std::string((char*)topic_type_names[i]);
     }
 
     {
-        std::shared_lock<std::shared_mutex> lock(discovery.receiver_mutex);
+        std::shared_lock<std::shared_mutex> lock(discovery.distributor_mutex);
         for (auto& d : discovery.distributors) try_connect_receiver(d, r, true);
     }
 
+    {
+        std::lock_guard<std::shared_mutex> lock(discovery.receiver_mutex);
+        r->discovery_id = discovery.receivers.insert(r);
+    }
 
+    return (int32_t)module->receivers.emplace(r);
 }
 
 void PondManager::api_destroy_receiver(pond_internal::Module* module, uint32_t receiver)
 {
+    if (!module->receivers.is_used(receiver))
+    {
+        log("Invalid receiver " + std::to_string(receiver) + " in module '" + module->name + "'");
+        return;
+    }
+    auto r = &*module->receivers[receiver];
 
+    {
+        std::lock_guard<std::shared_mutex> lock(discovery.receiver_mutex);
+        discovery.receivers.release_slot(r->discovery_id);
+    }
+
+    r->active.store(false);
+    {std::lock_guard<std::shared_mutex> lock(r->mutex);}
+
+    module->receivers.release_slot(receiver);
 }

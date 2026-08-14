@@ -13,5 +13,4 @@ add_executable(pond
     src/main.cpp
     src/pond_manager.cpp
     src/pond_manager_api.cpp
-    src/module.cpp
 )

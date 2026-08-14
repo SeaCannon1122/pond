@@ -11,7 +11,6 @@
 #include <unordered_map>
 #include <thread>
 #include <stdarg.h>
-#include <set>
 #include <atomic>
 
 typedef struct PondManager PondManager;
@@ -24,6 +23,8 @@ struct Receiver
     std::string module_name;
     std::vector<std::string> topics;
     std::vector<std::string> topic_types;
+    uint32_t discovery_id;
+    pond_api* api;
 
     std::shared_mutex mutex;
     std::atomic<bool> active;
@@ -61,31 +62,43 @@ struct ModuleContext
 
 struct Module
 {
-    // init static
     std::string name;
     std::unordered_map<std::string, std::string> topic_mappings;
     pond_api native_api;
     ModuleContext context;
 
-    // lib stuff
     void* lib_handle;
     pond_module_metadata module_api;
+    void* user_pointer;
     
-    // thread managed
     SlotArray<std::shared_ptr<Distributor>> distributors;
     SlotArray<std::shared_ptr<Receiver>> receivers;
 
-    // state
     std::atomic<bool> should_shutdown;
     std::atomic<bool> alive;
 };
 
 struct Thread
 {
-    std::mutex mutex;
     std::string name;
     std::thread thread;
-    std::set<uint32_t> modules;
+
+    std::mutex mutex;
+    SlotArray<std::shared_ptr<pond_internal::Module>> modules;
+
+    struct
+    {
+        std::atomic<bool> is;
+        std::shared_ptr<pond_internal::Module> module;
+    } load_request;
+
+    struct
+    {
+        std::atomic<bool> is;
+        std::string name;
+    } shutdown_request;
+    
+    std::atomic<bool> shutdown_thread;
 };
 
 }
@@ -95,21 +108,25 @@ class PondManager
 public:
     PondManager();
     ~PondManager();
-    void log(const std::string& message);
 
-    void load_module(
+    std::string load_module(
         const std::string& name,
         const std::string& bundle_name,
         const std::string& module_name,
         const std::string& thread_name
     );
 
-    void shutdown_module(const std::string& name);
+    std::string shutdown_module(const std::string& name);
 
-    void api_module_shutdown(pond_internal::Module* module);
-    void api_module_log(pond_internal::Module* module, uint8_t* format, va_list args);
-    void api_module_set_user_ptr(pond_internal::Module* module, void* ptr);
-    void* api_module_get_user_ptr(pond_internal::Module* module);
+    std::string print_modules();
+
+    void api_shutdown(pond_internal::Module* module);
+    void api_log(pond_internal::Module* module, uint8_t* format, va_list args);
+    void api_set_user_ptr(pond_internal::Module* module, void* ptr);
+    void* api_get_user_ptr(pond_internal::Module* module);
+
+    void api_set_parameter(pond_internal::Module* module, uint8_t* name, pond_parameter* parameter);
+    pond_parameter* api_get_parameter(pond_internal::Module* module, uint8_t* name);
 
     int32_t api_create_distributor(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names);
     void api_destroy_distributor(pond_internal::Module* module, uint32_t distributor);
@@ -120,16 +137,18 @@ public:
 
 private:
 
+    void log(const std::string& message);
+
     bool load_module_library(
         const std::string& bundle_name,
         const std::string& module_name,
-        pond_internal::Module* module
+        pond_internal::Module& module,
+        std::string& message
     );
-
-    void unload_module_library(pond_internal::Module* module);
 
     bool try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections);
     void thread_function(pond_internal::Thread* thread);
+    void cleanup_module(pond_internal::Module* module);
 
     struct
     {
@@ -140,8 +159,5 @@ private:
         SlotArray<std::shared_ptr<pond_internal::Distributor>> distributors;
     } discovery;
     
-    SlotArray<std::shared_ptr<pond_internal::Module>> modules;
     SlotArray<std::shared_ptr<pond_internal::Thread>> threads;
-    std::unordered_map<std::string, uint32_t> thread_names_map;
-    std::unordered_map<std::string, uint32_t> module_names_map;
 };

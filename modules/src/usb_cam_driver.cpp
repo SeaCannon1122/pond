@@ -1,6 +1,6 @@
 #include <pond/pond.hpp>
 #include <opencv2/opencv.hpp>
-#include <quac_modules/interfaces/wrapped_image_frame.hpp>
+#include <pond/data_types.hpp>
 
 class UsbCamDriver : public pond::ModuleBase
 {
@@ -10,7 +10,7 @@ public:
     virtual void onFrame() override;
 private:
     cv::VideoCapture cap;
-    pond::Distributor<std::shared_ptr<WrappedImageFrame>> distributor;
+    pond::Distributor<ImgFrameSPtr> distributor;
 };
 
 POND_MODULE_CPP_DECLARE(UsbCamDriver, "usb_cam_driver", "simple driver bridge for a usb camera")
@@ -18,18 +18,18 @@ POND_MODULE_CPP_DECLARE(UsbCamDriver, "usb_cam_driver", "simple driver bridge fo
 pond_result UsbCamDriver::onStartup()
 {
     POND_LOG("starting ...");
-    distributor = createDistributor("out");
+    distributor = createDistributor<ImgFrameSPtr>({"out"});
 
-    cap = cv::VideoCapture(stoi(args[0]));
+    cap = cv::VideoCapture(*parameter("video_index").getInt(0));
 
     if (!cap.isOpened())
     {
-        printf("Failed to open webcam.\n"); fflush(stdout);
+        POND_LOG("Failed to open webcam.\n");
         return POND_ERROR;
     }
 
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, stoi(args[1]));
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, stoi(args[2]));
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, *parameter("width").getInt(640));
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, *parameter("height").getInt(480));
 
     POND_LOG("started");
     return POND_SUCCESS;

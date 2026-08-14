@@ -27,11 +27,11 @@ set(ORB_SLAM3_DIR ~/lib/ORB_SLAM3)
 add_library(quac_modules SHARED
   src/bundle.cpp
   src/gst_server.cpp
-  src/realsense_driver.cpp
+  #src/realsense_driver.cpp
   src/usb_cam_driver.cpp
-  src/depthai_driver.cpp
-  src/orbslam3_module.cpp
-  src/ros2_bridge.cpp
+  #src/depthai_driver.cpp
+  #src/orbslam3_module.cpp
+  #src/ros2_bridge.cpp
 )
 
 target_include_directories(quac_modules PRIVATE

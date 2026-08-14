@@ -1,6 +1,6 @@
 #include <pond/pond.hpp>
 #include <librealsense2/rs.hpp>
-#include <quac_modules/interfaces/img_frame.hpp>
+#include <pond/data_types.hpp>
 #include <memory>
 
 class RealSenseImgFrame : public ImgFrame
