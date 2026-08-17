@@ -1,55 +1,194 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <stdint.h>
 #include <string>
 #include <memory>
 #include <functional>
-#include <unordered_map>
-#include "ring_buffer_queue.hpp"
+#include <type_traits>
 #include "pond.h"
 #include <array>
+#include <vector>
+#include <stddef.h>
 
 namespace pond
 {
+
+    #define _CPP_PARAM_REF(p_ptr) (*(c_type*)((uint8_t*)(p_ptr) + val_offset))
+
+    template<typename T, typename c_type>
+    class _ParameterBase
+    {
+    friend class _UntypedParameterBase;
+    public:
+
+        std::optional<T> getStrict(bool log = true)
+        {
+            pond_parameter* p = api->get_parameter(api->ctx, (uint8_t*)name->c_str());
+            if (p != NULL)
+            {
+                if (p->type == pt) { T value{_CPP_PARAM_REF(p)}; free(p); return value; }
+                else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '%s'", name->c_str(), type_name);
+                free(p);
+            }
+            else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' not set", name->c_str());
+            
+            return std::nullopt;
+        }
+
+        void set(const T& val)
+        {
+            pond_parameter* p;
+            if constexpr (std::is_same_v<T, std::string>)
+            {
+                p = (pond_parameter*)malloc(sizeof(pond_parameter) + val.size() + 1);
+                p->value.String = (uint8_t*)p + sizeof(pond_parameter);
+                memcpy(p->value.String, val.c_str(), val.size() + 1);
+            }
+            else
+            {
+                p = (pond_parameter*)malloc(sizeof(pond_parameter));
+                _CPP_PARAM_REF(p) = val;
+            }
+            
+            p->type = pt;
+            api->set_parameter(api->ctx, (uint8_t*)name->c_str(), p);
+        }
+
+        T get(const T& default_val, bool set_default = true)
+        {
+            if (auto ret = getStrict(false)) return std::move(ret.value());
+            else
+            {
+                if (set_default) set(default_val);
+                return default_val;
+            }
+        }
+    private:
+        _ParameterBase(std::string* _name, pond_api* _api, char* _type_name, size_t _val_offset, pond_parameter_type _pt)
+            : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
+        pond_api* api;
+        std::string* name;
+        char* type_name;
+        size_t val_offset;
+        pond_parameter_type pt;
+    };
+
+    template<typename T, typename c_type>
+    class _ParameterArrayBase
+    {
+    friend class _UntypedParameterBase;
+    public:
+
+        std::optional<std::vector<T>> getStrict(uint32_t min_length = 0, uint32_t max_length = 0, bool log = true)
+        {
+            pond_parameter* p = api->get_parameter(api->ctx, (uint8_t*)name->c_str());
+            if (p != NULL)
+            {
+                if (p->type == pt)
+                {
+                    if (check_array_length(p->array_length, min_length, max_length, log))
+                    {
+                        std::vector<T> vec(p->array_length);
+                        for (int i = 0; i < vec.size(); i++) vec[i] = T{_CPP_PARAM_REF(p)[i]};
+                        free(p);
+                        return vec;
+                    }
+                }
+                else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '%s'", name->c_str(), type_name);
+                free(p);
+            }
+            else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' not set", name->c_str());
+        
+            return std::nullopt;
+        }
+
+        void set(const std::vector<T>& val)
+        {
+            pond_parameter* p;
+            if constexpr (std::is_same_v<T, std::string>)
+            {
+                size_t total_size = 0;
+                for (auto& s : val) total_size += s.size() + 1;
+
+                p = (pond_parameter*)malloc(sizeof(pond_parameter) + sizeof(uint8_t*) * val.size() + total_size);
+                p->value.StringArray = (uint8_t**)((uint8_t*)p + sizeof(pond_parameter));
+
+                for (uint32_t i = 0, offset = 0; i < val.size(); i++)
+                {
+                    p->value.StringArray[i] = (uint8_t*)((uint8_t*)p + sizeof(pond_parameter) + sizeof(uint8_t*) * val.size() + offset);
+                    memcpy(p->value.StringArray[i], val[i].c_str(), val[i].size()+1);
+                    offset += val[i].size()+1;
+                }
+            }
+            else
+            {
+                p = (pond_parameter*)malloc(sizeof(pond_parameter) + sizeof(c_type) * val.size());
+                _CPP_PARAM_REF(p) = (c_type*)((uint8_t*)p + sizeof(pond_parameter));
+                for (uint32_t i = 0; i < val.size(); i++) _CPP_PARAM_REF(p)[i] = val[i];
+            }
+            
+            p->type = pt;
+            p->array_length = val.size();
+            api->set_parameter(api->ctx, (uint8_t*)name->c_str(), p);
+        }
+
+        std::vector<T> get(const std::vector<T>& default_val, uint32_t min_length = 0, uint32_t max_length = 0, bool set_default = true)
+        {
+            if (auto ret = getStrict(min_length, max_length, false)) return std::move(ret.value());
+            else
+            {
+                if (set_default) set(default_val);
+                return default_val;
+            }
+        }
+
+    private:
+        bool check_array_length(uint32_t length, uint32_t min, uint32_t max, bool log)
+        {
+            if (min == max && min != 0 && length != min)
+            {
+                if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length != %d", name->c_str(), min);
+                return false;
+            }
+            if (length < min)
+            {
+                if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length < %d", name->c_str(), min);
+                return false;
+            }
+            if (length > max && max != 0)
+            {
+                if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length > %d", name->c_str(), max);
+                return false;
+            }
+            return true;
+        }
+
+        _ParameterArrayBase(std::string* _name, pond_api* _api, char* _type_name, size_t _val_offset, pond_parameter_type _pt)
+            : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
+        pond_api* api;
+        std::string* name;
+        char* type_name;
+        size_t val_offset;
+        pond_parameter_type pt;
+    };
 
     class _UntypedParameterBase
     {
     friend class ModuleBase;
     public:
 
-    #define PARAM_FUNCTION_DECL(_type, _type_name)\
-        std::optional<_type> get##_type_name(const _type& def, bool default_on_fail = true);\
-        std::optional<std::vector<_type>> get##_type_name##Array(const std::vector<_type>& def, uint32_t min_length = 0, uint32_t max_length = 0, bool default_on_fail = true);\
-        void set##_type_name(const _type& value);\
-        void set##_type_name##Array(const std::vector<_type>& value);
-
-        PARAM_FUNCTION_DECL(std::string, String)
-        PARAM_FUNCTION_DECL(int32_t, Int)
-        PARAM_FUNCTION_DECL(double, Double)
-        PARAM_FUNCTION_DECL(bool, Bool)
+    _ParameterBase<int32_t, int32_t> asInt();
+    _ParameterArrayBase<int32_t, int32_t> asIntArray();
+    _ParameterBase<double, double> asDouble();
+    _ParameterArrayBase<double, double> asDoubleArray();
+    _ParameterBase<bool, bool> asBool();
+    _ParameterArrayBase<bool, bool> asBoolArray();
+    _ParameterBase<std ::string, char*> asString();
+    _ParameterArrayBase<std ::string, char*> asStringArray();
 
     private:
-
-        bool check_array_length(uint32_t length, uint32_t min, uint32_t max)
-        {
-            if (min == max && min != 0 && length != min)
-            {
-                api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length != %d", name->c_str(), min);
-                return false;
-            }
-            if (length < min)
-            {
-                api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length < %d", name->c_str(), min);
-                return false;
-            }
-            if (length > max && max != 0)
-            {
-                api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.length > %d", name->c_str(), max);
-                return false;
-            }
-            return true;
-        }
 
         _UntypedParameterBase(std::string* _name, pond_api* _api) : api(_api), name(_name) {}
         pond_api* api;
@@ -120,21 +259,17 @@ namespace pond
         virtual void onFrame();
         void shutdown();
 
-    #define CREATE_TOPIC_ARRAYS\
-        std::array<std::string, sizeof...(Args)> type_name_strings = {std::string(typeid(Args).name()) + "_" + std::to_string(typeid(Args).hash_code())...};\
-        std::array<uint8_t*, sizeof...(Args)> topic_names;\
-        std::array<uint8_t*, sizeof...(Args)> type_names;\
-        \
-        for (int i = 0; i < sizeof...(Args); i++)\
-        {\
-            topic_names[i] = (uint8_t*)topics[i].c_str();\
-            type_names[i] = (uint8_t*)type_name_strings[i].c_str();\
-        }
-
         template<typename... Args>
         Distributor<Args...> createDistributor(const std::array<std::string, sizeof...(Args)>& topics)
         {
-            CREATE_TOPIC_ARRAYS
+            std::array<std::string, sizeof...(Args)> type_name_strings = {std::string(typeid(Args).name()) + "_" + std::to_string(typeid(Args).hash_code())...};
+            std::array<uint8_t*, sizeof...(Args)> topic_names, type_names;
+            
+            for (int i = 0; i < sizeof...(Args); i++)
+            {
+                topic_names[i] = (uint8_t*)topics[i].c_str();
+                type_names[i] = (uint8_t*)type_name_strings[i].c_str();
+            }
 
             Distributor<Args...> d;
             d.api = &_pond_api;
@@ -145,7 +280,14 @@ namespace pond
         template<typename... Args, typename Callback>
         Receiver<Args...> createReceiver(const std::array<std::string, sizeof...(Args)>& topics, Callback&& callback)
         {
-            CREATE_TOPIC_ARRAYS
+            std::array<std::string, sizeof...(Args)> type_name_strings = {std::string(typeid(Args).name()) + "_" + std::to_string(typeid(Args).hash_code())...};
+            std::array<uint8_t*, sizeof...(Args)> topic_names, type_names;
+            
+            for (int i = 0; i < sizeof...(Args); i++)
+            {
+                topic_names[i] = (uint8_t*)topics[i].c_str();
+                type_names[i] = (uint8_t*)type_name_strings[i].c_str();
+            }
 
             Receiver<Args...> r;
 
@@ -203,66 +345,25 @@ POND_MODULE_DECLARE(cls, _name, _info)
 namespace pond
 {
 
-#define PARAM_GET_ARRAY_BLOCK(_type, _type_name, _caster)\
-if (check_array_length(p->array_length, min_length, max_length))\
-{\
-    _type vec(p->array_length);\
-    for (int i = 0; i < p->array_length; i++) vec[i] = _caster p->value._type_name[i];\
-    return vec;\
-}\
-
-#define PARAM_GET(_type, _type_name, _pond_type_name, _success_block, ...)\
-std::optional<_type> _UntypedParameterBase::get##_type_name(const _type& def, ##__VA_ARGS__ , bool default_on_fail)\
-{\
-    if (pond_parameter* p = api->get_parameter(api->ctx, (uint8_t*)name->c_str()))\
-    {\
-        if (p->type == _pond_type_name)\
-        {\
-            _success_block\
-        }\
-        else api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '"#_type_name"'", name->c_str());\
-    }\
-    else if (!default_on_fail) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' not set", name->c_str());\
-\
-    if (default_on_fail) return def;\
-    else return std::nullopt; \
-}
-
-#define PARAM_SET_SINGLE_AND_ARRAY(_type, _type_name, _pond_type_name, _set_type, _assign_suffix)\
-void _UntypedParameterBase::set##_type_name(const _type& value)\
-{\
-    pond_parameter p;\
-    p.type = _pond_type_name;\
-    p.value._type_name = (_set_type) value _assign_suffix;\
-    api->set_parameter(api->ctx, (uint8_t*)name->c_str(), &p);\
-}\
-\
-void _UntypedParameterBase::set##_type_name##Array(const std::vector<_type>& value)\
-{\
-    pond_parameter p;\
-    p.type = _pond_type_name##_ARRAY;\
-    p.value._type_name##Array = new _set_type[value.size()];\
-    for (int i = 0; i < value.size(); i++) p.value._type_name##Array[i] = (_set_type)value[i] _assign_suffix;\
-\
-    api->set_parameter(api->ctx, (uint8_t*)name->c_str(), &p);\
-\
-    delete p.value._type_name##Array;\
-}
-
-#define PARAM_FUNCTION(_type, _set_type, _type_name, _pond_type_name, _caster, _assign_suffix)\
-PARAM_GET(_type, _type_name, _pond_type_name, return _caster p->value._type_name;)\
-PARAM_GET(std::vector<_type>, _type_name##Array, _pond_type_name##_ARRAY, PARAM_GET_ARRAY_BLOCK(std::vector<_type>, _type_name##Array, _caster), uint32_t min_length, uint32_t max_length)\
-PARAM_SET_SINGLE_AND_ARRAY(_type, _type_name, _pond_type_name, _set_type, _assign_suffix)
-
-PARAM_FUNCTION(int32_t, int32_t, Int, POND_PARAMETER_INT,,)
-PARAM_FUNCTION(std::string, uint8_t*, String, POND_PARAMETER_STRING, (char*), .c_str())
-PARAM_FUNCTION(double, double, Double, POND_PARAMETER_DOUBLE,,)
-PARAM_FUNCTION(bool, bool, Bool, POND_PARAMETER_BOOL,,)
-
 _UntypedParameterBase ModuleBase::parameter(const std::string& name)
 {
     return _UntypedParameterBase((std::string*)&name, &_pond_api);
 }
+
+#define TYPED_PARAM_IMPL(_type, _param_type, _param_name, _c_type)\
+    _ParameterBase<_type, _c_type> _UntypedParameterBase::as##_param_name()\
+    {\
+        return _ParameterBase<_type, _c_type>(name, api, #_param_name, offsetof(pond_parameter, value._param_name), _param_type);\
+    }\
+    _ParameterArrayBase<_type, _c_type> _UntypedParameterBase::as##_param_name##Array()\
+    {\
+        return _ParameterArrayBase<_type, _c_type>(name, api, #_param_name"Array", offsetof(pond_parameter, value._param_name##Array), _param_type);\
+    }\
+
+    TYPED_PARAM_IMPL(int32_t, POND_PARAMETER_INT, Int, int32_t)
+    TYPED_PARAM_IMPL(double, POND_PARAMETER_DOUBLE, Double, double)
+    TYPED_PARAM_IMPL(bool, POND_PARAMETER_BOOL, Bool, bool)
+    TYPED_PARAM_IMPL(std::string, POND_PARAMETER_STRING, String, char*)
 
 pond_result ModuleBase::onStartup() {return POND_SUCCESS;}
 void ModuleBase::onShutdown() {}

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
 #include <pond/pond.h>
-#include "slot_array.hpp"
+
+#include <memory>
 #include <string>
 #include <mutex>
 #include <vector>
@@ -12,6 +12,8 @@
 #include <thread>
 #include <stdarg.h>
 #include <atomic>
+
+#include "slot_array.hpp"
 
 typedef struct PondManager PondManager;
 
@@ -63,9 +65,14 @@ struct ModuleContext
 struct Module
 {
     std::string name;
+    std::string thread_name;
+    uint32_t discovery_id;
     std::unordered_map<std::string, std::string> topic_mappings;
     pond_api native_api;
     ModuleContext context;
+
+    std::unordered_map<std::string, pond_parameter*> parameters;
+    std::mutex parameter_mutex;
 
     void* lib_handle;
     pond_module_metadata module_api;
@@ -81,9 +88,9 @@ struct Module
 struct Thread
 {
     std::string name;
+    uint32_t id;
     std::thread thread;
 
-    std::mutex mutex;
     SlotArray<std::shared_ptr<pond_internal::Module>> modules;
 
     struct
@@ -113,7 +120,9 @@ public:
         const std::string& name,
         const std::string& bundle_name,
         const std::string& module_name,
-        const std::string& thread_name
+        const std::string& thread_name,
+        const std::unordered_map<std::string, pond_parameter*>& parameters,
+        const std::unordered_map<std::string, std::string>& topic_mappings
     );
 
     std::string shutdown_module(const std::string& name);
@@ -128,11 +137,11 @@ public:
     void api_set_parameter(pond_internal::Module* module, uint8_t* name, pond_parameter* parameter);
     pond_parameter* api_get_parameter(pond_internal::Module* module, uint8_t* name);
 
-    int32_t api_create_distributor(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names);
+    int32_t api_create_distributor(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count);
     void api_destroy_distributor(pond_internal::Module* module, uint32_t distributor);
-    void api_distribute(pond_internal::Module* module, uint32_t distributor, void** data);
+    void api_distribute(pond_internal::Module* module, uint32_t distributor, void** slot_data);
 
-    int32_t api_create_receiver(pond_internal::Module* module, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names, pfn_pond_receiver_callback callback, void* callback_pointer);
+    int32_t api_create_receiver(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count, pfn_pond_receiver_callback callback, void* callback_pointer);
     void api_destroy_receiver(pond_internal::Module* module, uint32_t receiver);
 
 private:
@@ -157,7 +166,14 @@ private:
 
         std::shared_mutex distributor_mutex;
         SlotArray<std::shared_ptr<pond_internal::Distributor>> distributors;
-    } discovery;
+    } dds_discovery;
     
     SlotArray<std::shared_ptr<pond_internal::Thread>> threads;
+
+    struct
+    { 
+        std::mutex module_mutex;
+        SlotArray<std::shared_ptr<pond_internal::Module>> modules;
+    } module_discovery;
+    
 };

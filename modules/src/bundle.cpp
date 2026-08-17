@@ -3,17 +3,19 @@
 
 EXTERN_POND_MODULE(GstServer);
 //EXTERN_POND_MODULE(RealsenseDriver);
-EXTERN_POND_MODULE(UsbCamDriver);
+EXTERN_POND_MODULE(V4L2Camera);
+EXTERN_POND_MODULE(DummyCamera);
 //EXTERN_POND_MODULE(DepthaiDriver);
 //EXTERN_POND_MODULE(OrbSlam3Module);
 //EXTERN_POND_MODULE(Ros2Bridge);
 
 POND_BUNDLE_DECLARE(
     "All the modules for quac", 
-    2,
+    3,
     POND_MODULE(GstServer), 
     //POND_MODULE(RealsenseDriver),
-    POND_MODULE(UsbCamDriver),
+    POND_MODULE(V4L2Camera),
+    POND_MODULE(DummyCamera),
     //POND_MODULE(DepthaiDriver),
     //POND_MODULE(OrbSlam3Module),
     //POND_MODULE(Ros2Bridge)

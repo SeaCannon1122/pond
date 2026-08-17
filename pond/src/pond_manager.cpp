@@ -3,6 +3,7 @@
 #include <dlfcn.h>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <stdlib.h>
 #include <sstream>
 #include <thread>
@@ -167,24 +168,32 @@ std::string PondManager::load_module(
     const std::string& name,
     const std::string& bundle_name,
     const std::string& module_name,
-    const std::string& thread_name
+    const std::string& thread_name,
+    const std::unordered_map<std::string, pond_parameter*>& parameters,
+    const std::unordered_map<std::string, std::string>& topic_mappings
 )
 {
-    for (auto& t : threads)
     {
-        std::lock_guard<std::mutex> lock(t->mutex);
-        for (auto& m : t->modules) if (m->name == module_name)
-            LOG_RETURN("Module with name '" + name + "' already exists on thread '" + t->name + "'");
+        std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
+        for (auto& m : module_discovery.modules) if (m->name == module_name)
+            LOG_RETURN("Module with name '" + name + "' already exists on thread '" + m->thread_name + "'");
     }
-
+    
     auto module =  std::make_shared<pond_internal::Module>();
 
     std::string load_message;
     if (!load_module_library(bundle_name, module_name, *module, load_message)) LOG_RETURN(load_message);
 
-    module->name = module_name;
+    module->name = name;
     module->alive.store(true);
     module->should_shutdown.store(false);
+    module->topic_mappings = topic_mappings;
+    module->parameters = parameters;
+    module->thread_name = thread_name;
+
+    module->context.module = module.get();
+    module->context.manager = this;
+    module->native_api.ctx = &module->context;
 
     module->native_api.create_distributor = (pfn_pond_create_distributor)_pond_create_distributor;
     module->native_api.destroy_distributor = (pfn_pond_destroy_distributor)_pond_destroy_distributor;
@@ -216,7 +225,7 @@ std::string PondManager::load_module(
             thread.get()
         );
 
-        threads.insert(thread);
+        thread->id = threads.insert(thread);
     }
 
     thread->load_request.module = std::move(module);
@@ -230,17 +239,16 @@ std::string PondManager::print_modules()
 {
     std::string str;
     str.reserve(10000);
-    for (auto& t : threads)
-    {
-        str.append(t->name).append(":\n");
+    
+    std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
 
-        std::lock_guard<std::mutex> lock(t->mutex);
-        for (auto& m : t->modules)
-        {
-            str.append("  ");
-            str.append(m->name);
-            str.append("\n");
-        }
+    for (auto& m : module_discovery.modules)
+    {
+        str.append("  '");
+        str.append(m->name);
+        str.append("' on '");
+        str.append(m->thread_name);
+        str.append("'\n");
     }
 
     return str;
@@ -248,23 +256,31 @@ std::string PondManager::print_modules()
 
 std::string PondManager::shutdown_module(const std::string& name)
 {
-    for (auto& t : threads)
+    std::string thread_name = "";
     {
-        {
-            int32_t i = 0;
-            std::lock_guard<std::mutex> lock(t->mutex);
-            for (; i < t->modules.get_length(); i++) if(t->modules.is_used(i)) if (t->modules[i]->name == name) break;
-            if (i == t->modules.get_length()) continue;
-        }
-        
-        t->shutdown_request.name = name;
-        t->shutdown_request.is.store(true);
+        std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
 
-        while (t->shutdown_request.is.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        LOG_RETURN("Shutdown module '" + name + "'");
+        for (auto& m : module_discovery.modules) if (m->name == name)
+        {
+            thread_name = m->thread_name;
+            break;
+        }
     }
 
-    LOG_RETURN("Could not shutdown non-existent module '" + name + "'");
+    if (thread_name == "") LOG_RETURN("Could not shutdown non-existent module '" + name + "'");
+
+    for (auto& t : threads)
+    {
+        if (t->name == thread_name)
+        {
+            t->shutdown_request.name = name;
+            t->shutdown_request.is.store(true);
+
+            while (t->shutdown_request.is.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            LOG_RETURN("Shut down module '" + name + "'");
+        }
+    }
+    
 }
 
 void PondManager::cleanup_module(pond_internal::Module* module)
@@ -287,15 +303,17 @@ void PondManager::thread_function(pond_internal::Thread* thread)
     {
         if (thread->load_request.is.load())
         {
-            log("Starting module '" + thread->load_request.module->name + "' ...");
+            log("[" + thread->name + "] Starting module '" + thread->load_request.module->name + "' ...");
             if (thread->load_request.module->module_api.on_startup(&thread->load_request.module->native_api) == POND_SUCCESS)
             {
-                log("Started module '" + thread->load_request.module->name + "'");
+                log("[" + thread->name + "] Started module '" + thread->load_request.module->name + "'");
                 thread->modules.insert(thread->load_request.module);
+                std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
+                thread->load_request.module->discovery_id = module_discovery.modules.insert(thread->load_request.module);
             }
             else
             {
-                log("Error on startup of module '" + thread->load_request.module->name + "'");
+                log("[" + thread->name + "] Error on startup of module '" + thread->load_request.module->name + "'");
                 cleanup_module(thread->load_request.module.get());
             }
             
@@ -303,18 +321,36 @@ void PondManager::thread_function(pond_internal::Thread* thread)
             thread->load_request.is.store(false);
         }
 
-        shutdown = thread->shutdown_thread.load();
+        if (thread->shutdown_request.is.load())
+        {
+            for (auto& m : thread->modules)
+            {
+                if (m->name == thread->shutdown_request.name)
+                {
+                    m->should_shutdown.store(true);
+                    break;
+                }
+            }
+                
+            thread->shutdown_request.is.store(false);
+        }
 
-        if (shutdown) for (auto& m : thread->modules) m->should_shutdown.store(true);
+        if (shutdown = thread->shutdown_thread.load()) for (auto& m : thread->modules) m->should_shutdown.store(true);
 
         for (int i = 0; i < thread->modules.get_length(); i++) if (thread->modules.is_used(i))
         {
             if (thread->modules[i]->should_shutdown.load())
             {
-                log("Shutting down module '" + thread->load_request.module->name + "' ...");
+                log("[" + thread->name + "] Shutting down module '" + thread->modules[i]->name + "' ...");
                 thread->modules[i]->module_api.on_shutdown(&thread->modules[i]->native_api);
-                log("Shut down module '" + thread->load_request.module->name + "'");
+                log("[" + thread->name + "] Shut down module '" + thread->modules[i]->name + "'");
                 cleanup_module(thread->modules[i].get());
+                
+                {
+                    std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
+                    module_discovery.modules.release_slot(thread->modules[i]->discovery_id);
+                }
+                
                 thread->modules.release_slot(i);
             }
                 
@@ -323,5 +359,5 @@ void PondManager::thread_function(pond_internal::Thread* thread)
         for (auto& m : thread->modules) m->module_api.on_frame(&m->native_api);
     }
 
-    log("Thread '" + thread->name + "' exited");
+    log("[" + thread->name + "] exited");
 }

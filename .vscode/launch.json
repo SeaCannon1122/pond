@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug my_program",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/pond/pond",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "env": {
+                "POND_BUNDLE_PATH": "/home/christopher/quac_ws/quac_modular/build/modules"
+            }
+        }
+    ]
+}

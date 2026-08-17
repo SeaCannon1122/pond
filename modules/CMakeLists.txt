@@ -28,7 +28,8 @@ add_library(quac_modules SHARED
   src/bundle.cpp
   src/gst_server.cpp
   #src/realsense_driver.cpp
-  src/usb_cam_driver.cpp
+  src/v4l2_camera.cpp
+  src/dummy_camera.cpp
   #src/depthai_driver.cpp
   #src/orbslam3_module.cpp
   #src/ros2_bridge.cpp
