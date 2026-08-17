@@ -1,4 +1,4 @@
-#include "pond/pond.h"
+#include <pond/pond.h>
 #include "pond_manager.hpp"
 #include <mutex>
 #include <stdio.h>
@@ -76,24 +76,36 @@ pond_parameter* PondManager::api_get_parameter(pond_internal::Module* module, ui
     }
 }
 
+void construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count)
+{
+    slots.resize(c_slot_count);
+    for (uint32_t i = 0; i < c_slot_count; i++)
+    {
+        slots[i].type = std::string((char*)c_slots[i].type);
+        slots[i].topic = std::string((char*)c_slots[i].topic);
+
+        auto it = module->topic_mappings.find(slots[i].topic);
+        if (it != module->topic_mappings.end()) slots[i].topic = it->second;
+    }
+}
 
 bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections)
 {
     pond_internal::ReceiverConnection connection;
-    connection.indices.resize(r->topics.size());
-    connection.handle_array.resize(r->topics.size());
+    connection.indices.resize(r->slots.size());
+    connection.handle_array.resize(r->slots.size());
 
-    for (int i = 0; i < r->topics.size(); i++)
+    for (int i = 0; i < r->slots.size(); i++)
     {
         for (int j = 0; ; j++)
         {
-            if (j == d->topics.size()) return false;
+            if (j == d->slots.size()) return false;
 
-            if (d->topics[j] == r->topics[i])
+            if (d->slots[j].topic == r->slots[i].topic)
             {
-                if (d->topic_types[j] != "" && r->topic_types[i] != "" && d->topic_types[j] != r->topic_types[i])
+                if (d->slots[j].type != "" && r->slots[i].type != "" && d->slots[j].type != r->slots[i].type)
                 {
-                    log("Mismatch of types on topic '" + d->topics[j] + "': '" + d->module_name + "' (" + d->topic_types[j] + ") -> '" + r->module_name + "' (" + r->topic_types[j] + ")");
+                    log("Mismatch of types on topic '" + d->slots[j].topic + "': '" + d->module_name + "' (" + d->slots[j].type + ") -> '" + r->slots[i].topic + "': '" + r->module_name + "' (" + r->slots[i].type + ")");
                     return false;
                 }
                 
@@ -117,25 +129,19 @@ bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributo
 
 int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count)
 {
-    auto d = std::make_shared<pond_internal::Distributor>(); 
-    d->topics.resize(topic_count);
-    d->topic_types.resize(topic_count);
+    auto d = std::make_shared<pond_internal::Distributor>();
+    construct_slots(module, d->slots, slots, slot_count);
     d->module_name = module->name;
 
-    std::unordered_set<std::string> topics_set;
-
-    for (int i = 0; i < topic_count; i++)
+    std::unordered_set<std::string> all_topics;
+    for (auto& s : d->slots)
     {
-        d->topics[i] = std::string((char*)topics[i]);
-        for (auto& t : module->topic_mappings) if (d->topics[i] == t.first) d->topics[i] = t.second;
-        d->topic_types[i] = std::string((char*)topic_type_names[i]);
-
-        if (topics_set.find(d->topics[i]) != topics_set.end())
+        if (all_topics.find(s.topic) != all_topics.end())
         {
-            log("In module " + module->name + ": can't publish on the same topic (" + d->topics[i] + ") multiple times in parallel");
+            log("In module " + module->name + ": can't publish on the same topic (" + s.topic + ") multiple times in parallel");
             return -1;
         }
-        topics_set.insert(d->topics[i]);
+        all_topics.insert(s.topic);
     }
 
     {
@@ -189,7 +195,7 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
 
     for (auto& connection : d->connections)
     {
-        for (int i = 0; i < d->topics.size(); i++) connection.handle_array[i] = data[connection.indices[i]];
+        for (int i = 0; i < d->slots.size(); i++) connection.handle_array[i] = slot_data[connection.indices[i]];
         
         std::shared_lock<std::shared_mutex> lock(connection.receiver->mutex);
         if (!connection.receiver->active.load()) continue;
@@ -200,20 +206,12 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
 int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count, pfn_pond_receiver_callback callback, void* callback_pointer)
 {
     auto r = std::make_shared<pond_internal::Receiver>();
-    r->topics.resize(topic_count);
-    r->topic_types.resize(topic_count);
+    construct_slots(module, r->slots, slots, slot_count);
     r->module_name = module->name;
     r->api = &module->native_api;
     r->active.store(true);
     r->callback = callback;
     r->callback_pointer = callback_pointer;
-
-    for (int i = 0; i < topic_count; i++)
-    {
-        r->topics[i] = std::string((char*)topics[i]);
-        for (auto& t : module->topic_mappings) if (r->topics[i] == t.first) r->topics[i] = t.second;
-        r->topic_types[i] = std::string((char*)topic_type_names[i]);
-    }
 
     {
         std::shared_lock<std::shared_mutex> lock(dds_discovery.distributor_mutex);

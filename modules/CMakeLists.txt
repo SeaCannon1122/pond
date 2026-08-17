@@ -27,7 +27,7 @@ set(ORB_SLAM3_DIR ~/lib/ORB_SLAM3)
 add_library(quac_modules SHARED
   src/bundle.cpp
   src/gst_server.cpp
-  #src/realsense_driver.cpp
+  src/realsense_camera.cpp
   src/v4l2_camera.cpp
   src/dummy_camera.cpp
   #src/depthai_driver.cpp

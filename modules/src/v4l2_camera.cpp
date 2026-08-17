@@ -6,7 +6,7 @@ class CVImgFrame : public ImgFrame
 {
 public:
 
-    explicit CVImgFrame(cv::Mat& frame_, const std::string& format_) : frame(frame_)
+    explicit CVImgFrame(cv::Mat& frame_, ImgFrame::Format format_) : frame(frame_)
     {
 
         data = frame.data;
@@ -69,7 +69,7 @@ void V4L2Camera::onFrame()
         shutdown();
     }
 
-    ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, "rgb8");
+    ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, ImgFrame::Format::RGB8);
     distributor.distribute(color_msg);
     
 }

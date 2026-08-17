@@ -9,8 +9,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include_directories(include)
 
+add_library(pond_manager STATIC
+    src/manager/pond_manager.cpp
+    src/manager/pond_manager_api.cpp
+)
+
 add_executable(pond
     src/main.cpp
-    src/pond_manager.cpp
-    src/pond_manager_api.cpp
 )
+
+target_link_libraries(pond PRIVATE pond_manager)

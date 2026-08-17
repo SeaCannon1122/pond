@@ -8,7 +8,7 @@ template <typename T>
 class SlotArray
 {
 public:
-    SlotArray() = default;
+    SlotArray() : elements(10) {}
 
     explicit SlotArray(uint32_t initial_capacity) : elements(initial_capacity) {}
 

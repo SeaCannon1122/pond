@@ -38,14 +38,14 @@ class DummyImgFrame : public ImgFrame
 {
 public:
 
-    explicit DummyImgFrame(uint32_t w, uint32_t h, const std::string& format_)
+    explicit DummyImgFrame(uint32_t w, uint32_t h)
     {
         image_data = makeDummyImage(w, h);
         data = image_data.data();
         width = w;
         height = h;
         pixel_size = 3;
-        format = format_;  
+        format = ImgFrame::Format::RGB8;  
     }
 
 private:
@@ -88,6 +88,6 @@ void DummyCamera::onFrame()
     if (remaining > std::chrono::duration<double>::zero()) std::this_thread::sleep_for(remaining);
     last_time = std::chrono::steady_clock::now();
 
-    ImgFrameSPtr color_msg = std::make_shared<DummyImgFrame>(width, height, "rgb8");
+    ImgFrameSPtr color_msg = std::make_shared<DummyImgFrame>(width, height);
     distributor.distribute(color_msg);
 }

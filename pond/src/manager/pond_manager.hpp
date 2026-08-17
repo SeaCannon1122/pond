@@ -12,6 +12,7 @@
 #include <thread>
 #include <stdarg.h>
 #include <atomic>
+#include <unordered_set>
 
 #include "slot_array.hpp"
 
@@ -20,11 +21,16 @@ typedef struct PondManager PondManager;
 namespace pond_internal
 {
 
+struct Slot
+{
+    std::string type;
+    std::string topic;
+};
+
 struct Receiver
 {
     std::string module_name;
-    std::vector<std::string> topics;
-    std::vector<std::string> topic_types;
+    std::vector<Slot> slots;
     uint32_t discovery_id;
     pond_api* api;
 
@@ -44,8 +50,7 @@ struct ReceiverConnection
 struct Distributor
 {
     std::string module_name;
-    std::vector<std::string> topics;
-    std::vector<std::string> topic_types;
+    std::vector<Slot> slots;
     uint32_t discovery_id;
 
     SlotArray<ReceiverConnection> connections;

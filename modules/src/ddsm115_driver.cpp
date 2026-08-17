@@ -30,7 +30,6 @@ POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115
 
 pond_result DDSM115Driver::onStartup()
 {
-    if (args.size() < 2) return POND_ERROR;
 
     if (cmd.connect(args[0]) == false)
     {

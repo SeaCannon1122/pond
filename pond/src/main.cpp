@@ -1,5 +1,5 @@
 #include "pond/pond.h"
-#include "pond_manager.hpp"
+#include "manager/pond_manager.hpp"
 #include <chrono>
 
 #include <atomic>
@@ -38,8 +38,10 @@ int main()
             {
                 {"width", pond_malloc_parameter_int(1920)},
                 {"height", pond_malloc_parameter_int(1080)},
-                {"fps", pond_malloc_parameter_int(30)},
+                {"port", pond_malloc_parameter_int(5000)},
+                {"ip", pond_malloc_parameter_string((uint8_t*)"127.0.0.1")},
                 {"bitrate", pond_malloc_parameter_int(10000)},
+                {"format", pond_malloc_parameter_string((uint8_t*)"RGB8")},
             },
             {{"in", "image"}}
         );

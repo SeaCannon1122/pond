@@ -43,9 +43,9 @@ pond_parameter* _pond_get_parameter(pond_internal::ModuleContext* ctx, uint8_t* 
     return ctx->manager->api_get_parameter(ctx->module, name);
 }
 
-int32_t _pond_create_distributor(pond_internal::ModuleContext* ctx, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names)
+int32_t _pond_create_distributor(pond_internal::ModuleContext* ctx, pond_dds_slot_info* slots, uint32_t slot_count)
 {
-    return ctx->manager->api_create_distributor(ctx->module, topics, topic_count, topic_type_names);
+    return ctx->manager->api_create_distributor(ctx->module, slots, slot_count);
 }
 
 void _pond_destroy_distributor(pond_internal::ModuleContext* ctx, uint32_t distributor)
@@ -58,9 +58,9 @@ void _pond_distribute(pond_internal::ModuleContext* ctx, uint32_t distributor, v
     ctx->manager->api_distribute(ctx->module,distributor, data);
 }
 
-int32_t _pond_create_receiver(pond_internal::ModuleContext* ctx, uint8_t** topics, uint32_t topic_count, uint8_t** topic_type_names, pfn_pond_receiver_callback callback, void* callback_pointer)
+int32_t _pond_create_receiver(pond_internal::ModuleContext* ctx, pond_dds_slot_info* slots, uint32_t slot_count, pfn_pond_receiver_callback callback, void* callback_pointer)
 {
-    return ctx->manager->api_create_receiver(ctx->module, topics, topic_count, topic_type_names, callback, callback_pointer);
+    return ctx->manager->api_create_receiver(ctx->module, slots, slot_count, callback, callback_pointer);
 }
 
 void _pond_destroy_receiver(pond_internal::ModuleContext* ctx, uint32_t receiver)

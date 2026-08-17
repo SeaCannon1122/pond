@@ -130,9 +130,8 @@ typedef struct pond_api pond_api;
 
 typedef struct pond_dds_slot_info
 {
+    uint8_t* topic;
     uint8_t* type;
-    uint8_t** aliases;
-    uint32_t alias_count;
 } pond_dds_slot_info;
 
 typedef void (*pfn_pond_receiver_callback)(pond_api* api, void* callback_pointer, void** slot_data);

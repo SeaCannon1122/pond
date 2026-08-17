@@ -2,7 +2,7 @@
 #include <pond/pond.hpp>
 
 EXTERN_POND_MODULE(GstServer);
-//EXTERN_POND_MODULE(RealsenseDriver);
+EXTERN_POND_MODULE(RealsenseCamera);
 EXTERN_POND_MODULE(V4L2Camera);
 EXTERN_POND_MODULE(DummyCamera);
 //EXTERN_POND_MODULE(DepthaiDriver);
@@ -11,9 +11,9 @@ EXTERN_POND_MODULE(DummyCamera);
 
 POND_BUNDLE_DECLARE(
     "All the modules for quac", 
-    3,
-    POND_MODULE(GstServer), 
-    //POND_MODULE(RealsenseDriver),
+    4,
+    POND_MODULE(GstServer),
+    POND_MODULE(RealsenseCamera),
     POND_MODULE(V4L2Camera),
     POND_MODULE(DummyCamera),
     //POND_MODULE(DepthaiDriver),

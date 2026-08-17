@@ -1,13 +1,13 @@
 #pragma once
 
-#include <cstddef>
+#include "pond.h"
+#include <unordered_set>
 #include <optional>
 #include <stdint.h>
 #include <string>
 #include <memory>
 #include <functional>
 #include <type_traits>
-#include "pond.h"
 #include <array>
 #include <vector>
 #include <stddef.h>
@@ -15,7 +15,7 @@
 namespace pond
 {
 
-    #define _CPP_PARAM_REF(p_ptr) (*(c_type*)((uint8_t*)(p_ptr) + val_offset))
+    #define _CPP_PARAM_REF(p_ptr, extra_ptr) (*(c_type*extra_ptr)((uint8_t*)(p_ptr) + val_offset))
 
     template<typename T, typename c_type>
     class _ParameterBase
@@ -23,12 +23,39 @@ namespace pond
     friend class _UntypedParameterBase;
     public:
 
-        std::optional<T> getStrict(bool log = true)
+        std::optional<T> getStrict(const std::unordered_set<T>& allowed_values = {}, bool log = true)
         {
             pond_parameter* p = api->get_parameter(api->ctx, (uint8_t*)name->c_str());
             if (p != NULL)
             {
-                if (p->type == pt) { T value{_CPP_PARAM_REF(p)}; free(p); return value; }
+                if (p->type == pt)
+                {
+                    T value{_CPP_PARAM_REF(p, )};
+                    
+                    if (auto it = allowed_values.find(value); it != allowed_values.end() || allowed_values.size() == 0)
+                    {
+                        free(p);
+                        return value;
+                    }
+                    else if (log)
+                    {
+                        std::string list; list.reserve(1000);
+                        for (auto& v : allowed_values)
+                        {
+                            list.append(", ");
+                            if constexpr (std::is_same_v<T, std::string>) { list.append("'");list.append(v);list.append("'"); }
+                            else if constexpr (std::is_same_v<T, bool>) list.append(v ? "true" : "false");
+                            else list.append(std::to_string(v));
+                        }
+
+                        std::string string_value;
+                        if constexpr (std::is_same_v<T, std::string>) string_value = "'" + value + "'";
+                        else if constexpr (std::is_same_v<T, bool>) string_value = (value ? "true" : "false");
+                        else string_value = std::to_string(value);
+
+                        api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' (%s) value must be in { %s }", name->c_str(), string_value.c_str(), &list.c_str()[2]);
+                    }   
+                }
                 else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '%s'", name->c_str(), type_name);
                 free(p);
             }
@@ -49,16 +76,16 @@ namespace pond
             else
             {
                 p = (pond_parameter*)malloc(sizeof(pond_parameter));
-                _CPP_PARAM_REF(p) = val;
+                _CPP_PARAM_REF(p, ) = val;
             }
             
             p->type = pt;
             api->set_parameter(api->ctx, (uint8_t*)name->c_str(), p);
         }
 
-        T get(const T& default_val, bool set_default = true)
+        T get(const T& default_val, const std::unordered_set<T>& allowed_values = {}, bool set_default = true)
         {
-            if (auto ret = getStrict(false)) return std::move(ret.value());
+            if (auto ret = getStrict(allowed_values, false)) return std::move(ret.value());
             else
             {
                 if (set_default) set(default_val);
@@ -91,7 +118,7 @@ namespace pond
                     if (check_array_length(p->array_length, min_length, max_length, log))
                     {
                         std::vector<T> vec(p->array_length);
-                        for (int i = 0; i < vec.size(); i++) vec[i] = T{_CPP_PARAM_REF(p)[i]};
+                        for (int i = 0; i < vec.size(); i++) vec[i] = T{_CPP_PARAM_REF(p, *)[i]};
                         free(p);
                         return vec;
                     }
@@ -125,8 +152,8 @@ namespace pond
             else
             {
                 p = (pond_parameter*)malloc(sizeof(pond_parameter) + sizeof(c_type) * val.size());
-                _CPP_PARAM_REF(p) = (c_type*)((uint8_t*)p + sizeof(pond_parameter));
-                for (uint32_t i = 0; i < val.size(); i++) _CPP_PARAM_REF(p)[i] = val[i];
+                _CPP_PARAM_REF(p, *) = (c_type*)((uint8_t*)p + sizeof(pond_parameter));
+                for (uint32_t i = 0; i < val.size(); i++) _CPP_PARAM_REF(p, *)[i] = val[i];
             }
             
             p->type = pt;
@@ -202,11 +229,13 @@ namespace pond
     public:
         void destroy()
         {
+            if (id == -1) return;
             api->destroy_distributor(api->ctx, id);
         }
 
         void distribute(Args&... args)
         {
+            if (id == -1) return;
             void* data[] = { static_cast<void*>(&args)... };
             api->distribute(api->ctx, id, data);
         }
@@ -243,6 +272,7 @@ namespace pond
     public:
         void destroy()
         {
+            if (id == -1) return;
             api->destroy_receiver(api->ctx, id);
         }
     private:
@@ -263,17 +293,17 @@ namespace pond
         Distributor<Args...> createDistributor(const std::array<std::string, sizeof...(Args)>& topics)
         {
             std::array<std::string, sizeof...(Args)> type_name_strings = {std::string(typeid(Args).name()) + "_" + std::to_string(typeid(Args).hash_code())...};
-            std::array<uint8_t*, sizeof...(Args)> topic_names, type_names;
+            std::array<pond_dds_slot_info, sizeof...(Args)> slot_infos;
             
             for (int i = 0; i < sizeof...(Args); i++)
             {
-                topic_names[i] = (uint8_t*)topics[i].c_str();
-                type_names[i] = (uint8_t*)type_name_strings[i].c_str();
+                slot_infos[i].topic = (uint8_t*)topics[i].c_str();
+                slot_infos[i].type = (uint8_t*)type_name_strings[i].c_str();
             }
 
             Distributor<Args...> d;
             d.api = &_pond_api;
-            d.id = d.api->create_distributor(d.api->ctx, topic_names.data(), sizeof...(Args), type_names.data());
+            d.id = d.api->create_distributor(d.api->ctx, slot_infos.data(), sizeof...(Args));
             return d;
         }
 
@@ -281,12 +311,12 @@ namespace pond
         Receiver<Args...> createReceiver(const std::array<std::string, sizeof...(Args)>& topics, Callback&& callback)
         {
             std::array<std::string, sizeof...(Args)> type_name_strings = {std::string(typeid(Args).name()) + "_" + std::to_string(typeid(Args).hash_code())...};
-            std::array<uint8_t*, sizeof...(Args)> topic_names, type_names;
+            std::array<pond_dds_slot_info, sizeof...(Args)> slot_infos;
             
             for (int i = 0; i < sizeof...(Args); i++)
             {
-                topic_names[i] = (uint8_t*)topics[i].c_str();
-                type_names[i] = (uint8_t*)type_name_strings[i].c_str();
+                slot_infos[i].topic = (uint8_t*)topics[i].c_str();
+                slot_infos[i].type = (uint8_t*)type_name_strings[i].c_str();
             }
 
             Receiver<Args...> r;
@@ -300,9 +330,8 @@ namespace pond
 
             r.id = r.api->create_receiver(
                 r.api->ctx, 
-                topic_names.data(), 
+                slot_infos.data(), 
                 sizeof...(Args), 
-                type_names.data(), 
                 ReceiverCallback<Args...>::trampoline,
                 &(*r.callback)
             );

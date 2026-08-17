@@ -17,19 +17,23 @@ private:
     GstElement* pipeline;
     GstElement* appsrc;
     pond::Receiver<ImgFrameSPtr> receiver;
-    int32_t width, height, fps, port;
+    int32_t width, height, port;
     std::string ip;
+    ImgFrame::Format image_format;
 };
 
 POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
 
 pond_result GstServer::onStartup()
 {
-    width = parameter("width").asInt().get(640);
-    height = parameter("height").asInt().get(480);
-    fps = parameter("fps").asInt().get(30);
-    port = parameter("port").asInt().get(5000);
-    ip = parameter("ip").asString().get("127.0.0.1");
+    auto _width = parameter("width").asInt().getStrict();
+    auto _height = parameter("height").asInt().getStrict();
+    auto _port = parameter("port").asInt().getStrict();
+    auto _ip = parameter("ip").asString().getStrict();
+
+    auto _format_string = parameter("format").asString().getStrict({"RGB8", "BGR8", "Y8", "Y16", "Z8", "Z16"});
+    if (!_format_string || !_width || !_height || !_port || !_ip) return POND_ERROR;
+    width = *_width; height = *_height; port = *_port; ip = *_ip;
 
     receiver = createReceiver<ImgFrameSPtr>(
         {"in"},
@@ -58,9 +62,8 @@ pond_result GstServer::onStartup()
 
     std::string pipeline_desc =
         "appsrc name=appsrc is-live=true block=false format=time do-timestamp=true "
-        "caps=video/x-raw,format=BGR,width=" + std::to_string(width) +
-        ",height=" + std::to_string(height) +
-        ",framerate=" + std::to_string(fps) + "/1 "
+        "caps=video/x-raw,format=RGB,width=" + std::to_string(width) +
+        ",height=" + std::to_string(height) + " "
         "! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
         "! videoconvert "
         "! x264enc tune=zerolatency speed-preset=ultrafast key-int-max=" +
