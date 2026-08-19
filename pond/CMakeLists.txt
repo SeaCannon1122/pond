@@ -1,2 +1,2 @@
 add_subdirectory(manager)
-add_subdirectory(manager_py)
+add_subdirectory(python)

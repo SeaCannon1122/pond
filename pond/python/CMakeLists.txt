@@ -13,9 +13,9 @@ set_target_properties(_pond PROPERTIES
         "${CMAKE_BINARY_DIR}/python/pond"
 )
 
-add_custom_command(TARGET _pond POST_BUILD
+add_custom_target(copy_python ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/python/pond"
+        "${CMAKE_CURRENT_SOURCE_DIR}/pond"
         "${CMAKE_BINARY_DIR}/python/pond"
 )
 

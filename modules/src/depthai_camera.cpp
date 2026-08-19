@@ -31,16 +31,19 @@ public:
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
+    std::shared_ptr<dai::Device> device;
+
     std::shared_ptr<dai::Pipeline> pipeline;
     std::shared_ptr<dai::node::Camera> left;
     std::shared_ptr<dai::node::Camera> right;
     std::shared_ptr<dai::node::Sync> sync;
     std::shared_ptr<dai::MessageQueue> out_queue;
+
     pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>> distributor;
     CameraInfo mono_left_info, mono_right_info;
 };
 
-POND_MODULE_CPP_DECLARE(DepthaiCamera, "dephai_camera", "driver module for the Oak D Lite")
+POND_MODULE_CPP_DECLARE(DepthaiCamera, "depthai_camera", "driver module for the Oak D Lite")
 
 pond_result DepthaiCamera::onStartup()
 {
@@ -52,7 +55,28 @@ pond_result DepthaiCamera::onStartup()
         }
     );
 
-    pipeline = std::make_shared<dai::Pipeline>();
+    if (auto mxid = parameter("mxid").asString().getStrict({}, false))
+    {
+        auto devices = dai::Device::getAllConnectedDevices();
+        POND_LOG("%d device(s) connected", devices.size());
+
+        for (int i = 0;; i++)
+        {
+            if (i == devices.size())
+            {
+                POND_LOG("No device with mxID %s connected", mxid->c_str());
+                return POND_ERROR;
+            }
+
+            if(devices[i].getDeviceId() == *mxid) break;
+        }
+        device = std::make_shared<dai::Device>(dai::DeviceInfo(*mxid));
+    }
+    else device = std::make_shared<dai::Device>();
+
+    device->setMaxReconnectionAttempts(0);
+
+    pipeline = std::make_shared<dai::Pipeline>(device);
 
     left = pipeline->create<dai::node::Camera>();
     left->build(dai::CameraBoardSocket::CAM_B);
@@ -60,16 +84,15 @@ pond_result DepthaiCamera::onStartup()
     right = pipeline->create<dai::node::Camera>();
     right->build(dai::CameraBoardSocket::CAM_C);
 
-    // Create and configure sync node
     sync = pipeline->create<dai::node::Sync>();
-    sync->setRunOnHost(true);  // Can also run on device
+    sync->setRunOnHost(true);
 
-    // Link cameras to sync inputs
     left->requestOutput({640, 480}, dai::ImgFrame::Type::GRAY8, dai::ImgResizeMode::CROP, 30.f)->link(sync->inputs["left"]);
     right->requestOutput({640, 480}, dai::ImgFrame::Type::GRAY8, dai::ImgResizeMode::CROP, 30.f)->link(sync->inputs["right"]);
 
-    // Create output queue
     out_queue = sync->out.createOutputQueue();
+
+    pipeline->start();
 
     return POND_SUCCESS;
 }
@@ -83,6 +106,7 @@ void DepthaiCamera::onShutdown()
     right.reset();
     out_queue.reset();
     pipeline.reset();
+    device.reset();
 
     distributor.destroy();
 }
@@ -95,31 +119,25 @@ void DepthaiCamera::onFrame()
         return;
     }
 
-    auto sync_group = out_queue->tryGet<dai::MessageGroup>();
-    if (sync_group)
-    {
-        auto left_frame = sync_group->get<dai::ImgFrame>("left");
-        auto right_frame = sync_group->get<dai::ImgFrame>("right");
-
-        if (left_frame && right_frame)
+    try {
+        auto sync_group = out_queue->tryGet<dai::MessageGroup>();
+        if (sync_group)
         {
-            ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
-            ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
-            std::vector<ImuDataStamped> imu_data;
-            distributor.distribute(left_msg, mono_left_info, right_msg, mono_right_info, imu_data);
+            auto left_frame = sync_group->get<dai::ImgFrame>("left");
+            auto right_frame = sync_group->get<dai::ImgFrame>("right");
 
-            return;
-
-            // auto imu_data = imu_queue->tryGet<dai::IMUData>();
-            // if (imu_data)
-            // {
-            //     for (const auto& packet : imu_data->packets)
-            //     {
-            //         auto accel = packet.acceleroMeter;
-            //         auto gyro = packet.gyroscope;
-
-            //     }
-            // }
+            if (left_frame && right_frame)
+            {
+                ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
+                ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8);
+                std::vector<ImuDataStamped> imu_data;
+                distributor.distribute(left_msg, mono_left_info, right_msg, mono_right_info, imu_data);
+            }
         }
+    }
+    catch (const dai::MessageQueue::QueueException& e)
+    {
+        POND_LOG("DepthAI message queue closed: %s", e.what());
+        shutdown();
     }
 }

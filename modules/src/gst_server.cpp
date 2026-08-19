@@ -1,6 +1,5 @@
 #include "pond/pond.h"
 #include <cstdint>
-#include <memory>
 #include <opencv2/core/mat.hpp>
 #include <pond/pond.hpp>
 #include <gst/gst.h>
@@ -31,27 +30,27 @@ pond_result GstServer::onStartup()
     auto _port = parameter("port").asInt().getStrict();
     auto _ip = parameter("ip").asString().getStrict();
 
-    auto _format_string = parameter("format").asString().getStrict({"RGB8", "BGR8", "Y8", "Y16", "Z8", "Z16"});
+    auto _format_string = parameter("format").asString().getStrict({"RGB8", "BGR8", "Depth8", "Depth16", "Mono8", "Mono16"});
     if (!_format_string || !_width || !_height || !_port || !_ip) return POND_ERROR;
-    width = *_width; height = *_height; port = *_port; ip = *_ip;
+    width = *_width; height = *_height; port = *_port; ip = *_ip; image_format = ImgFrame::stringToFormat(*_format_string);
 
     receiver = createReceiver<ImgFrameSPtr>(
         {"in"},
         [this](ImgFrameSPtr& frame)
         {
-            if (frame->width != width || frame->height != height || frame->pixel_size != 3)
+            if (frame->width != width || frame->height != height || frame->format != image_format)
             {
                 POND_LOG(
-                    "ERROR: frame->width (%d) != width (%d) || frame->height (%d) != height (%d) || frame->pixel_size (%d) != 3",
-                    frame->width, width, frame->height, height, frame->pixel_size
+                    "ERROR: frame->width (%d) != width (%d) || frame->height (%d) != height (%d) ||  frame->format (%s) != image_format (%s)",
+                    frame->width, width, frame->height, height, ImgFrame::formatToString(frame->format).c_str(), ImgFrame::formatToString(image_format).c_str()
                 );
                 return;
             }
 
-            GstBuffer *buffer = gst_buffer_new_allocate(nullptr, 3 * width * height, nullptr);
+            GstBuffer *buffer = gst_buffer_new_allocate(nullptr, frame->pixel_size * width * height, nullptr);
             GstMapInfo map;
             gst_buffer_map(buffer, &map, GST_MAP_WRITE);
-            memcpy(map.data, frame->data, 3 * width * height);
+            memcpy(map.data, frame->data, frame->pixel_size * width * height);
 
             gst_buffer_unmap(buffer, &map);
             gst_app_src_push_buffer(GST_APP_SRC(appsrc), buffer);
@@ -60,9 +59,17 @@ pond_result GstServer::onStartup()
 
     gst_init(0, NULL);
 
+    std::string gst_format;
+    if (image_format == ImgFrame::Format::RGB8) gst_format = "RGB";
+    if (image_format == ImgFrame::Format::BGR8) gst_format = "BGR";
+    if (image_format == ImgFrame::Format::Depth8) gst_format = "GRAY8_LE";
+    if (image_format == ImgFrame::Format::Depth16) gst_format = "GRAY16_LE";
+    if (image_format == ImgFrame::Format::Mono8) gst_format = "GRAY8_LE";
+    if (image_format == ImgFrame::Format::Mono16) gst_format = "GRAY16_LE";
+
     std::string pipeline_desc =
         "appsrc name=appsrc is-live=true block=false format=time do-timestamp=true "
-        "caps=video/x-raw,format=RGB,width=" + std::to_string(width) +
+        "caps=video/x-raw,format=" + gst_format + ",width=" + std::to_string(width) +
         ",height=" + std::to_string(height) + " "
         "! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
         "! videoconvert "

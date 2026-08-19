@@ -3,7 +3,6 @@ import time
 
 from pond import Manager
 
-
 is_running = True
 int_counter = 0
 
@@ -33,33 +32,45 @@ def main():
     pm.load_module(
         name="camera",
         bundle_name="quac_modules",
-        module_name="dummy_camera",
+        module_name="depthai_camera",
         thread_name="default_thread",
-        parameters={
-            "width": 1920,
-            "height": 1080,
-            "fps": 30,
-        },
-        topic_mappings={
-            "out": "image",
-        },
+        parameters={},
+        topic_mappings={},
     )
 
     pm.load_module(
-        name="streamer",
+        name="mono_left_gst_streamer",
         bundle_name="quac_modules",
         module_name="gst_server",
         thread_name="default_thread",
         parameters={
-            "width": 1920,
-            "height": 1080,
+            "width": 640,
+            "height": 480,
             "port": 5000,
             "ip": "192.168.137.26",
             "bitrate": 10000,
-            "format": "RGB8",
+            "format": "Mono8",
         },
         topic_mappings={
-            "in": "image",
+            "in": "mono_left/image",
+        },
+    )
+
+    pm.load_module(
+        name="mono_right_gst_streamer",
+        bundle_name="quac_modules",
+        module_name="gst_server",
+        thread_name="default_thread",
+        parameters={
+            "width": 640,
+            "height": 480,
+            "port": 5001,
+            "ip": "192.168.137.26",
+            "bitrate": 10000,
+            "format": "Mono8",
+        },
+        topic_mappings={
+            "in": "mono_right/image",
         },
     )
 
@@ -68,8 +79,9 @@ def main():
             time.sleep(0.2)
 
     finally:
-        pm.shutdown_module("streamer")
         pm.shutdown_module("camera")
+        pm.shutdown_module("mono_left_gst_streamer")
+        pm.shutdown_module("mono_right_gst_streamer")
 
 
 if __name__ == "__main__":
