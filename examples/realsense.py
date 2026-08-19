@@ -35,7 +35,7 @@ def main():
         module_name="realsense_camera",
         thread_name="default_thread",
         parameters={
-            "disable_emitter" : True
+            "disable_emitter" : False
         },
         topic_mappings={}
     )
