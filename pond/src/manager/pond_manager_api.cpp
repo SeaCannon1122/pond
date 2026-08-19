@@ -47,7 +47,11 @@ void PondManager::api_set_parameter(pond_internal::Module* module, uint8_t* name
 {
     std::lock_guard<std::mutex> lock(module->parameter_mutex);
 
-    if (parameter) module->parameters[std::string((char*)name)] = parameter;
+    if (parameter)
+    {
+        if (auto it = module->parameters.find(std::string((char*)name)); it != module->parameters.end()) free(it->second);
+        module->parameters[std::string((char*)name)] = parameter;
+    }
     else module->parameters.erase(std::string((char*)name));
 }
 

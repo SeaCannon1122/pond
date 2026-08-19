@@ -4,6 +4,14 @@
 #include <memory>
 #include <array>
 
+class Stamp
+{
+    double time;
+    double hw_time;
+    std::string frame_id;
+};
+
+
 class ImgFrame
 {
 public:
@@ -13,20 +21,20 @@ public:
         ERROR,
         RGB8,
         BGR8,
-        Z8,
-        Z16,
-        Y8,
-        Y16,
+        Depth8,
+        Depth16,
+        Mono8,
+        Mono16,
     };
 
     static Format stringToFormat(const std::string& str)
     {
         if (str == "RGB8") return Format::RGB8;
         if (str == "BGR8") return Format::BGR8;
-        if (str == "Z8") return Format::Z8;
-        if (str == "Z16") return Format::Z16;
-        if (str == "Y8") return Format::Y8;
-        if (str == "Y16") return Format::Y16;
+        if (str == "Depth8") return Format::Depth8;
+        if (str == "Depth16") return Format::Depth16;
+        if (str == "Mono8") return Format::Mono8;
+        if (str == "Mono16") return Format::Mono16;
         return Format::ERROR;
     };
 
@@ -36,14 +44,13 @@ public:
     uint32_t height;
     uint32_t pixel_size;
     Format format;
-    double time;
-    double hw_time;
+    Stamp stamp;
 };
 
 class CameraInfo
 {
 public:
-    std::string frame_id;
+    Stamp stamp;
     uint32_t height;
     uint32_t width;
     std::string distortion_model;
@@ -69,4 +76,10 @@ class ImuData
 {
     Point lin_acc;
     Point ang_vel;
+};
+
+class ImuDataStamped
+{
+    ImuData data;
+    Stamp stamp;
 };

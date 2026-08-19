@@ -111,9 +111,9 @@ void RealsenseCamera::onFrame()
     rs2::video_frame right_frame = frames.get_infrared_frame(2);
 
     ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8);
-    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Z16);
-    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Y8);
-    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Y8);
+    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16);
+    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8);
+    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8);
 
     distributor.distribute(color_msg, color_info, depth_msg, depth_info, left_msg, mono_left_info, right_msg, mono_right_info);
 }

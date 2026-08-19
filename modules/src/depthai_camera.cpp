@@ -1,15 +1,17 @@
+#include <depthai/capabilities/ImgFrameCapability.hpp>
 #include <depthai/pipeline/datatype/ImgFrame.hpp>
 #include <pond/pond.hpp>
 #include <depthai/depthai.hpp>
 #include <memory>
+#include <vector>
 #include "depthai/depthai.hpp"
-#include "wrapped_image_frame.hpp"
+#include "pond/data_types.hpp"
 
-class DepthaiWrappedImageFrame : public WrappedImageFrame
+class DepthaiImgFrame : public ImgFrame
 {
 public:
 
-    explicit DepthaiWrappedImageFrame(std::shared_ptr<dai::ImgFrame>& frame_, const std::string& format_) : frame(frame_)
+    explicit DepthaiImgFrame(std::shared_ptr<dai::ImgFrame>& frame_, ImgFrame::Format format_) : frame(frame_)
     {
         data = frame->getFrame().data;
         width = frame->getWidth();
@@ -18,16 +20,11 @@ public:
         format = format_;
     }
 
-    DepthaiWrappedImageFrame* clone() const override
-    {
-        return new DepthaiWrappedImageFrame(*this);
-    }
-
 private:
     std::shared_ptr<dai::ImgFrame> frame;
 };
 
-class DepthaiDriver : public pond::ModuleBase
+class DepthaiCamera : public pond::ModuleBase
 {
 public:
     virtual pond_result onStartup() override;
@@ -39,16 +36,21 @@ private:
     std::shared_ptr<dai::node::Camera> right;
     std::shared_ptr<dai::node::Sync> sync;
     std::shared_ptr<dai::MessageQueue> out_queue;
-    pond::Distributor left_distributor;
-    pond::Distributor right_distributor;
+    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>> distributor;
+    CameraInfo mono_left_info, mono_right_info;
 };
 
-POND_MODULE_CPP_DECLARE(DepthaiDriver, "dephai_driver", "driver module for the Oak D Lite")
+POND_MODULE_CPP_DECLARE(DepthaiCamera, "dephai_camera", "driver module for the Oak D Lite")
 
-pond_result DepthaiDriver::onStartup()
+pond_result DepthaiCamera::onStartup()
 {
-    left_distributor = createDistributor("left");
-    right_distributor = createDistributor("right");
+    distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>>(
+        {
+            "mono_left/image", "mono_left/cam_info", 
+            "mono_right/image", "mono_right/cam_info", 
+            "imu_data"
+        }
+    );
 
     pipeline = std::make_shared<dai::Pipeline>();
 
@@ -63,8 +65,8 @@ pond_result DepthaiDriver::onStartup()
     sync->setRunOnHost(true);  // Can also run on device
 
     // Link cameras to sync inputs
-    left->requestFullResolutionOutput()->link(sync->inputs["left"]);
-    right->requestFullResolutionOutput()->link(sync->inputs["right"]);
+    left->requestOutput({640, 480}, dai::ImgFrame::Type::GRAY8, dai::ImgResizeMode::CROP, 30.f)->link(sync->inputs["left"]);
+    right->requestOutput({640, 480}, dai::ImgFrame::Type::GRAY8, dai::ImgResizeMode::CROP, 30.f)->link(sync->inputs["right"]);
 
     // Create output queue
     out_queue = sync->out.createOutputQueue();
@@ -72,7 +74,7 @@ pond_result DepthaiDriver::onStartup()
     return POND_SUCCESS;
 }
 
-void DepthaiDriver::onShutdown()
+void DepthaiCamera::onShutdown()
 {
     pipeline->stop();
     pipeline->wait();
@@ -82,11 +84,10 @@ void DepthaiDriver::onShutdown()
     out_queue.reset();
     pipeline.reset();
 
-    left_distributor.destroy();
-    right_distributor.destroy();
+    distributor.destroy();
 }
 
-void DepthaiDriver::onFrame()
+void DepthaiCamera::onFrame()
 {
     if (!pipeline->isRunning())
     {
@@ -102,11 +103,10 @@ void DepthaiDriver::onFrame()
 
         if (left_frame && right_frame)
         {
-            auto* left_msg = new std::shared_ptr<WrappedImageFrame>(std::make_shared<DepthaiWrappedImageFrame>(left_frame, "mono8"));
-            left_distributor.distribute(static_cast<void*>(left_msg));
-
-            auto* right_msg = new std::shared_ptr<WrappedImageFrame>(std::make_shared<DepthaiWrappedImageFrame>(right_frame, "mono8"));
-            right_distributor.distribute(static_cast<void*>(right_msg));
+            ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
+            ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
+            std::vector<ImuDataStamped> imu_data;
+            distributor.distribute(left_msg, mono_left_info, right_msg, mono_right_info, imu_data);
 
             return;
 
