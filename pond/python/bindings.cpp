@@ -1,14 +1,9 @@
-#include <cstdint>
-#include <cstring>
 #include <stdexcept>
-#include <string>
-#include <unordered_map>
-#include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "../manager/src/pond_manager.hpp"
+#include <pond/manager/manager.hpp>
 
 namespace py = pybind11;
 
@@ -238,7 +233,8 @@ PYBIND11_MODULE(_pond, m)
                     module_name,
                     thread_name,
                     native_parameters,
-                    topic_mappings
+                    topic_mappings,
+                    {}
                 );
             },
 

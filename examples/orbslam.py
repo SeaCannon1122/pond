@@ -48,7 +48,6 @@ def main():
             "height": 480,
             "port": 5000,
             "ip": "192.168.137.26",
-            "bitrate": 10000,
             "format": "Mono8",
         },
         topic_mappings={
@@ -66,7 +65,6 @@ def main():
             "height": 480,
             "port": 5001,
             "ip": "192.168.137.26",
-            "bitrate": 10000,
             "format": "Mono8",
         },
         topic_mappings={

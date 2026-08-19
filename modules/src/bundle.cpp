@@ -6,17 +6,17 @@ EXTERN_POND_MODULE(RealsenseCamera);
 EXTERN_POND_MODULE(V4L2Camera);
 EXTERN_POND_MODULE(DummyCamera);
 EXTERN_POND_MODULE(DepthaiCamera);
-//EXTERN_POND_MODULE(OrbSlam3Module);
-//EXTERN_POND_MODULE(Ros2Bridge);
+EXTERN_POND_MODULE(OrbSlam3);
+EXTERN_POND_MODULE(DepthColorizer);
 
 POND_BUNDLE_DECLARE(
     "All the modules for quac", 
-    5,
+    7,
     POND_MODULE(GstServer),
     POND_MODULE(RealsenseCamera),
     POND_MODULE(V4L2Camera),
     POND_MODULE(DummyCamera),
-    POND_MODULE(DepthaiCamera)
-    //POND_MODULE(OrbSlam3Module),
-    //POND_MODULE(Ros2Bridge)
+    POND_MODULE(DepthaiCamera),
+    POND_MODULE(OrbSlam3),
+    POND_MODULE(DepthColorizer)
 )

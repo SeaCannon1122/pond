@@ -1,61 +1,11 @@
-#include <chrono>
-#include <thread>
-#include <memory>
 #include <pond/pond.hpp>
-#include <opencv2/opencv.hpp>
-#include <pond/data_types.hpp>
-#include <vector>
-#include <random>
-
-
-std::vector<uint8_t> makeDummyImage(std::size_t w, std::size_t h)
-{
-    using namespace std::chrono;
-
-    const auto now = steady_clock::now();
-    const auto t = duration_cast<milliseconds>(
-        now.time_since_epoch()
-    ).count();
-
-    std::vector<uint8_t> image(w * h * 3);
-
-    for (std::size_t y = 0; y < h; ++y)
-    {
-        for (std::size_t x = 0; x < w; ++x)
-        {
-            const std::size_t i = (y * w + x) * 3;
-
-            image[i + 0] = static_cast<uint8_t>((x + t / 10) % 256);
-            image[i + 1] = static_cast<uint8_t>((y + t / 15) % 256);
-            image[i + 2] = static_cast<uint8_t>((x + y + t / 20) % 256);
-        }
-    }
-
-    return image;
-}
-
-class DummyImgFrame : public ImgFrame
-{
-public:
-
-    explicit DummyImgFrame(uint32_t w, uint32_t h)
-    {
-        image_data = makeDummyImage(w, h);
-        data = image_data.data();
-        width = w;
-        height = h;
-        pixel_size = 3;
-        format = ImgFrame::Format::RGB8;  
-    }
-
-private:
-    std::vector<uint8_t> image_data;
-};
+#include <pond/data_types/data_types.hpp>
+#include <thread>
 
 class DummyCamera : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -66,7 +16,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(DummyCamera, "dummy_camera", "distributing dummy images for testing")
 
-pond_result DummyCamera::onStartup()
+pond_result DummyCamera::onStartup(const std::vector<void*>& args)
 {
     distributor = createDistributor<ImgFrameSPtr>({"out"});
     width = parameter("width").asInt().get(640);
@@ -88,6 +38,30 @@ void DummyCamera::onFrame()
     if (remaining > std::chrono::duration<double>::zero()) std::this_thread::sleep_for(remaining);
     last_time = std::chrono::steady_clock::now();
 
-    ImgFrameSPtr color_msg = std::make_shared<DummyImgFrame>(width, height);
+    ImgFrameSPtr color_msg = std::make_shared<ImgFrame>();
+
+    auto now = std::chrono::steady_clock::now();
+    auto t = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+    color_msg->default_data_buffer.resize(3*width*height);
+
+    for (std::size_t y = 0; y < height; y++)
+    {
+        for (std::size_t x = 0; x < width; x++)
+        {
+            size_t i = (y * width + x) * 3;
+
+            color_msg->default_data_buffer[i + 0] = static_cast<uint8_t>((x + y + t / 20) % 256);
+            color_msg->default_data_buffer[i + 2] = static_cast<uint8_t>((x + t / 10) % 256);
+            color_msg->default_data_buffer[i + 1] = static_cast<uint8_t>((y + t / 15) % 256);
+        }
+    }
+
+    color_msg->data = color_msg->default_data_buffer.data();
+    color_msg->width = width;
+    color_msg->height = height;
+    color_msg->pixel_size = 3;
+    color_msg->format = ImgFrame::Format::RGB8;  
+
     distributor.distribute(color_msg);
 }

@@ -1,29 +1,10 @@
 #include <pond/pond.hpp>
-#include <opencv2/opencv.hpp>
-#include <pond/data_types.hpp>
-
-class CVImgFrame : public ImgFrame
-{
-public:
-
-    explicit CVImgFrame(cv::Mat& frame_, ImgFrame::Format format_) : frame(frame_)
-    {
-
-        data = frame.data;
-        width = frame.cols;
-        height = frame.rows;
-        pixel_size = frame.elemSize();
-        format = format_;
-    }
-
-private:
-    cv::Mat frame;
-};
+#include "cv_img_frame.hpp"
 
 class V4L2Camera : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -33,7 +14,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(V4L2Camera, "v4l2_camera", "v4l2 camera image distributor")
 
-pond_result V4L2Camera::onStartup()
+pond_result V4L2Camera::onStartup(const std::vector<void*>& args)
 {
     distributor = createDistributor<ImgFrameSPtr>({"out"});
 
@@ -69,7 +50,7 @@ void V4L2Camera::onFrame()
         shutdown();
     }
 
-    ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, ImgFrame::Format::RGB8);
+    ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, ImgFrame::Format::BGR8);
     distributor.distribute(color_msg);
     
 }

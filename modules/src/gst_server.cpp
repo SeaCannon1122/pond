@@ -1,15 +1,13 @@
-#include "pond/pond.h"
-#include <cstdint>
-#include <opencv2/core/mat.hpp>
 #include <pond/pond.hpp>
+#include <pond/data_types/data_types.hpp>
+
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
-#include <pond/data_types.hpp>
 
 class GstServer : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -23,7 +21,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
 
-pond_result GstServer::onStartup()
+pond_result GstServer::onStartup(const std::vector<void*>& args)
 {
     auto _width = parameter("width").asInt().getStrict();
     auto _height = parameter("height").asInt().getStrict();
@@ -57,14 +55,22 @@ pond_result GstServer::onStartup()
         }
     );
 
-    gst_init(0, NULL);
+    GError *error = nullptr;
+    if (!gst_is_initialized()) gst_init_check(0, NULL, &error);
+    
+    if (error)
+    {
+        POND_LOG("GError: %s", error->message);
+        g_error_free(error);
+        return POND_ERROR;
+    }
 
     std::string gst_format;
     if (image_format == ImgFrame::Format::RGB8) gst_format = "RGB";
     if (image_format == ImgFrame::Format::BGR8) gst_format = "BGR";
-    if (image_format == ImgFrame::Format::Depth8) gst_format = "GRAY8_LE";
+    if (image_format == ImgFrame::Format::Depth8) gst_format = "GRAY8";
     if (image_format == ImgFrame::Format::Depth16) gst_format = "GRAY16_LE";
-    if (image_format == ImgFrame::Format::Mono8) gst_format = "GRAY8_LE";
+    if (image_format == ImgFrame::Format::Mono8) gst_format = "GRAY8";
     if (image_format == ImgFrame::Format::Mono16) gst_format = "GRAY16_LE";
 
     std::string pipeline_desc =
@@ -80,7 +86,7 @@ pond_result GstServer::onStartup()
         "! udpsink host=" + ip +
         " port=" + std::to_string(port) + " sync=false async=false";
 
-    GError *error = nullptr;
+    
     pipeline = gst_parse_launch(pipeline_desc.c_str(), &error);
 
     if (!pipeline || error)

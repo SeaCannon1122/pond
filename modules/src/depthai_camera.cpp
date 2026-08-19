@@ -1,11 +1,7 @@
-#include <depthai/capabilities/ImgFrameCapability.hpp>
-#include <depthai/pipeline/datatype/ImgFrame.hpp>
 #include <pond/pond.hpp>
+#include <pond/data_types/data_types.hpp>
+
 #include <depthai/depthai.hpp>
-#include <memory>
-#include <vector>
-#include "depthai/depthai.hpp"
-#include "pond/data_types.hpp"
 
 class DepthaiImgFrame : public ImgFrame
 {
@@ -27,7 +23,7 @@ private:
 class DepthaiCamera : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -45,7 +41,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(DepthaiCamera, "depthai_camera", "driver module for the Oak D Lite")
 
-pond_result DepthaiCamera::onStartup()
+pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
 {
     distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>>(
         {

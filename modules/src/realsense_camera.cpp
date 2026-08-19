@@ -1,20 +1,21 @@
 #include <pond/pond.hpp>
+#include <pond/data_types/data_types.hpp>
+
 #include <librealsense2/rs.hpp>
-#include <pond/data_types.hpp>
-#include <memory>
 
 class RealSenseImgFrame : public ImgFrame
 {
 public:
 
-    explicit RealSenseImgFrame(rs2::video_frame& frame_, ImgFrame::Format format_) : frame(frame_)
+    explicit RealSenseImgFrame(rs2::video_frame& frame_, ImgFrame::Format format_, double depth_scale_ = 1) : frame(frame_)
     {
 
-        data = frame.get_data();
+        data = (void*)frame.get_data();
         width = frame.get_width();
         height = frame.get_height();
         pixel_size = frame.get_bytes_per_pixel();
         format = format_;
+        depth_scale = depth_scale_;
     }
 
 private:
@@ -24,7 +25,7 @@ private:
 class RealsenseCamera : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -36,7 +37,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(RealsenseCamera, "realsense_camera", "driver for the intel realsense d435")
 
-pond_result RealsenseCamera::onStartup()
+pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
 {
     distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
@@ -89,9 +90,8 @@ pond_result RealsenseCamera::onStartup()
     rs2::pipeline_profile profile = pipe.start(cfg);
 
     for (auto&& sensor : profile.get_device().query_sensors())
-    {
-        if (sensor.supports(RS2_OPTION_EMITTER_ENABLED)) sensor.set_option(RS2_OPTION_EMITTER_ENABLED, 0);
-    }
+        if (sensor.supports(RS2_OPTION_EMITTER_ENABLED))
+            sensor.set_option(RS2_OPTION_EMITTER_ENABLED, parameter("disable_emitter").asBool().get(false) ? 0 : 1);
 
     return POND_SUCCESS;
 }
@@ -111,7 +111,7 @@ void RealsenseCamera::onFrame()
     rs2::video_frame right_frame = frames.get_infrared_frame(2);
 
     ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8);
-    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16);
+    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, depth_frame.get_units());
     ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8);
     ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8);
 

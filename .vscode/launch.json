@@ -5,12 +5,12 @@
             "name": "Debug my_program",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/pond/pond",
+            "program": "${workspaceFolder}/build/test/pond_test",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,
             "env": {
-                "POND_BUNDLE_PATH": "/home/christopher/quac_ws/quac_modular/build/modules"
+                "POND_BUNDLE_PATH": "${workspaceFolder}/build/modules"
             }
         }
     ]

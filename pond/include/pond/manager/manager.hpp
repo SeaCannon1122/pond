@@ -75,6 +75,7 @@ struct Module
     std::unordered_map<std::string, std::string> topic_mappings;
     pond_api native_api;
     ModuleContext context;
+    std::vector<void*> args;
 
     std::unordered_map<std::string, pond_parameter*> parameters;
     std::mutex parameter_mutex;
@@ -126,8 +127,9 @@ public:
         const std::string& bundle_name,
         const std::string& module_name,
         const std::string& thread_name,
-        const std::unordered_map<std::string, pond_parameter*>& parameters,
-        const std::unordered_map<std::string, std::string>& topic_mappings
+        const std::unordered_map<std::string, pond_parameter*>& parameters = {},
+        const std::unordered_map<std::string, std::string>& topic_mappings = {},
+        const std::vector<void*>& args = {}
     );
 
     std::string shutdown_module(const std::string& name);

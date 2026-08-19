@@ -4,7 +4,7 @@
 #include <memory>
 #include <array>
 
-class Stamp
+struct Stamp
 {
     double time;
     double hw_time;
@@ -53,17 +53,20 @@ public:
     };
 
     virtual ~ImgFrame() = default;
-    const void* data;
+    void* data;
     uint32_t width;
     uint32_t height;
     uint32_t pixel_size;
+    double depth_scale;
     Format format;
     Stamp stamp;
+
+    //default for storing data;
+    std::vector<uint8_t> default_data_buffer;
 };
 
-class CameraInfo
+struct CameraInfo
 {
-public:
     Stamp stamp;
     uint32_t height;
     uint32_t width;
@@ -78,7 +81,7 @@ public:
 
 using ImgFrameSPtr = std::shared_ptr<ImgFrame>;
 
-class Point
+struct Point
 {
     double x;
     double y;
@@ -86,13 +89,13 @@ class Point
     double w;
 };
 
-class ImuData
+struct ImuData
 {
     Point lin_acc;
     Point ang_vel;
 };
 
-class ImuDataStamped
+struct ImuDataStamped
 {
     ImuData data;
     Stamp stamp;

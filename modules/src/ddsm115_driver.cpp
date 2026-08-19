@@ -17,7 +17,7 @@ struct ddsm115_motor
 class DDSM115Driver : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup() override;
+    virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
@@ -28,7 +28,7 @@ private:
 
 POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115 Motors")
 
-pond_result DDSM115Driver::onStartup()
+pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 {
 
     if (cmd.connect(args[0]) == false)

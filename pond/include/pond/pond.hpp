@@ -93,11 +93,11 @@ namespace pond
             }
         }
     private:
-        _ParameterBase(std::string* _name, pond_api* _api, char* _type_name, size_t _val_offset, pond_parameter_type _pt)
+        _ParameterBase(std::string* _name, pond_api* _api, const char* _type_name, size_t _val_offset, pond_parameter_type _pt)
             : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
         pond_api* api;
         std::string* name;
-        char* type_name;
+        const char* type_name;
         size_t val_offset;
         pond_parameter_type pt;
     };
@@ -192,11 +192,11 @@ namespace pond
             return true;
         }
 
-        _ParameterArrayBase(std::string* _name, pond_api* _api, char* _type_name, size_t _val_offset, pond_parameter_type _pt)
+        _ParameterArrayBase(std::string* _name, pond_api* _api, const char* _type_name, size_t _val_offset, pond_parameter_type _pt)
             : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
         pond_api* api;
         std::string* name;
-        char* type_name;
+        const char* type_name;
         size_t val_offset;
         pond_parameter_type pt;
     };
@@ -284,7 +284,7 @@ namespace pond
     class ModuleBase
     {
     public:
-        virtual pond_result onStartup();
+        virtual pond_result onStartup(const std::vector<void*>& args);
         virtual void onShutdown();
         virtual void onFrame();
         void shutdown();
@@ -347,13 +347,15 @@ namespace pond
 #define POND_LOG(format, ...) _pond_api.log(_pond_api.ctx, (uint8_t*)format, ##__VA_ARGS__)
 
 #define POND_MODULE_CPP_DECLARE(cls, _name, _info)\
-pond_result pond_module_##cls##_on_startup(pond_api* api)\
+pond_result pond_module_##cls##_on_startup(pond_api* api, uint32_t argc, void** argv)\
 {\
     cls* module = new cls();\
     api->set_user_ptr(api->ctx, module);\
     module->_pond_api = *api;\
+    std::vector<void*> args(argc);\
+    for (uint32_t i = 0; i < argc; i++) args[i] = argv[i];\
 \
-    return module->onStartup();\
+    return module->onStartup(args);\
 }\
 \
 void pond_module_##cls##_on_shutdown(pond_api* api)\
@@ -394,7 +396,7 @@ _UntypedParameterBase ModuleBase::parameter(const std::string& name)
     TYPED_PARAM_IMPL(bool, POND_PARAMETER_BOOL, Bool, bool)
     TYPED_PARAM_IMPL(std::string, POND_PARAMETER_STRING, String, char*)
 
-pond_result ModuleBase::onStartup() {return POND_SUCCESS;}
+pond_result ModuleBase::onStartup(const std::vector<void*>& args) {return POND_SUCCESS;}
 void ModuleBase::onShutdown() {}
 void ModuleBase::onFrame() {}
 

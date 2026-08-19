@@ -1,9 +1,5 @@
-#include <pond/pond.h>
-#include "pond_manager.hpp"
-#include <mutex>
-#include <stdio.h>
+#include <pond/manager/manager.hpp>
 #include <time.h>
-#include <unordered_set>
 
 void PondManager::api_shutdown(pond_internal::Module* module)
 {
@@ -199,8 +195,9 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
 
     for (auto& connection : d->connections)
     {
-        for (int i = 0; i < d->slots.size(); i++) connection.handle_array[i] = slot_data[connection.indices[i]];
+        for (int i = 0; i < connection.handle_array.size(); i++) connection.handle_array[i] = slot_data[connection.indices[i]];
         
+        if (!connection.receiver->active.load()) continue;
         std::shared_lock<std::shared_mutex> lock(connection.receiver->mutex);
         if (!connection.receiver->active.load()) continue;
         connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array.data());
@@ -221,7 +218,6 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
         std::shared_lock<std::shared_mutex> lock(dds_discovery.distributor_mutex);
         for (auto& d : dds_discovery.distributors) try_connect_receiver(d, r, true);
     }
-
     {
         std::lock_guard<std::shared_mutex> lock(dds_discovery.receiver_mutex);
         r->discovery_id = dds_discovery.receivers.insert(r);

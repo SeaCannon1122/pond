@@ -1,13 +1,6 @@
-#include "pond/pond.h"
-#include "pond_manager.hpp"
+#include <pond/manager/manager.hpp>
 #include <dlfcn.h>
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-#include <stdlib.h>
 #include <sstream>
-#include <thread>
-#include <vector>
 #include <filesystem>
 
 void _pond_shutdown(pond_internal::ModuleContext* ctx)
@@ -103,7 +96,7 @@ PondManager::~PondManager()
 
 void PondManager::log(const std::string& message)
 {
-    printf(("[POND_MANAGER] " + message + "\n").c_str());
+    printf("[POND_MANAGER] %s\n", message.c_str());
     fflush(stdout);
 }
 
@@ -170,7 +163,8 @@ std::string PondManager::load_module(
     const std::string& module_name,
     const std::string& thread_name,
     const std::unordered_map<std::string, pond_parameter*>& parameters,
-    const std::unordered_map<std::string, std::string>& topic_mappings
+    const std::unordered_map<std::string, std::string>& topic_mappings,
+    const std::vector<void*>& args
 )
 {
     {
@@ -190,6 +184,7 @@ std::string PondManager::load_module(
     module->topic_mappings = topic_mappings;
     module->parameters = parameters;
     module->thread_name = thread_name;
+    module->args = args;
 
     module->context.module = module.get();
     module->context.manager = this;
@@ -232,7 +227,7 @@ std::string PondManager::load_module(
     thread->load_request.is.store(true);
     while (thread->load_request.is.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    LOG_RETURN("Loaded module  '" + name + "'  of type  '" + bundle_name + "/" + module_name + "'");
+    return "Loaded module  '" + name + "'  of type  '" + bundle_name + "/" + module_name + "'";
 }
 
 std::string PondManager::print_modules()
@@ -277,10 +272,11 @@ std::string PondManager::shutdown_module(const std::string& name)
             t->shutdown_request.is.store(true);
 
             while (t->shutdown_request.is.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            LOG_RETURN("Shut down module '" + name + "'");
+            return "Shut down module '" + name + "'";
         }
     }
     
+    return "";
 }
 
 void PondManager::cleanup_module(pond_internal::Module* module)
@@ -304,7 +300,7 @@ void PondManager::thread_function(pond_internal::Thread* thread)
         if (thread->load_request.is.load())
         {
             log("[" + thread->name + "] Starting module '" + thread->load_request.module->name + "' ...");
-            if (thread->load_request.module->module_api.on_startup(&thread->load_request.module->native_api) == POND_SUCCESS)
+            if (thread->load_request.module->module_api.on_startup(&thread->load_request.module->native_api, thread->load_request.module->args.size(), thread->load_request.module->args.data()) == POND_SUCCESS)
             {
                 log("[" + thread->name + "] Started module '" + thread->load_request.module->name + "'");
                 thread->modules.insert(thread->load_request.module);
