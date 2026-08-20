@@ -1,5 +1,6 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/data_types.hpp>
+#include <pond/data_types/video_types.hpp>
+#include <pond/data_types/imu_types.hpp>
 
 #include <depthai/depthai.hpp>
 
@@ -7,13 +8,15 @@ class DepthaiImgFrame : public ImgFrame
 {
 public:
 
-    explicit DepthaiImgFrame(std::shared_ptr<dai::ImgFrame>& frame_, ImgFrame::Format format_) : frame(frame_)
+    explicit DepthaiImgFrame(std::shared_ptr<dai::ImgFrame>& frame_, ImgFrame::Format format_, double time) : frame(frame_)
     {
         data = frame->getFrame().data;
         width = frame->getWidth();
         height = frame->getHeight();
         pixel_size = frame->getBytesPerPixel();
         format = format_;
+        stamp.hw_time = std::chrono::duration<double>(frame->getTimestamp().time_since_epoch()).count();
+        stamp.time = time;
     }
 
 private:
@@ -117,6 +120,8 @@ void DepthaiCamera::onFrame()
 
     try {
         auto sync_group = out_queue->tryGet<dai::MessageGroup>();
+        double time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    
         if (sync_group)
         {
             auto left_frame = sync_group->get<dai::ImgFrame>("left");
@@ -124,8 +129,8 @@ void DepthaiCamera::onFrame()
 
             if (left_frame && right_frame)
             {
-                ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8);
-                ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8);
+                ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8, time);
+                ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8, time);
                 std::vector<ImuDataStamped> imu_data;
                 distributor.distribute(left_msg, mono_left_info, right_msg, mono_right_info, imu_data);
             }

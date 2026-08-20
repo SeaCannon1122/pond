@@ -1,0 +1,44 @@
+%YAML:1.0
+
+# Camera Parameters
+Camera.type: "PinHole"
+
+Camera.fx: 383.517822265625
+Camera.fy: 383.517822265625
+Camera.cx: 318.42974853515625
+Camera.cy: 239.71493530273438
+
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
+
+Camera.width: 640
+Camera.height: 480
+
+Camera.fps: 30
+
+# Stereo baseline * focal length
+Camera.bf: 19.2207430560
+
+
+# ORB Extractor
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+
+# Viewer
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1
+Viewer.GraphLineWidth: 1
+Viewer.PointSize: 2
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3
+
+
+# Stereo settings
+ThDepth: 40.0
+DepthMapFactor: 1.0

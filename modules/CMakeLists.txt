@@ -33,6 +33,9 @@ add_library(quac_modules SHARED
   src/depthai_camera.cpp
   src/orb_slam3.cpp
   src/depth_colorizer.cpp
+  src/ros2_bridge.cpp
+  src/ddsm115_driver.cpp
+  src/DDSM115CMD.cpp
 )
 
 target_include_directories(quac_modules PRIVATE

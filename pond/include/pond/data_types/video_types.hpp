@@ -1,16 +1,11 @@
+#pragma once
+
+#include "stamp.hpp"
+
 #include <stdint.h>
-#include <string>
 #include <vector>
-#include <memory>
 #include <array>
-
-struct Stamp
-{
-    double time;
-    double hw_time;
-    std::string frame_id;
-};
-
+#include <memory>
 
 class ImgFrame
 {
@@ -80,23 +75,3 @@ struct CameraInfo
 };
 
 using ImgFrameSPtr = std::shared_ptr<ImgFrame>;
-
-struct Point
-{
-    double x;
-    double y;
-    double z;
-    double w;
-};
-
-struct ImuData
-{
-    Point lin_acc;
-    Point ang_vel;
-};
-
-struct ImuDataStamped
-{
-    ImuData data;
-    Stamp stamp;
-};

@@ -81,8 +81,10 @@ std::vector<std::string> get_bundle_paths()
     return paths;
 }
 
-PondManager::PondManager()
+PondManager::PondManager(bool connect_log, bool distribute_log)
 {
+    this->connect_log = connect_log;
+    this->distribute_log = distribute_log;
     log("Constructed");
 }
 

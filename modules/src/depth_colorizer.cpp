@@ -1,6 +1,6 @@
 #include <cstring>
 #include <pond/pond.hpp>
-#include "cv_img_frame.hpp"
+#include <pond/data_types/cv_img_frame.hpp>
 
 class DepthColorizer : public pond::ModuleBase
 {

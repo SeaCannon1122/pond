@@ -119,7 +119,8 @@ struct Thread
 class PondManager
 {
 public:
-    PondManager();
+    PondManager() = delete;
+    PondManager(bool connect_log, bool distribute_log);
     ~PondManager();
 
     std::string load_module(
@@ -182,5 +183,7 @@ private:
         std::mutex module_mutex;
         SlotArray<std::shared_ptr<pond_internal::Module>> modules;
     } module_discovery;
-    
+
+    bool connect_log;
+    bool distribute_log;
 };

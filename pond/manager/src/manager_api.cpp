@@ -147,7 +147,17 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
     {
         std::shared_lock<std::shared_mutex> lock(dds_discovery.receiver_mutex);
         for (auto& r : dds_discovery.receivers)
-            if (!try_connect_receiver(d, r, false)) return -1;
+            if (try_connect_receiver(d, r, false)) if (connect_log)
+            {
+                std::string topic_array_string;
+                topic_array_string.reserve(1000);
+                for (auto& s: r->slots)
+                {
+                    topic_array_string.append(", ");
+                    topic_array_string.append(s.topic);
+                }
+                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to receiver on module '%s' on topics { %s }", r->module_name.c_str(), &(topic_array_string.c_str()[2]));
+            }
     }
 
     {
@@ -200,6 +210,19 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
         if (!connection.receiver->active.load()) continue;
         std::shared_lock<std::shared_mutex> lock(connection.receiver->mutex);
         if (!connection.receiver->active.load()) continue;
+        
+        if (distribute_log)
+        {
+            std::string topic_array_string;
+            topic_array_string.reserve(1000);
+            for (auto& s: connection.receiver->slots)
+            {
+                topic_array_string.append(", ");
+                topic_array_string.append(s.topic);
+            }
+            module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing to module '%s' on topics { %s }", connection.receiver->module_name.c_str(), &(topic_array_string.c_str()[2]));
+        }
+
         connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array.data());
     }
 }
@@ -216,7 +239,18 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
 
     {
         std::shared_lock<std::shared_mutex> lock(dds_discovery.distributor_mutex);
-        for (auto& d : dds_discovery.distributors) try_connect_receiver(d, r, true);
+        for (auto& d : dds_discovery.distributors)
+            if (try_connect_receiver(d, r, true)) if (connect_log)
+            {
+                std::string topic_array_string;
+                topic_array_string.reserve(1000);
+                for (auto& s: r->slots)
+                {
+                    topic_array_string.append(", ");
+                    topic_array_string.append(s.topic);
+                }
+                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to distributor on module '%s' on topics { %s }", d->module_name.c_str(), &(topic_array_string.c_str()[2]));
+            }
     }
     {
         std::lock_guard<std::shared_mutex> lock(dds_discovery.receiver_mutex);

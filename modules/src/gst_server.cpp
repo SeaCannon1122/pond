@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/data_types.hpp>
+#include <pond/data_types/video_types.hpp>
 
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>

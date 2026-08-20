@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include "DDSM115CMD.hpp"
+#include "DDSM115CMD.h"
 
 struct ddsm115_motor
 {
@@ -30,8 +30,10 @@ POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115
 
 pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 {
+    auto device = parameter("device").asString().getStrict();
+    if (!device) return POND_ERROR;
 
-    if (cmd.connect(args[0]) == false)
+    if (cmd.connect(*device) == false)
     {
         POND_LOG(cmd.get_error());
         return POND_ERROR;
@@ -42,6 +44,7 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 
 void DDSM115Driver::onShutdown()
 {
+    cmd.disconnect();
 }
 
 void DDSM115Driver::onFrame()

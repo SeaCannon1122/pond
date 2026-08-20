@@ -1,4 +1,6 @@
-#include <pond/data_types/data_types.hpp>
+#pragma once
+
+#include "video_types.hpp"
 #include <opencv2/opencv.hpp>
 
 class CVImgFrame : public ImgFrame

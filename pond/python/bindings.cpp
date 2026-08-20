@@ -189,7 +189,11 @@ PYBIND11_MODULE(_pond, m)
     m.doc() = "Python bindings for pond";
 
     py::class_<PondManager>(m, "Manager")
-        .def(py::init<>())
+        .def(
+            py::init<bool, bool>(),
+            py::arg("connect_log"),
+            py::arg("distribute_log")
+        )
 
         .def(
             "load_module",

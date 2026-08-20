@@ -1,7 +1,0 @@
-quac:
-  osb_slam3:  
-    vocabulary: /home/christopher/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt
-    realsense_config:
-    depthai_config:
-
-  wheels: "a"

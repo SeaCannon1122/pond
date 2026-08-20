@@ -22,7 +22,7 @@ int main()
     signal(SIGTERM, signalHandler);
 
     {
-        PondManager pm;
+        PondManager pm(false, false);
 
         
         

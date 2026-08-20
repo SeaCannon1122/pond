@@ -27,7 +27,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    pm = Manager()
+    pm = Manager(True, False)
 
     pm.load_module(
         name="camera",
@@ -77,9 +77,7 @@ def main():
             time.sleep(0.2)
 
     finally:
-        pm.shutdown_module("camera")
-        pm.shutdown_module("mono_left_gst_streamer")
-        pm.shutdown_module("mono_right_gst_streamer")
+        pass
 
 
 if __name__ == "__main__":

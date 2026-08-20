@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/data_types.hpp>
+#include <pond/data_types/video_types.hpp>
 
 #include <librealsense2/rs.hpp>
 
@@ -7,7 +7,7 @@ class RealSenseImgFrame : public ImgFrame
 {
 public:
 
-    explicit RealSenseImgFrame(rs2::video_frame& frame_, ImgFrame::Format format_, double depth_scale_ = 1) : frame(frame_)
+    explicit RealSenseImgFrame(rs2::video_frame& frame_, ImgFrame::Format format_, double timestamp, double depth_scale_ = 1) : frame(frame_)
     {
 
         data = (void*)frame.get_data();
@@ -16,6 +16,8 @@ public:
         pixel_size = frame.get_bytes_per_pixel();
         format = format_;
         depth_scale = depth_scale_;
+        stamp.hw_time = frame.get_timestamp();
+        stamp.time = timestamp;
     }
 
 private:
@@ -105,15 +107,17 @@ void RealsenseCamera::onShutdown()
 void RealsenseCamera::onFrame()
 {
     rs2::frameset frames = pipe.wait_for_frames();
+    double time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    
     rs2::video_frame color_frame = frames.get_color_frame();
     rs2::depth_frame depth_frame = frames.get_depth_frame();
     rs2::video_frame left_frame = frames.get_infrared_frame(1);
     rs2::video_frame right_frame = frames.get_infrared_frame(2);
 
-    ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8);
-    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, depth_frame.get_units());
-    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8);
-    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8);
+    ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8, time);
+    ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, time, depth_frame.get_units());
+    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8, time);
+    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8, time);
 
     distributor.distribute(color_msg, color_info, depth_msg, depth_info, left_msg, mono_left_info, right_msg, mono_right_info);
 }

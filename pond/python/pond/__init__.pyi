@@ -1,5 +1,9 @@
 class Manager:
-    def __init__(self) -> None: ...
+    def __init__(
+        self,
+        connect_log: bool,
+        distribute_log: bool,
+    ) -> None: ...
 
     def load_module(
         self,

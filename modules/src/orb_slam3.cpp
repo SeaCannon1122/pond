@@ -1,8 +1,11 @@
 
+#include <chrono>
 #include <pond/pond.hpp>
-#include <pond/data_types/data_types.hpp>
+#include <pond/data_types/cv_img_frame.hpp>
+#include <pond/data_types/imu_types.hpp>
 
 #include "System.h"
+#include "pond/data_types/video_types.hpp"
 #include <mutex>
 
 class OrbSlam3 : public pond::ModuleBase
@@ -13,14 +16,20 @@ public:
     virtual void onFrame() override;
 private:
     std::shared_ptr<ORB_SLAM3::System> slam;
+
     pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuDataStamped>> receiver_with_imu;
     pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver_without_imu;
+
+    pond::Distributor<PoseStamped> pose_distributor;
+    pond::Distributor<ImgFrameSPtr> keypoint_frame_distributor;
+
     bool use_imu;
+    std::string frame_id;
 
     std::mutex input_mutex;
     ImgFrameSPtr left_frame, right_frame;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points;
-    bool new_data;
+    std::atomic<bool> new_data;
 };
 
 POND_MODULE_CPP_DECLARE(OrbSlam3, "orb_slam3", "pond module for orbslam3")
@@ -30,6 +39,20 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     auto vocabulary_path = parameter("vocabulary_path").asString().getStrict();
     auto settings_path = parameter("camera_info_path").asString().getStrict();
     if (!vocabulary_path || !settings_path) return POND_ERROR;
+
+    frame_id = parameter("frame_id").asString().get("base_link");
+
+    pose_distributor = createDistributor<PoseStamped>({"pose"});
+    keypoint_frame_distributor = createDistributor<ImgFrameSPtr>({"mono_left_with_keypoints/image"});
+
+    new_data.store(false);
+
+    slam = std::make_shared<ORB_SLAM3::System>(
+        *vocabulary_path,
+        *settings_path,
+        ORB_SLAM3::System::STEREO,
+        false
+    );
 
     if (use_imu = parameter("use_imu").asBool().get(false))
     {
@@ -45,7 +68,7 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
                     return;
                 }
 
-                new_data = true;
+                new_data.store(true);
 
                 imu_data_points.reserve(imu_data.size());
                 for (auto& d : imu_data)
@@ -76,22 +99,12 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
                     return;
                 }
 
-                new_data = true;
-
+                new_data.store(true);
                 left_frame = left;
                 right_frame = right;
             }
         );
     }
-
-    new_data = false;
-
-    slam = std::make_shared<ORB_SLAM3::System>(
-        *vocabulary_path,
-        *settings_path,
-        ORB_SLAM3::System::STEREO,
-        false
-    );
 
     return POND_SUCCESS;
 }
@@ -103,6 +116,9 @@ void OrbSlam3::onShutdown()
 
     if (use_imu) receiver_with_imu.destroy();
     else receiver_without_imu.destroy();
+
+    pose_distributor.destroy();
+    keypoint_frame_distributor.destroy();
 }
 
 void OrbSlam3::onFrame()
@@ -110,20 +126,66 @@ void OrbSlam3::onFrame()
     ImgFrameSPtr left_frame_c, right_frame_c;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points_c;
 
+    if (new_data.load())
     {
         std::lock_guard<std::mutex> lock(input_mutex);
-        if (!new_data) return;
+        new_data.store(false);
+
         left_frame_c = std::move(left_frame); right_frame_c = std::move(right_frame);
         if (use_imu) imu_data_points_c = std::move(imu_data_points);
+        
+    }
+    else
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return;
     }
 
     cv::Mat left(left_frame_c->height, left_frame_c->width, CV_8UC1, left_frame_c->data);
-    cv::Mat right(left_frame_c->height, left_frame_c->width, CV_8UC1, left_frame_c->data);
+    cv::Mat right(right_frame_c->height, right_frame_c->width, CV_8UC1, right_frame_c->data);
 
-    Sophus::SE3f Tcw = slam->TrackStereo(left, right, (left_frame_c->stamp.hw_time + right_frame_c->stamp.hw_time) / 2, imu_data_points_c);
+    double hw_time_stamp = (left_frame_c->stamp.hw_time + right_frame_c->stamp.hw_time) / 2.0;
+    double time_stamp = (left_frame_c->stamp.time + right_frame_c->stamp.time) / 2.0;
+    Sophus::SE3f Tcw = slam->TrackStereo(left, right, hw_time_stamp, imu_data_points_c);
 
     if(!Tcw.matrix().isZero())
     {
-        
+        Sophus::SE3f Twc = Tcw.inverse();
+
+        Eigen::Vector3f t = Twc.translation();
+        Eigen::Matrix3f R = Twc.rotationMatrix();
+
+        PoseStamped pose;
+        pose.stamp.time = time_stamp;
+        pose.stamp.hw_time = hw_time_stamp;
+        pose.stamp.frame_id = "base_link";
+
+        pose.pose.p.x = t.x();
+        pose.pose.p.y = t.y();
+        pose.pose.p.z = t.z();
+        pose.pose.p.w = 1;
+
+        pose.pose.o.x = std::atan2(R(2,1), R(2,2));
+        pose.pose.o.y = std::atan2(
+            -R(2,0),
+            std::sqrt(R(2,1) * R(2,1) + R(2,2) * R(2,2))
+        );
+        pose.pose.o.z = std::atan2(R(1,0), R(0,0));
+        pose.pose.o.w = 1;
+
+        pose_distributor.distribute(pose);
     }
+
+    std::vector<cv::KeyPoint> keypoints = slam->GetTrackedKeyPointsUn();
+
+    cv::Mat keypoint_mat;
+    cv::drawKeypoints(
+        left,
+        keypoints,
+        keypoint_mat,
+        cv::Scalar(0, 255, 0)
+    );
+
+    ImgFrameSPtr keypoint_frame = std::make_shared<CVImgFrame>(keypoint_mat, ImgFrame::Format::BGR8);
+    keypoint_frame_distributor.distribute(keypoint_frame);
 }
