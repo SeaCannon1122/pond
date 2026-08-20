@@ -4,24 +4,15 @@ import time
 from pond import Manager
 
 is_running = True
-int_counter = 0
-
 
 def signal_handler(signum, frame):
-    global is_running, int_counter
+    global is_running
 
     if signum not in (signal.SIGINT, signal.SIGTERM):
         return
 
     print(" INTERRUPT", flush=True)
-
     is_running = False
-
-    int_counter += 1
-
-    if int_counter == 10:
-        raise SystemExit(187)
-
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)

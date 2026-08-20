@@ -4,23 +4,15 @@ import time
 from pond import Manager
 
 is_running = True
-int_counter = 0
-
 
 def signal_handler(signum, frame):
-    global is_running, int_counter
+    global is_running
 
     if signum not in (signal.SIGINT, signal.SIGTERM):
         return
 
     print(" INTERRUPT", flush=True)
-
     is_running = False
-
-    int_counter += 1
-
-    if int_counter == 10:
-        raise SystemExit(187)
 
 
 def main():
@@ -37,6 +29,8 @@ def main():
         module_name="realsense_camera",
         thread_name="default_thread",
         parameters={
+            # "serial_number" : "827312072798", # gripper
+            "serial_number" : "938422071694", # back
             "disable_emitter" : disable_depth
         },
         topic_mappings={}
@@ -135,6 +129,26 @@ def main():
             "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt"
         },
         topic_mappings={},
+    )
+
+    pm.load_module(
+        name="ros2_bridge",
+        bundle_name="quac_modules",
+        module_name="ros2_bridge",
+        thread_name="ros2_bridge_thread",
+        parameters={
+            "pond_topics" : ["imu_data", "pose"],
+
+            "imu_data.pond.type" : "ImuDataStamped.Vector",
+            "imu_data.ros.topic" : "imu",
+            "imu_data.ros.qos.reliable" : False,
+
+            "pose.pond.type" : "PoseStamped",
+            "pose.ros.topic" : "pose",
+            "pose.ros.qos.reliable" : False
+
+        },
+        topic_mappings={}
     )
 
     try:

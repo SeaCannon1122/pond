@@ -112,7 +112,7 @@ bool PondManager::load_module_library(
     #if defined(_WIN32)
     std::string library_name = bundle_name + ".dll";
 #elif defined(__linux__)
-    std::string library_name = "lib" + bundle_name + ".so";
+    std::string library_name = "lib" + bundle_name + "-pond_bundle.so";
 #else
     std::string library_name = bundle_name;
 #endif

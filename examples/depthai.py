@@ -4,23 +4,15 @@ import time
 from pond import Manager
 
 is_running = True
-int_counter = 0
-
 
 def signal_handler(signum, frame):
-    global is_running, int_counter
+    global is_running
 
     if signum not in (signal.SIGINT, signal.SIGTERM):
         return
 
     print(" INTERRUPT", flush=True)
-
     is_running = False
-
-    int_counter += 1
-
-    if int_counter == 10:
-        raise SystemExit(187)
 
 
 def main():
@@ -34,24 +26,26 @@ def main():
         bundle_name="quac_modules",
         module_name="depthai_camera",
         thread_name="default_thread",
-        parameters={},
-        topic_mappings={},
+        parameters={
+            "MxId" : "19443010218B077E00"
+        },
+        topic_mappings={}
     )
 
     pm.load_module(
-        name="mono_left_gst_streamer",
+        name="mono_left_keypoint_gst_streamer",
         bundle_name="quac_modules",
         module_name="gst_server",
         thread_name="default_thread",
         parameters={
             "width": 640,
             "height": 480,
-            "port": 5000,
+            "port": 5002,
             "ip": "192.168.137.26",
-            "format": "Mono8",
+            "format": "BGR8",
         },
         topic_mappings={
-            "in": "mono_left/image",
+            "in": "mono_left_with_keypoints/image",
         },
     )
 
@@ -63,7 +57,7 @@ def main():
         parameters={
             "width": 640,
             "height": 480,
-            "port": 5001,
+            "port": 5003,
             "ip": "192.168.137.26",
             "format": "Mono8",
         },
@@ -71,6 +65,20 @@ def main():
             "in": "mono_right/image",
         },
     )
+
+    
+
+    # pm.load_module(
+    #     name="orbslam",
+    #     bundle_name="quac_modules",
+    #     module_name="orb_slam3",
+    #     thread_name="slam_thread",
+    #     parameters={
+    #         "camera_info_path" : "/home/pilot/pond/config/Realsense.yaml",
+    #         "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt"
+    #     },
+    #     topic_mappings={},
+    # )
 
     try:
         while is_running:

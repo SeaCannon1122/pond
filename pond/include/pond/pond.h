@@ -13,7 +13,7 @@ typedef enum pond_result
 
 typedef enum pond_parameter_type
 {
-    POND_PARAMETER_DONT_CARE,
+    POND_PARAMETER_ERROR,
     POND_PARAMETER_STRING,
     POND_PARAMETER_STRING_ARRAY,
     POND_PARAMETER_INT,
@@ -23,6 +23,23 @@ typedef enum pond_parameter_type
     POND_PARAMETER_BOOL,
     POND_PARAMETER_BOOL_ARRAY
 } pond_parameter_type;
+
+static const char* pond_parameter_type_to_string(pond_parameter_type type)
+{
+    switch (type)
+    {
+        case POND_PARAMETER_STRING: return "POND_PARAMETER_STRING";
+        case POND_PARAMETER_STRING_ARRAY: return "POND_PARAMETER_STRING_ARRAY";
+        case POND_PARAMETER_INT: return "POND_PARAMETER_INT";
+        case POND_PARAMETER_INT_ARRAY: return "POND_PARAMETER_INT_ARRAY";
+        case POND_PARAMETER_DOUBLE: return "POND_PARAMETER_DOUBLE";
+        case POND_PARAMETER_DOUBLE_ARRAY: return "POND_PARAMETER_DOUBLE_ARRAY";
+        case POND_PARAMETER_BOOL: return "POND_PARAMETER_BOOL";
+        case POND_PARAMETER_BOOL_ARRAY: return "POND_PARAMETER_BOOL_ARRAY";
+        default: return "ERROR";
+    }
+    
+}
 
 typedef struct pond_parameter
 {

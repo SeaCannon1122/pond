@@ -56,7 +56,13 @@ namespace pond
                         api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' (%s) value must be in { %s }", name->c_str(), string_value.c_str(), &list.c_str()[2]);
                     }   
                 }
-                else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '%s'", name->c_str(), type_name);
+                else if (log) api->log(
+                    api->ctx, 
+                    (uint8_t*)"[Error] Parameter '%s'.type (%s) != %s", 
+                    name->c_str(), 
+                    pond_parameter_type_to_string(p->type),
+                    pond_parameter_type_to_string(pt)
+                );
                 free(p);
             }
             else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' not set", name->c_str());
@@ -93,11 +99,10 @@ namespace pond
             }
         }
     private:
-        _ParameterBase(std::string* _name, pond_api* _api, const char* _type_name, size_t _val_offset, pond_parameter_type _pt)
-            : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
+        _ParameterBase(std::string* _name, pond_api* _api, size_t _val_offset, pond_parameter_type _pt)
+            : api(_api), name(_name), val_offset(_val_offset), pt(_pt) {}
         pond_api* api;
         std::string* name;
-        const char* type_name;
         size_t val_offset;
         pond_parameter_type pt;
     };
@@ -123,7 +128,13 @@ namespace pond
                         return vec;
                     }
                 }
-                else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s'.type != '%s'", name->c_str(), type_name);
+                else if (log) api->log(
+                    api->ctx, 
+                    (uint8_t*)"[Error] Parameter '%s'.type (%s) != %s", 
+                    name->c_str(), 
+                    pond_parameter_type_to_string(p->type),
+                    pond_parameter_type_to_string(pt)
+                );
                 free(p);
             }
             else if (log) api->log(api->ctx, (uint8_t*)"[Error] Parameter '%s' not set", name->c_str());
@@ -192,11 +203,10 @@ namespace pond
             return true;
         }
 
-        _ParameterArrayBase(std::string* _name, pond_api* _api, const char* _type_name, size_t _val_offset, pond_parameter_type _pt)
-            : api(_api), name(_name), type_name(_type_name), val_offset(_val_offset), pt(_pt) {}
+        _ParameterArrayBase(std::string* _name, pond_api* _api, size_t _val_offset, pond_parameter_type _pt)
+            : api(_api), name(_name), val_offset(_val_offset), pt(_pt) {}
         pond_api* api;
         std::string* name;
-        const char* type_name;
         size_t val_offset;
         pond_parameter_type pt;
     };
@@ -384,11 +394,11 @@ _UntypedParameterBase ModuleBase::parameter(const std::string& name)
 #define TYPED_PARAM_IMPL(_type, _param_type, _param_name, _c_type)\
     _ParameterBase<_type, _c_type> _UntypedParameterBase::as##_param_name()\
     {\
-        return _ParameterBase<_type, _c_type>(name, api, #_param_name, offsetof(pond_parameter, value._param_name), _param_type);\
+        return _ParameterBase<_type, _c_type>(name, api, offsetof(pond_parameter, value._param_name), _param_type);\
     }\
     _ParameterArrayBase<_type, _c_type> _UntypedParameterBase::as##_param_name##Array()\
     {\
-        return _ParameterArrayBase<_type, _c_type>(name, api, #_param_name"Array", offsetof(pond_parameter, value._param_name##Array), _param_type);\
+        return _ParameterArrayBase<_type, _c_type>(name, api, offsetof(pond_parameter, value._param_name##Array), _param_type##_ARRAY);\
     }\
 
     TYPED_PARAM_IMPL(int32_t, POND_PARAMETER_INT, Int, int32_t)

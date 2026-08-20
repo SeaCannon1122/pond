@@ -14,7 +14,6 @@ def signal_handler(signum, frame):
     print(" INTERRUPT", flush=True)
     is_running = False
 
-
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -22,17 +21,30 @@ def main():
     pm = Manager(True, False)
 
     pm.load_module(
+        name="wrong_camera",
+        bundle_name="quac",
+        module_name="realsense_camera",
+        thread_name="default_thread",
+        parameters={},
+        topic_mappings={}
+    )
+
+    pm.load_module(
+            name="wrong_camera",
+            bundle_name="quac_modules",
+            module_name="realsense",
+            thread_name="default_thread",
+            parameters={},
+            topic_mappings={}
+        )
+
+    pm.load_module(
         name="camera",
         bundle_name="quac_modules",
-        module_name="dummy_camera",
+        module_name="realsense_camera",
         thread_name="default_thread",
-        parameters={
-            "width": 640,
-            "height": 480,
-        },
-        topic_mappings={
-            "out": "image"
-        },
+        parameters={},
+        topic_mappings={}
     )
 
     pm.load_module(
@@ -45,10 +57,10 @@ def main():
             "height": 480,
             "port": 5000,
             "ip": "192.168.137.26",
-            "format": "RGB8",
+            "format": "BGR8",
         },
         topic_mappings={
-            "in": "image",
+            "in": "color/cam_info",
         },
     )
 
@@ -57,8 +69,7 @@ def main():
             time.sleep(0.2)
 
     finally:
-        pm.shutdown_module("camera")
-        pm.shutdown_module("streamer")
+        pass
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
         }
     );
 
-    if (auto mxid = parameter("mxid").asString().getStrict({}, false))
+    if (auto mxid = parameter("MxId").asString().getStrict({}, false))
     {
         auto devices = dai::Device::getAllConnectedDevices();
         POND_LOG("%d device(s) connected", devices.size());
@@ -63,7 +63,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
         {
             if (i == devices.size())
             {
-                POND_LOG("No device with mxID %s connected", mxid->c_str());
+                POND_LOG("No device with MxId '%s' connected", mxid->c_str());
                 return POND_ERROR;
             }
 

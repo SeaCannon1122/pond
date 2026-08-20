@@ -143,6 +143,18 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
         }
         all_topics.insert(s.topic);
     }
+    
+    if (connect_log)
+    {
+        std::string topic_array_string;
+        topic_array_string.reserve(1000);
+        for (auto& s: d->slots)
+        {
+            topic_array_string.append(", ");
+            topic_array_string.append(s.topic);
+        }
+        module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing on topics { %s }", &(topic_array_string.c_str()[2]));
+    }
 
     {
         std::shared_lock<std::shared_mutex> lock(dds_discovery.receiver_mutex);
@@ -236,6 +248,18 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
     r->active.store(true);
     r->callback = callback;
     r->callback_pointer = callback_pointer;
+
+    if (connect_log)
+    {
+        std::string topic_array_string;
+        topic_array_string.reserve(1000);
+        for (auto& s: r->slots)
+        {
+            topic_array_string.append(", ");
+            topic_array_string.append(s.topic);
+        }
+        module->native_api.log(module->native_api.ctx, (uint8_t*)"Receiving on topics { %s }", &(topic_array_string.c_str()[2]));
+    }
 
     {
         std::shared_lock<std::shared_mutex> lock(dds_discovery.distributor_mutex);

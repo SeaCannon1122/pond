@@ -22,9 +22,14 @@ find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Pangolin REQUIRED)
 
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
 set(ORB_SLAM3_DIR ~/lib/ORB_SLAM3)
 
-add_library(quac_modules SHARED
+add_library(quac_modules-pond_bundle SHARED
   src/bundle.cpp
   src/gst_server.cpp
   src/realsense_camera.cpp
@@ -32,13 +37,14 @@ add_library(quac_modules SHARED
   src/dummy_camera.cpp
   src/depthai_camera.cpp
   src/orb_slam3.cpp
+  src/rtabmap.cpp
   src/depth_colorizer.cpp
   src/ros2_bridge.cpp
   src/ddsm115_driver.cpp
   src/DDSM115CMD.cpp
 )
 
-target_include_directories(quac_modules PRIVATE
+target_include_directories(quac_modules-pond_bundle PRIVATE
 
   ${OPENCV_INCLUDE_DIRS}
   ${GST_INCLUDE_DIRS}
@@ -51,7 +57,7 @@ target_include_directories(quac_modules PRIVATE
   ${ORB_SLAM3_DIR}/Thirdparty/Sophus
 )
 
-target_link_libraries(quac_modules
+target_link_libraries(quac_modules-pond_bundle
   ${OpenCV_LIBS}
   ${GST_LIBRARIES}
   ${GST_APP_LIBRARIES}
@@ -71,12 +77,19 @@ target_link_libraries(quac_modules
   GLEW::GLEW
 
   pthread
+
+  rclcpp::rclcpp
 )
 
-target_link_directories(quac_modules PRIVATE
+ament_target_dependencies(quac_modules-pond_bundle
+  geometry_msgs
+  sensor_msgs
+)
+
+target_link_directories(quac_modules-pond_bundle PRIVATE
   ${ORB_SLAM3_DIR}/lib
 )
 
-target_link_options(quac_modules PRIVATE
+target_link_options(quac_modules-pond_bundle PRIVATE
   -Wl,--no-undefined
 )
