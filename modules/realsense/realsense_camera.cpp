@@ -1,3 +1,4 @@
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include <pond/data_types/video_types.hpp>
 
@@ -37,7 +38,13 @@ private:
     CameraInfo color_info, depth_info, mono_left_info, mono_right_info;
 };
 
-POND_MODULE_CPP_DECLARE(RealsenseCamera, "realsense_camera", "driver for the intel realsense d435")
+POND_MODULE_CPP_DECLARE(RealsenseCamera, "camera", "driver for the intel realsense d435")
+
+POND_BUNDLE_DECLARE(
+    "realsense pond bundle", 
+    1,
+    POND_MODULE(RealsenseCamera),
+)
 
 pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
 {

@@ -1,3 +1,4 @@
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include <pond/data_types/video_types.hpp>
 #include <pond/data_types/imu_types.hpp>
@@ -42,7 +43,13 @@ private:
     CameraInfo mono_left_info, mono_right_info;
 };
 
-POND_MODULE_CPP_DECLARE(DepthaiCamera, "depthai_camera", "driver module for the Oak D Lite")
+POND_MODULE_CPP_DECLARE(DepthaiCamera, "camera", "driver module for the Oak D Lite")
+
+POND_BUNDLE_DECLARE(
+    "Depthai modules", 
+    1,
+    POND_MODULE(DepthaiCamera),
+)
 
 pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
 {

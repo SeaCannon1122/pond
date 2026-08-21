@@ -23,8 +23,8 @@ def main():
 
     pm.load_module(
         name="camera",
-        bundle_name="quac_modules",
-        module_name="depthai_camera",
+        bundle_name="depthai",
+        module_name="camera",
         thread_name="default_thread",
         parameters={
             "MxId" : "19443010218B077E00"
@@ -34,25 +34,25 @@ def main():
 
     pm.load_module(
         name="mono_left_keypoint_gst_streamer",
-        bundle_name="quac_modules",
-        module_name="gst_server",
+        bundle_name="gstreamer",
+        module_name="rtp_server",
         thread_name="default_thread",
         parameters={
             "width": 640,
             "height": 480,
             "port": 5002,
             "ip": "192.168.137.26",
-            "format": "BGR8",
+            "format": "Mono8",
         },
         topic_mappings={
-            "in": "mono_left_with_keypoints/image",
+            "in": "mono_left/image",
         },
     )
 
     pm.load_module(
         name="mono_right_gst_streamer",
-        bundle_name="quac_modules",
-        module_name="gst_server",
+        bundle_name="gstreamer",
+        module_name="rtp_server",
         thread_name="default_thread",
         parameters={
             "width": 640,

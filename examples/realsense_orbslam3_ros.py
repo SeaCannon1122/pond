@@ -25,13 +25,14 @@ def main():
 
     pm.load_module(
         name="camera",
-        bundle_name="quac_modules",
-        module_name="realsense_camera",
+        bundle_name="realsense",
+        module_name="camera",
         thread_name="default_thread",
         parameters={
             # "serial_number" : "827312072798", # gripper
             "serial_number" : "938422071694", # back
-            "disable_emitter" : disable_depth
+            "disable_emitter" : disable_depth,
+            "color.dims": [640, 480],
         },
         topic_mappings={}
     )
@@ -39,7 +40,7 @@ def main():
     if not disable_depth:
         pm.load_module(
             name="colorizer", 
-            bundle_name="quac_modules", 
+            bundle_name="camera", 
             module_name="depth_colorizer", 
             thread_name="default_thread",
             parameters={
@@ -53,8 +54,8 @@ def main():
 
         pm.load_module(
             name="depth_gst_streamer",
-            bundle_name="quac_modules",
-            module_name="gst_server",
+            bundle_name="gstreamer",
+            module_name="rtp_server",
             thread_name="default_thread",
             parameters={
                 "width": 640,
@@ -70,15 +71,17 @@ def main():
     
     pm.load_module(
         name="color_gst_streamer",
-        bundle_name="quac_modules",
-        module_name="gst_server",
+        bundle_name="gstreamer",
+        module_name="rtp_server",
         thread_name="default_thread",
         parameters={
-            "width": 1280,
-            "height": 720,
+            "width": 640,
+            "height": 480,
             "port": 5000,
             "ip": "192.168.137.26",
             "format": "RGB8",
+            "bitrate": 5000,
+            "key_int_max:": 60
         },
         topic_mappings={
             "in": "color/image",
@@ -87,8 +90,8 @@ def main():
 
     pm.load_module(
         name="mono_left_keypoint_gst_streamer",
-        bundle_name="quac_modules",
-        module_name="gst_server",
+        bundle_name="gstreamer",
+        module_name="rtp_server",
         thread_name="default_thread",
         parameters={
             "width": 640,
@@ -104,8 +107,8 @@ def main():
 
     pm.load_module(
         name="mono_right_gst_streamer",
-        bundle_name="quac_modules",
-        module_name="gst_server",
+        bundle_name="gstreamer",
+        module_name="rtp_server",
         thread_name="default_thread",
         parameters={
             "width": 640,
@@ -121,12 +124,13 @@ def main():
 
     pm.load_module(
         name="orbslam",
-        bundle_name="quac_modules",
-        module_name="orb_slam3",
+        bundle_name="orb_slam3",
+        module_name="slam",
         thread_name="slam_thread",
         parameters={
             "camera_info_path" : "/home/pilot/pond/config/Realsense.yaml",
-            "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt"
+            "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt",
+            "mode" : "Stereo"
         },
         topic_mappings={},
     )

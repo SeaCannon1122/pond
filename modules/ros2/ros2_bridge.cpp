@@ -1,7 +1,7 @@
-#include "pond/pond.h"
-#include <pond/data_types/imu_types.hpp>
-#include <memory>
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
+#include <pond/data_types/imu_types.hpp>
+
 #include <rclcpp/rclcpp.hpp>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -39,19 +39,19 @@ private:
         else qos.best_effort();
 
         obj->publisher = node->create_publisher<ros_msg>(parameter(pond_topic+".ros.topic").asString().get("ros_topic"), qos);
-        if (vector) obj->vector_receiver = createReceiver<std::vector<pond_data_type>>({pond_topic}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>& data)
+        if (vector) obj->vector_receiver = createReceiver<std::vector<pond_data_type>>({pond_topic}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
         {
             ros_msg msg;
-            for (const auto& d : data)
+            for (const auto& d : *data)
             {
                 convert_function(d, msg);
                 pub_ptr->publish(msg);
             }
         });
-        else obj->receiver = createReceiver<pond_data_type>({pond_topic}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type& data)
+        else obj->receiver = createReceiver<pond_data_type>({pond_topic}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type* data)
         {
             ros_msg msg;
-            convert_function(data, msg);
+            convert_function(*data, msg);
             pub_ptr->publish(msg);
         });
 
@@ -62,7 +62,13 @@ private:
     std::vector<std::shared_ptr<void>> pond_to_ros_s;
 };
 
-POND_MODULE_CPP_DECLARE(Ros2Bridge, "ros2_bridge", "bridging different message types to ros2")
+POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types to ros2")
+
+POND_BUNDLE_DECLARE(
+    "ros2 integration", 
+    1,
+    POND_MODULE(Ros2Bridge),
+)
 
 void pond_to_ros_convert_ImuDataStamped(const ImuDataStamped& data, sensor_msgs::msg::Imu& msg)
 {

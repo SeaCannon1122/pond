@@ -4,7 +4,7 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 
-class GstServer : public pond::ModuleBase
+class RTPServer : public pond::ModuleBase
 {
 public:
     virtual pond_result onStartup(const std::vector<void*>& args) override;
@@ -19,9 +19,9 @@ private:
     ImgFrame::Format image_format;
 };
 
-POND_MODULE_CPP_DECLARE(GstServer, "gst_server", "gst video streamer")
+POND_MODULE_CPP_DECLARE(RTPServer, "rtp_server", "rtp h264 udp video streamer")
 
-pond_result GstServer::onStartup(const std::vector<void*>& args)
+pond_result RTPServer::onStartup(const std::vector<void*>& args)
 {
     auto _width = parameter("width").asInt().getStrict();
     auto _height = parameter("height").asInt().getStrict();
@@ -34,21 +34,21 @@ pond_result GstServer::onStartup(const std::vector<void*>& args)
 
     receiver = createReceiver<ImgFrameSPtr>(
         {"in"},
-        [this](ImgFrameSPtr& frame)
+        [this](ImgFrameSPtr* frame)
         {
-            if (frame->width != width || frame->height != height || frame->format != image_format)
+            if ((*frame)->width != width || (*frame)->height != height || (*frame)->format != image_format)
             {
                 POND_LOG(
                     "ERROR: frame->width (%d) != width (%d) || frame->height (%d) != height (%d) ||  frame->format (%s) != image_format (%s)",
-                    frame->width, width, frame->height, height, ImgFrame::formatToString(frame->format).c_str(), ImgFrame::formatToString(image_format).c_str()
+                    (*frame)->width, width, (*frame)->height, height, ImgFrame::formatToString((*frame)->format).c_str(), ImgFrame::formatToString(image_format).c_str()
                 );
                 return;
             }
 
-            GstBuffer *buffer = gst_buffer_new_allocate(nullptr, frame->pixel_size * width * height, nullptr);
+            GstBuffer *buffer = gst_buffer_new_allocate(nullptr, (*frame)->pixel_size * width * height, nullptr);
             GstMapInfo map;
             gst_buffer_map(buffer, &map, GST_MAP_WRITE);
-            memcpy(map.data, frame->data, frame->pixel_size * width * height);
+            memcpy(map.data, (*frame)->data, (*frame)->pixel_size * width * height);
 
             gst_buffer_unmap(buffer, &map);
             gst_app_src_push_buffer(GST_APP_SRC(appsrc), buffer);
@@ -106,14 +106,14 @@ pond_result GstServer::onStartup(const std::vector<void*>& args)
     return POND_SUCCESS;
 }
 
-void GstServer::onShutdown()
+void RTPServer::onShutdown()
 {
     gst_element_set_state(pipeline, GST_STATE_NULL);
     gst_object_unref(pipeline);
     receiver.destroy();
 }
 
-void GstServer::onFrame()
+void RTPServer::onFrame()
 {
     
 }

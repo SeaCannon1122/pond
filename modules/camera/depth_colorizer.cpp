@@ -21,18 +21,18 @@ pond_result DepthColorizer::onStartup(const std::vector<void*>& args)
     max_depth = parameter("max_depth").asDouble().get(4000);
 
     distributor = createDistributor<ImgFrameSPtr>({"out"});
-    receiver = createReceiver<ImgFrameSPtr>({"in"}, [this](ImgFrameSPtr& frame){
+    receiver = createReceiver<ImgFrameSPtr>({"in"}, [this](ImgFrameSPtr* frame){
 
-        if (frame->format != ImgFrame::Format::Depth8 && frame->format != ImgFrame::Format::Depth16)
+        if ((*frame)->format != ImgFrame::Format::Depth8 && (*frame)->format != ImgFrame::Format::Depth16)
         {
             POND_LOG(
                 "ERROR: frame->format (%s) != ImgFrame::Format::Depth8 && frame->format != ImgFrame::Format::Depth16",
-                ImgFrame::formatToString(frame->format).c_str()
+                ImgFrame::formatToString((*frame)->format).c_str()
             );
             return;
         }
 
-        cv::Mat depth_mat(frame->height, frame->width, frame->format == ImgFrame::Format::Depth8 ? CV_8UC1 : CV_16UC1, frame->data);
+        cv::Mat depth_mat((*frame)->height, (*frame)->width, (*frame)->format == ImgFrame::Format::Depth8 ? CV_8UC1 : CV_16UC1, (*frame)->data);
         
         cv::Mat colorized_mat;
         depth_mat.convertTo(colorized_mat, CV_8UC1, 255.0 / max_depth);

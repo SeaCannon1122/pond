@@ -9,6 +9,7 @@
 #include <functional>
 #include <type_traits>
 #include <array>
+#include <utility>
 #include <vector>
 #include <stddef.h>
 
@@ -254,26 +255,7 @@ namespace pond
         pond_api* api; 
     };
 
-    template<typename... Args>
-    class ReceiverCallback
-    {
-    public:
-        explicit ReceiverCallback(std::function<void(Args&...)> callback) : callback_(std::move(callback)) {}
-
-        static void trampoline(pond_api* api, void* callback_pointer, void** data)
-        {
-            static_cast<ReceiverCallback*>(callback_pointer)->invoke(data, std::index_sequence_for<Args...>{});
-        }
-
-    private:
-        std::function<void(Args&...)> callback_;
-
-        template<std::size_t... I>
-        void invoke(void** data, std::index_sequence<I...>)
-        {
-            callback_(*static_cast<std::remove_reference_t<Args>*>(data[I])...);
-        }
-    };
+    template<size_t i> using argtype_void_int = void*;
 
     template<typename... Args>
     class Receiver
@@ -288,7 +270,7 @@ namespace pond
     private:
         int32_t id;
         pond_api* api;
-        std::shared_ptr<ReceiverCallback<Args...>> callback;
+        std::shared_ptr<std::function<void(Args*...)>> callback;
     };
 
     class ModuleBase
@@ -317,6 +299,22 @@ namespace pond
             return d;
         }
 
+        template<size_t... I>
+        static void callback_entrypoint(pond_api* api, void* callback_pointer, void** data)
+        {
+            std::function<void(argtype_void_int<I>...)>* function = (std::function<void(argtype_void_int<I>...)>*)callback_pointer;
+            (*function)(data[I]...);
+        };
+
+        template <size_t N, size_t... I>
+        struct sequence_callback_generator : sequence_callback_generator<N - 1, N - 1, I...> {};
+
+        template <size_t... I>
+        struct sequence_callback_generator<0, I...>
+        {
+            static constexpr auto callback = callback_entrypoint<I...>;
+        };
+
         template<typename... Args, typename Callback>
         Receiver<Args...> createReceiver(const std::array<std::string, sizeof...(Args)>& topics, Callback&& callback)
         {
@@ -332,17 +330,13 @@ namespace pond
             Receiver<Args...> r;
 
             r.api = &_pond_api;
-            r.callback =  std::make_shared<ReceiverCallback<Args...>>(
-                std::function<void(Args&...)>(
-                    std::forward<Callback>(callback)
-                )
-            );
+            r.callback =  std::make_shared<std::function<void(Args*...)>>(callback);
 
             r.id = r.api->create_receiver(
                 r.api->ctx, 
                 slot_infos.data(), 
                 sizeof...(Args), 
-                ReceiverCallback<Args...>::trampoline,
+                sequence_callback_generator<sizeof...(Args)>::callback,
                 &(*r.callback)
             );
             return r;
@@ -413,12 +407,6 @@ void ModuleBase::onFrame() {}
 void ModuleBase::shutdown()
 {
     _pond_api.shutdown(_pond_api.ctx);
-}
-
-void pond_cpp_callback(pond_api* api, void* callback_pointer, void** data)
-{
-    auto* callback = static_cast<std::function<void(void**)>*>(callback_pointer);
-    (*callback)(data);
 }
 
 }
