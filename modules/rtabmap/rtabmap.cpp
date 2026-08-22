@@ -1,3 +1,4 @@
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 
 class RTABMap : public pond::ModuleBase
@@ -10,6 +11,12 @@ private:
 };
 
 POND_MODULE_CPP_DECLARE(RTABMap, "rtabmap", "rtabmap module")
+
+POND_BUNDLE_DECLARE(
+    "rtabmap", 
+    1,
+    POND_MODULE(RTABMap),
+)
 
 pond_result RTABMap::onStartup(const std::vector<void*>& args)
 {

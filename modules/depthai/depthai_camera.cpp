@@ -39,7 +39,7 @@ private:
     std::shared_ptr<dai::node::Sync> sync;
     std::shared_ptr<dai::MessageQueue> out_queue;
 
-    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>> distributor;
+    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuData>> distributor;
     CameraInfo mono_left_info, mono_right_info;
 };
 
@@ -53,7 +53,7 @@ POND_BUNDLE_DECLARE(
 
 pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
 {
-    distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuDataStamped>>(
+    distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, std::vector<ImuData>>(
         {
             "mono_left/image", "mono_left/cam_info", 
             "mono_right/image", "mono_right/cam_info", 
@@ -138,7 +138,7 @@ void DepthaiCamera::onFrame()
             {
                 ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8, time);
                 ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8, time);
-                std::vector<ImuDataStamped> imu_data;
+                std::vector<ImuData> imu_data;
                 distributor.distribute(left_msg, mono_left_info, right_msg, mono_right_info, imu_data);
             }
         }

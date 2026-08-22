@@ -48,12 +48,12 @@ public:
     };
 
     virtual ~ImgFrame() = default;
-    void* data;
-    uint32_t width;
-    uint32_t height;
-    uint32_t pixel_size;
-    double depth_scale;
-    Format format;
+    void* data = NULL;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t pixel_size = 0;
+    double depth_scale = 0;
+    Format format = Format::ERROR;
     Stamp stamp;
 
     //default for storing data;
@@ -63,15 +63,15 @@ public:
 struct CameraInfo
 {
     Stamp stamp;
-    uint32_t height;
-    uint32_t width;
-    std::string distortion_model;
-    std::vector<double> d;
-    std::array<double, 9> k;
-    std::array<double, 9> r;
-    std::array<double, 12> p;
-    uint32_t binning_x;
-    uint32_t binning_y;
+    uint32_t height = 0;
+    uint32_t width = 0;
+    std::string distortion_model = "";
+    std::vector<double> d = {};
+    std::array<double, 9> k = {};
+    std::array<double, 9> r = {};
+    std::array<double, 12> p = {};
+    uint32_t binning_x = 0;
+    uint32_t binning_y = 0;
 };
 
 using ImgFrameSPtr = std::shared_ptr<ImgFrame>;

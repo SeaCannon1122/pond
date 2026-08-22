@@ -130,27 +130,43 @@ def main():
         parameters={
             "camera_info_path" : "/home/pilot/pond/config/Realsense.yaml",
             "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt",
-            "mode" : "Stereo"
+            "mode" : "Stereo",
+            "frame_id" : "camera",
+            "parent_frame_id" : "base_link"
         },
         topic_mappings={},
     )
 
     pm.load_module(
         name="ros2_bridge",
-        bundle_name="quac_modules",
-        module_name="ros2_bridge",
+        bundle_name="ros2",
+        module_name="bridge",
         thread_name="ros2_bridge_thread",
         parameters={
-            "pond_topics" : ["imu_data", "pose"],
+            "node_name" : "pond_bridge",
+            "topic_count" : 3,
 
-            "imu_data.pond.type" : "ImuDataStamped.Vector",
-            "imu_data.ros.topic" : "imu",
-            "imu_data.ros.qos.reliable" : False,
+            "topic0.direction" : "POND_TO_ROS",
+            "topic0.pond.topic" : "imu_data",
+            "topic0.pond.type" : "ImuData",
+            "topic0.pond.is_vector" : True,
+            "topic0.ros.topic" : "imu",
+            "topic0.ros.type" : "sensor_msgs::msg::Imu",
+            "topic0.ros.qos.reliable" : False,
 
-            "pose.pond.type" : "PoseStamped",
-            "pose.ros.topic" : "pose",
-            "pose.ros.qos.reliable" : False
+            "topic1.direction" : "POND_TO_ROS",
+            "topic1.pond.topic" : "camera_transform",
+            "topic1.pond.type" : "FrameTransform",
+            "topic1.ros.topic" : "pose",
+            "topic1.ros.type" : "geometry_msgs::msg::PoseStamped",
+            "topic1.ros.qos.reliable" : False,
 
+            "topic2.direction" : "ROS_TO_POND",
+            "topic2.pond.topic" : "cmd_vel",
+            "topic2.pond.type" : "TwistCommand",
+            "topic2.ros.topic" : "cmd_vel",
+            "topic2.ros.type" : "geometry_msgs::msg::TwistStamped",
+            "topic2.ros.qos.reliable" : False,
         },
         topic_mappings={}
     )

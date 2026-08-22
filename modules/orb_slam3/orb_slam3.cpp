@@ -1,11 +1,12 @@
+#include "pond/data_types/transform_types.hpp"
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
-#include <chrono>
+
 #include <pond/pond.hpp>
 #include <pond/data_types/cv_img_frame.hpp>
 #include <pond/data_types/imu_types.hpp>
+#include <pond/data_types/transform_types.hpp>
 
 #include "System.h"
-#include "pond/data_types/video_types.hpp"
 #include <mutex>
 
 class OrbSlam3 : public pond::ModuleBase
@@ -17,7 +18,6 @@ public:
 private:
     std::shared_ptr<ORB_SLAM3::System> slam;
 
-    std::string frame_id;
     ORB_SLAM3::System::eSensor mode;
     bool use_imu;
 
@@ -25,14 +25,14 @@ private:
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points;
     std::atomic<bool> new_data;
 
-    void store_imu_data(std::vector<ImuDataStamped>* imu_data)
+    void store_imu_data(std::vector<ImuData>* imu_data)
     {
         imu_data_points.reserve((*imu_data).size());
         for (auto& d : *imu_data)
         {
             imu_data_points.push_back(ORB_SLAM3::IMU::Point(
-                d.data.lin_acc.x, d.data.lin_acc.y, d.data.lin_acc.z,
-                d.data.ang_vel.x, d.data.ang_vel.y, d.data.ang_vel.z,
+                d.lin_acc[0], d.lin_acc[1], d.lin_acc[2],
+                d.ang_vel[0], d.ang_vel[1], d.ang_vel[2],
                 d.stamp.hw_time
             ));
         }
@@ -40,53 +40,26 @@ private:
 
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuDataStamped>> receiver_imu;
+        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
     } stereo;
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuDataStamped>> receiver_imu;
+        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
     } rgbd;
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, std::vector<ImuDataStamped>> receiver_imu;
+        pond::Receiver<ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr> receiver;
     } mono;
 
     ImgFrameSPtr first_frame, second_frame;
-    pond::Distributor<PoseStamped> pose_distributor;
-    PoseStamped pose;
+    pond::Distributor<FrameTransform> transform_distributor;
+    FrameTransform transform;
     pond::Distributor<ImgFrameSPtr> keypoint_frame_distributor;
 
-    void distribute_result_pose(const Sophus::SE3f& Tcw)
-    {
-        if(Tcw.matrix().isZero()) return;
-    
-        Sophus::SE3f Twc = Tcw.inverse();
-
-        Eigen::Vector3f t = Twc.translation();
-        Eigen::Matrix3f R = Twc.rotationMatrix();
-        
-        pose.stamp.frame_id = "base_link";
-
-        pose.pose.p.y = -t.x();
-        pose.pose.p.z = -t.y();
-        pose.pose.p.x = t.z();
-        pose.pose.p.w = 1;
-
-        pose.pose.o.y = -std::atan2(R(2,1), R(2,2));
-        pose.pose.o.z = -std::atan2(
-            -R(2,0),
-            std::sqrt(R(2,1) * R(2,1) + R(2,2) * R(2,2))
-        );
-        pose.pose.o.x = std::atan2(R(1,0), R(0,0));
-        pose.pose.o.w = 1;
-
-        pose_distributor.distribute(pose);
-    }
-
-    void image_imu_callback(ImgFrameSPtr* first, ImgFrameSPtr* second, std::vector<ImuDataStamped>* imu_data)
+    void image_imu_callback(ImgFrameSPtr* first, ImgFrameSPtr* second, std::vector<ImuData>* imu_data)
     {
         std::lock_guard<std::mutex> lock(input_mutex);
 
@@ -137,9 +110,10 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     else mono.use = false;
     
     use_imu = parameter("use_imu").asBool().get(false);
-    frame_id = parameter("frame_id").asString().get("base_link");
+    transform.stamp.frame_id = parameter("frame_id").asString().get("camera");
+    transform.parent_frame_id = parameter("parent_frame_id").asString().get("base_link");
 
-    pose_distributor = createDistributor<PoseStamped>({"pose"});
+    transform_distributor = createDistributor<FrameTransform>({"slam_transform"});
     keypoint_frame_distributor = createDistributor<ImgFrameSPtr>({stereo.use ? "mono_left_with_keypoints/image" : (rgbd.use ? "color_with_keypoints/image" : "mono_with_keypoints/image")});
 
     new_data.store(false);
@@ -153,9 +127,9 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
 
     if (stereo.use)
     {
-        if (use_imu) stereo.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuDataStamped>>(
+        if (use_imu) stereo.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>>(
             {"mono_left/image", "mono_right/image", "imu_data"},
-            [this](ImgFrameSPtr* left, ImgFrameSPtr* right, std::vector<ImuDataStamped>* imu_data)
+            [this](ImgFrameSPtr* left, ImgFrameSPtr* right, std::vector<ImuData>* imu_data)
             {
                 image_imu_callback(left, right, imu_data);
             }
@@ -170,9 +144,9 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     }
     if (rgbd.use)
     {
-        if (use_imu) rgbd.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuDataStamped>>(
+        if (use_imu) rgbd.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>>(
             {"color/image", "depth/image", "imu_data"},
-            [this](ImgFrameSPtr* color, ImgFrameSPtr* depth, std::vector<ImuDataStamped>* imu_data)
+            [this](ImgFrameSPtr* color, ImgFrameSPtr* depth, std::vector<ImuData>* imu_data)
             {
                 image_imu_callback(color, depth, imu_data);
             }
@@ -187,9 +161,9 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     }
     if (mono.use)
     {
-        if (use_imu) mono.receiver_imu = createReceiver<ImgFrameSPtr, std::vector<ImuDataStamped>>(
+        if (use_imu) mono.receiver_imu = createReceiver<ImgFrameSPtr, std::vector<ImuData>>(
             {"mono/image", "imu_data"},
-            [this](ImgFrameSPtr* frame, std::vector<ImuDataStamped>* imu_data)
+            [this](ImgFrameSPtr* frame, std::vector<ImuData>* imu_data)
             {
                 image_imu_callback(frame, NULL, imu_data);
             }
@@ -227,7 +201,7 @@ void OrbSlam3::onShutdown()
         else mono.receiver.destroy();
     }
 
-    pose_distributor.destroy();
+    transform_distributor.destroy();
     keypoint_frame_distributor.destroy();
 }
 
@@ -252,16 +226,17 @@ void OrbSlam3::onFrame()
     }
 
     cv::Mat no_keypoint_mat;
+    Sophus::SE3f Tcw;
 
     if (stereo.use)
     {
         cv::Mat left(first_frame_c->height, first_frame_c->width, CV_8UC1, first_frame_c->data);
         cv::Mat right(second_frame_c->height, second_frame_c->width, CV_8UC1, second_frame_c->data);
 
-        pose.stamp.hw_time = (first_frame_c->stamp.hw_time + second_frame_c->stamp.hw_time) / 2.0;
-        pose.stamp.time = (first_frame_c->stamp.time + second_frame_c->stamp.time) / 2.0;
+        transform.stamp.hw_time = (first_frame_c->stamp.hw_time + second_frame_c->stamp.hw_time) / 2.0;
+        transform.stamp.time = (first_frame_c->stamp.time + second_frame_c->stamp.time) / 2.0;
 
-        distribute_result_pose(slam->TrackStereo(left, right, pose.stamp.hw_time, imu_data_points_c));
+        Tcw = slam->TrackStereo(left, right, transform.stamp.hw_time, imu_data_points_c);
         no_keypoint_mat = left;
     }
     if (rgbd.use)
@@ -271,19 +246,25 @@ void OrbSlam3::onFrame()
         cv::Mat depth32;
         depth.convertTo(depth32, CV_32F, second_frame_c->depth_scale);
 
-        pose.stamp.hw_time = (first_frame_c->stamp.hw_time + second_frame_c->stamp.hw_time) / 2.0;
-        pose.stamp.time = (first_frame_c->stamp.time + second_frame_c->stamp.time) / 2.0;
-        distribute_result_pose(slam->TrackRGBD(rgb, depth32, pose.stamp.hw_time, imu_data_points_c));
+        transform.stamp.hw_time = (first_frame_c->stamp.hw_time + second_frame_c->stamp.hw_time) / 2.0;
+        transform.stamp.time = (first_frame_c->stamp.time + second_frame_c->stamp.time) / 2.0;
+        Tcw = slam->TrackRGBD(rgb, depth32, transform.stamp.hw_time, imu_data_points_c);
         no_keypoint_mat = rgb;
     }
     if (mono.use)
     {
         cv::Mat mono(first_frame_c->height, first_frame_c->width, CV_8UC1, first_frame_c->data);
 
-        pose.stamp.hw_time = first_frame_c->stamp.hw_time;
-        pose.stamp.time = first_frame_c->stamp.time;
-        distribute_result_pose(slam->TrackMonocular(mono, pose.stamp.hw_time, imu_data_points_c));
+        transform.stamp.hw_time = first_frame_c->stamp.hw_time;
+        transform.stamp.time = first_frame_c->stamp.time;
+        Tcw = slam->TrackMonocular(mono, transform.stamp.hw_time, imu_data_points_c);
         no_keypoint_mat = mono;
+    }
+
+    if(!Tcw.matrix().isZero())
+    {
+        transform.tf = Tcw.cast<double>().inverse();
+        transform_distributor.distribute(transform);
     }
 
     std::vector<cv::KeyPoint> keypoints = slam->GetTrackedKeyPointsUn();

@@ -1,13 +1,8 @@
+#include <rclcpp/executors.hpp>
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
-#include <pond/pond.hpp>
-#include <pond/data_types/imu_types.hpp>
+#include "ros2_bridge.hpp"
 
-#include <rclcpp/rclcpp.hpp>
-
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <sensor_msgs/msg/imu.hpp>
-
-template<typename ros_msg, typename pond_data_type>
+template<typename pond_data_type, typename ros_msg>
 struct pond_to_ros
 {
     ~pond_to_ros()
@@ -22,6 +17,15 @@ struct pond_to_ros
     bool is_vector;
 };
 
+template<typename pond_data_type, typename ros_msg>
+struct ros_to_pond
+{
+    ~ros_to_pond() { distributor.destroy(); }
+
+    std::shared_ptr<rclcpp::Subscription<ros_msg>> subscriber;
+    pond::Distributor<pond_data_type> distributor;
+};
+
 class Ros2Bridge : public pond::ModuleBase
 {
 public:
@@ -29,16 +33,13 @@ public:
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
-    template<typename ros_msg, typename pond_data_type>
 
-    void create_pond_to_ros(const std::string& pond_topic, std::shared_ptr<pond_to_ros<ros_msg, pond_data_type>>& obj, void (*convert_function)(const pond_data_type&, ros_msg&), bool vector)
+    template<typename pond_data_type, typename ros_msg>
+    std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> create_pond_to_ros(const std::string& pond_topic, const std::string& ros_topic, void (*convert_function)(const pond_data_type&, ros_msg&), rclcpp::QoS& qos, bool vector)
     {
-        rclcpp::QoS qos(parameter(pond_topic+".ros.qos.depth").asInt().get(10));
-        
-        if (parameter(pond_topic+".ros.qos.reliable").asBool().get(true)) qos.reliable();
-        else qos.best_effort();
+        std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> obj = std::make_shared<pond_to_ros<pond_data_type, ros_msg>>();
 
-        obj->publisher = node->create_publisher<ros_msg>(parameter(pond_topic+".ros.topic").asString().get("ros_topic"), qos);
+        obj->publisher = node->create_publisher<ros_msg>(ros_topic, qos);
         if (vector) obj->vector_receiver = createReceiver<std::vector<pond_data_type>>({pond_topic}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
         {
             ros_msg msg;
@@ -56,10 +57,27 @@ private:
         });
 
         obj->is_vector = vector;
+        return obj;
+    }
+
+    template<typename pond_data_type, typename ros_msg>
+    std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> create_ros_to_pond(const std::string& pond_topic, const std::string& ros_topic, void (*convert_function)(pond_data_type&, const ros_msg&), rclcpp::QoS& qos)
+    {
+        std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> obj = std::make_shared<ros_to_pond<pond_data_type, ros_msg>>();
+
+        obj->distributor = createDistributor<pond_data_type>({pond_topic});
+        obj->subscriber = node->create_subscription<ros_msg>(ros_topic, qos, [dis_ptr = &obj->distributor, convert_function](const std::shared_ptr<ros_msg> msg)
+        {
+            pond_data_type data;
+            convert_function(data, *msg);
+            dis_ptr->distribute(data);
+        });
+
+        return obj;
     }
 
     std::shared_ptr<rclcpp::Node> node;
-    std::vector<std::shared_ptr<void>> pond_to_ros_s;
+    std::vector<std::shared_ptr<void>> bridges;
 };
 
 POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types to ros2")
@@ -70,35 +88,6 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(Ros2Bridge),
 )
 
-void pond_to_ros_convert_ImuDataStamped(const ImuDataStamped& data, sensor_msgs::msg::Imu& msg)
-{
-    msg.header.frame_id = data.stamp.frame_id;
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(data.stamp.time * 1e9), RCL_SYSTEM_TIME);
-
-    msg.angular_velocity.x = data.data.ang_vel.x;
-    msg.angular_velocity.y = data.data.ang_vel.y;
-    msg.angular_velocity.z = data.data.ang_vel.z;
-
-    msg.linear_acceleration.x = data.data.lin_acc.x;
-    msg.linear_acceleration.y = data.data.lin_acc.y;
-    msg.linear_acceleration.z = data.data.lin_acc.z;
-}
-
-void pond_to_ros_convert_PoseStamped(const PoseStamped& data, geometry_msgs::msg::PoseStamped& msg)
-{
-    msg.header.frame_id = data.stamp.frame_id;
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(data.stamp.time * 1e9), RCL_SYSTEM_TIME);
-
-    msg.pose.position.x = data.pose.p.x;
-    msg.pose.position.y = data.pose.p.y;
-    msg.pose.position.z = data.pose.p.z;
-
-    msg.pose.orientation.x = data.pose.o.x;
-    msg.pose.orientation.y = data.pose.o.y;
-    msg.pose.orientation.z = data.pose.o.z;
-    msg.pose.orientation.w = data.pose.o.w;
-}
-
 pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 {
     rclcpp::init(
@@ -108,42 +97,77 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
     );
     node = std::make_shared<rclcpp::Node>(parameter("node_name").asString().get("pond_bridge"));
 
-    POND_LOG("POND_TO_ROS:");
-    auto pond_topics = parameter("pond_topics").asStringArray().getStrict();
-    if (!pond_topics) return POND_ERROR;
+    int topic_count = parameter("topic_count").asInt().get(0);
     
-    for (const auto& pond_topic : *pond_topics)
+    for (int i = 0; i < topic_count; i++)
     {
-        POND_LOG("  %s -> %s", pond_topic.c_str(), parameter(pond_topic+".ros.topic").asString().get("ros_topic").c_str());
+        std::string prefix = "topic" + std::to_string(i) + ".";
 
-        auto pond_type_full = parameter(pond_topic+".pond.type").asString().getStrict();
-        if (!pond_type_full) continue;
-        
-        std::string pond_type = *pond_type_full;
-        std::string suffix = "";
+        auto direction_o = parameter(prefix+"direction").asString().getStrict({"POND_TO_ROS", "ROS_TO_POND"});
+        auto pond_topic_o = parameter(prefix+"pond.topic").asString().getStrict();
+        auto pond_type_o = parameter(prefix+"pond.type").asString().getStrict();
+        auto ros_topic_o = parameter(prefix+"ros.topic").asString().getStrict();
+        auto ros_type_o = parameter(prefix+"ros.type").asString().getStrict();
+        if (!direction_o || !pond_topic_o || !pond_type_o || !ros_topic_o || !ros_type_o) continue;
 
-        if (auto pos = (*pond_type_full).find('.'); pos != std::string::npos)
+        std::string direction = *direction_o, pond_topic = *pond_topic_o, pond_type = *pond_type_o, ros_topic = *ros_topic_o, ros_type = *ros_type_o;
+
+        rclcpp::QoS qos(parameter(prefix+"ros.qos.depth").asInt().get(10));
+
+        if (parameter(prefix+".ros.qos.reliable").asBool().get(true)) qos.reliable();
+        else qos.best_effort();
+
+        if (direction == "POND_TO_ROS")
         {
-            pond_type = (*pond_type_full).substr(0, pos);
-            suffix  = (*pond_type_full).substr(pos + 1);
-        }
+            bool is_vector = parameter(prefix+"pond.is_vector").asBool().get(false);
+            
+            bool bridged = [&]() -> bool {
+                if (pond_type == "ImuData")
+                {
+                    if (ros_type == "sensor_msgs::msg::Imu") bridges.emplace_back( create_pond_to_ros<ImuData, sensor_msgs::msg::Imu>(
+                        pond_topic, ros_topic, ImuData__to__sensor_msgs_msg_Imu, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "FrameTransform")
+                {
+                    if (ros_type == "geometry_msgs::msg::Pose") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::Pose>(
+                        pond_topic, ros_topic, FrameTransform__to__geometry_msgs_msg_Pose, qos, is_vector
+                    ));
+                    else if (ros_type == "geometry_msgs::msg::PoseStamped") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::PoseStamped>(
+                        pond_topic, ros_topic, FrameTransform__to__geometry_msgs_msg_PoseStamped, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else return false;
+    
+                return true;
+            }();
 
-        bool is_vector = (suffix == "Vector");
+            if (bridged) POND_LOG("Bridging POND_TO_ROS:    '%s' '%s%s'  -->>  '%s' '%s'", pond_topic.c_str(), pond_type.c_str(), is_vector ? ".vector" : "", ros_topic.c_str(), ros_type.c_str());
+            else POND_LOG("Cannot bridge POND_TO_ROS:    '%s' '%s%s'  -->>  '%s' '%s'", pond_topic.c_str(), pond_type.c_str(), is_vector ? ".vector" : "", ros_topic.c_str(), ros_type.c_str());
+        }
+        else
+        {
+            bool bridged = [&]() -> bool {
+                if (pond_type == "TwistCommand")
+                {
+                    if (ros_type == "geometry_msgs::msg::Twist") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::Twist>(
+                        pond_topic, ros_topic, geometry_msgs_msg_Twist__to__TwistCommand, qos
+                    ));
+                    else if (ros_type == "geometry_msgs::msg::TwistStamped") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::TwistStamped>(
+                        pond_topic, ros_topic, geometry_msgs_msg_TwistStamped__to__TwistCommand, qos
+                    ));
+                    else return false;
+                }
+                else return false;
 
-        if (pond_type == "ImuDataStamped")
-        {
-            auto obj = std::make_shared<pond_to_ros<sensor_msgs::msg::Imu, ImuDataStamped>>();
-            create_pond_to_ros<sensor_msgs::msg::Imu, ImuDataStamped>(pond_topic, obj, pond_to_ros_convert_ImuDataStamped, is_vector);
-            pond_to_ros_s.emplace_back(obj);
+                return true;
+            }();
+
+            if (bridged)  POND_LOG("Bridging ROS_TO_POND:    '%s' '%s'  -->>  '%s' '%s'", ros_topic.c_str(), ros_type.c_str(), pond_topic.c_str(), pond_type.c_str());
+            else POND_LOG("Cannot bridge ROS_TO_POND:    '%s' '%s'  -->>  '%s' '%s'", ros_topic.c_str(), ros_type.c_str(), pond_topic.c_str(), pond_type.c_str());
         }
-        else if (pond_type == "PoseStamped")
-        {
-            auto obj = std::make_shared<pond_to_ros<geometry_msgs::msg::PoseStamped, PoseStamped>>();
-            create_pond_to_ros<geometry_msgs::msg::PoseStamped, PoseStamped>(pond_topic, obj, pond_to_ros_convert_PoseStamped, is_vector);
-            pond_to_ros_s.emplace_back(obj);
-        }
-        else POND_LOG("Cannot bridge pond topic type '%s'", pond_type.c_str());
-       
     }
 
     return POND_SUCCESS;
@@ -151,11 +175,12 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 
 void Ros2Bridge::onShutdown()
 {
-    pond_to_ros_s.resize(0);
+    bridges.resize(0);
     node.reset();
     rclcpp::shutdown();
 }
 
 void Ros2Bridge::onFrame()
 {
+    rclcpp::spin_some(node);
 }
