@@ -114,8 +114,11 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 
         rclcpp::QoS qos(parameter(prefix+"ros.qos.depth").asInt().get(10));
 
-        if (parameter(prefix+".ros.qos.reliable").asBool().get(true)) qos.reliable();
+        if (parameter(prefix+"ros.qos.reliable").asBool().get(true)) qos.reliable();
         else qos.best_effort();
+
+        if (parameter(prefix+"ros.qos.volatile").asBool().get(true)) qos.durability_volatile();
+        else qos.transient_local();
 
         if (direction == "POND_TO_ROS")
         {
@@ -137,6 +140,33 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     else if (ros_type == "geometry_msgs::msg::PoseStamped") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::PoseStamped>(
                         pond_topic, ros_topic, FrameTransform__to__geometry_msgs_msg_PoseStamped, qos, is_vector
                     ));
+                    else if (ros_type == "geometry_msgs::msg::TransformStamped") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::TransformStamped>(
+                        pond_topic, ros_topic, FrameTransform__to__geometry_msgs_msg_TransformStamped, qos, is_vector
+                    ));
+                    else if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_pond_to_ros<FrameTransform, tf2_msgs::msg::TFMessage>(
+                        pond_topic, ros_topic, FrameTransform__to__tf2_msgs_msg_TFMessage, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::vector<FrameTransform>")
+                {
+                    if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_pond_to_ros<std::vector<FrameTransform>, tf2_msgs::msg::TFMessage>(
+                        pond_topic, ros_topic, std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::string")
+                {
+                    if (ros_type == "std_msgs::msg::String") bridges.emplace_back(create_pond_to_ros<std::string, std_msgs::msg::String>(
+                        pond_topic, ros_topic, std_string__to__std_msgs_msg_String, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "LaserScanSPtr")
+                {
+                    if (ros_type == "sensor_msgs::msg::LaserScan") bridges.emplace_back(create_pond_to_ros<LaserScanSPtr, sensor_msgs::msg::LaserScan>(
+                        pond_topic, ros_topic, LaserScanSPtr__to__sensor_msgs_msg_LaserScan, qos, is_vector
+                    ));
                     else return false;
                 }
                 else return false;
@@ -157,6 +187,37 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     ));
                     else if (ros_type == "geometry_msgs::msg::TwistStamped") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::TwistStamped>(
                         pond_topic, ros_topic, geometry_msgs_msg_TwistStamped__to__TwistCommand, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "FrameTransform")
+                {
+                    if (ros_type == "geometry_msgs::msg::TransformStamped") bridges.emplace_back(create_ros_to_pond<FrameTransform, geometry_msgs::msg::TransformStamped>(
+                        pond_topic, ros_topic, geometry_msgs_msg_TransformStamped__to__FrameTransform, qos
+                    ));
+                    else if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_ros_to_pond<FrameTransform, tf2_msgs::msg::TFMessage>(
+                        pond_topic, ros_topic, tf2_msgs_msg_TFMessage__to__FrameTransform, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::vector<FrameTransform>")
+                {
+                    if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_ros_to_pond<std::vector<FrameTransform>, tf2_msgs::msg::TFMessage>(
+                        pond_topic, ros_topic, tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::string")
+                {
+                    if (ros_type == "std_msgs::msg::String") bridges.emplace_back(create_ros_to_pond<std::string, std_msgs::msg::String>(
+                        pond_topic, ros_topic, std_msgs_msg_String__to__std_string, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "LaserScanSPtr")
+                {
+                    if (ros_type == "sensor_msgs::msg::LaserScan") bridges.emplace_back(create_ros_to_pond<LaserScanSPtr, sensor_msgs::msg::LaserScan>(
+                        pond_topic, ros_topic, sensor_msgs_msg_LaserScan__to__LaserScanSPtr, qos
                     ));
                     else return false;
                 }

@@ -5,8 +5,7 @@
 struct FrameTransform
 {
     Stamp stamp;
-    std::string parent_frame_id;
-
+    std::string child_frame_id;
     Sophus::SE3d tf;
 };
 

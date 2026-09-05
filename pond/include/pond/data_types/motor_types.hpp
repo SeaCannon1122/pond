@@ -1,3 +1,5 @@
+#pragma once
+
 #include "stamp.hpp"
 
 struct MotorCommand

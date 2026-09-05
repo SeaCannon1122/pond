@@ -284,12 +284,18 @@ std::string PondManager::shutdown_module(const std::string& name)
 void PondManager::cleanup_module(pond_internal::Module* module)
 {
     for (int i = 0; i < module->distributors.get_length(); i++) 
-        if (module->distributors.is_used(i)) 
+        if (module->distributors.is_used(i))
+        {
             api_destroy_distributor(module, i);
+        }
+            
 
     for (int i = 0; i < module->receivers.get_length(); i++)
-        if (module->receivers.is_used(i)) 
+        if (module->receivers.is_used(i))
+        {
             api_destroy_receiver(module, i);
+        }
+            
 
     dlclose(module->lib_handle);
 }

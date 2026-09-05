@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <material name="wheel_material">
+        <color rgba="0.6 0.6 0.6 1.0" />
+    </material>
+
+    <xacro:macro name="wheel" params="name xyz visual_rpy collision_xyz">
+        <joint name="${name}_joint" type="continuous">
+            <origin xyz="${xyz}" rpy="0 0 0"/>
+            <parent link="chassis"/>
+            <child link="${name}"/>
+            <axis xyz="0.0 1.0 0.0"/>
+        </joint>
+
+        <link name="${name}">
+            <visual>
+                <origin xyz="0 0 0" rpy="${visual_rpy}"/>
+                <geometry>
+                    <mesh filename="package://quac/meshes/version_6/wheel_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="wheel_material"/>
+            </visual>
+            <collision>
+                <origin xyz="${collision_xyz}" rpy="${pi/2} 0 0"/>
+                <geometry>
+                    <cylinder radius="0.06" length="0.04" />
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>1.0</mu>       <!-- Static friction -->
+                            <mu2>1.0</mu2>     <!-- Dynamic friction -->
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+            <xacro:inertial_cylinder mass="0.1" radius="0.06" length="0.04">
+                <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+            </xacro:inertial_cylinder>
+
+        </link>
+
+    </xacro:macro>
+
+    <!-- Four wheels -->
+    
+    <xacro:wheel name="wheel_front_left" xyz="0.109 0.063 -0.079" visual_rpy="0 0 ${pi}" collision_xyz="0 0.03 0" />
+    <xacro:wheel name="wheel_front_right" xyz="0.109 -0.063 -0.079" visual_rpy="0 0 0" collision_xyz="0 -0.03 0" />
+    <xacro:wheel name="wheel_rear_left" xyz="-0.109 0.063 -0.079" visual_rpy="0 0 ${pi}" collision_xyz="0 0.03 0" />
+    <xacro:wheel name="wheel_rear_right" xyz="-0.109 -0.063 -0.079" visual_rpy="0 0 0" collision_xyz="0 -0.03 0" />
+    
+</robot>

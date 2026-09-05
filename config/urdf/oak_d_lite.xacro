@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+	<material name="oak_d_lite_material">
+        <color rgba="0.5 0.5 0.5 1"/>
+    </material>
+
+	<xacro:macro name="oak_d_lite" params="camera_name parent xyz rpy">
+
+		<xacro:property name="baseline" value="0.075" />
+
+		<xacro:property name="left_name" value="infra2" />
+		<xacro:property name="right_name" value="infra1" />
+
+		<link name="${camera_name}" />
+
+		<joint name="${camera_name}_center_joint" type="fixed">
+			<parent link="${parent}" />
+			<child link="${camera_name}" />
+			<origin xyz="${xyz}" rpy="${rpy}" />
+		</joint>
+
+		<link name="${camera_name}_model_origin">
+			<visual>
+				<origin xyz="0 0 0" rpy="0 0 0" />
+				<geometry>
+					<mesh filename="package://quac/meshes/oak_d_lite.stl" />
+				</geometry>
+				<material name="oak_d_lite_material"/>
+			</visual>
+		</link>
+
+		<joint name="${camera_name}_model_origin_joint" type="fixed">
+			<parent link="${camera_name}" />
+			<child link="${camera_name}_model_origin" />
+			<origin xyz="0 0 0" rpy="${pi/2} 0 ${pi/2}" />
+		</joint>
+
+		<!-- RGB Camera -->
+		<link name="${camera_name}_color_frame" />
+
+		<joint name="${camera_name}_rgb_camera_joint" type="fixed">
+			<parent link="${camera_name}" />
+			<child link="${camera_name}_color_frame" />
+			<origin xyz="0 0 0" rpy="0 0 0" />
+		</joint>
+
+		<link name="${camera_name}_imu"/>
+
+		<joint name="${camera_name}_imu_joint" type="fixed">
+			<parent link="${camera_name}_color_frame"/>
+			<child link="${camera_name}_imu"/>
+
+			<origin xyz="-0.00315 0.0006439 -0.0002" rpy="-${pi/2} 0.0 ${pi/2}"/>
+		</joint>
+
+		<link name="${camera_name}_color_optical_frame" />
+
+		<joint name="${camera_name}_rgb_camera_optical_joint" type="fixed">
+			<origin xyz="0 0 0" rpy="-${pi/2} 0.0 -${pi/2}" />
+			<parent link="${camera_name}_color_frame" />
+			<child link="${camera_name}_color_optical_frame" />
+		</joint>
+		
+		<!-- Left Camera -->
+		<link name="${camera_name}_${left_name}_frame" />
+
+		<joint name="${camera_name}_left_camera_joint" type="fixed">
+			<parent link="${camera_name}" />
+			<child link="${camera_name}_${left_name}_frame" />
+			<origin xyz="0 ${baseline/2} 0" rpy="0 0 0" />
+		</joint>
+
+		<link name="${camera_name}_${left_name}_optical_frame" />
+
+		<joint name="${camera_name}_left_camera_optical_joint" type="fixed">
+			<origin xyz="0 0 0" rpy="-${pi/2} 0.0 -${pi/2}" />
+			<parent link="${camera_name}_${left_name}_frame" />
+			<child link="${camera_name}_${left_name}_optical_frame" />
+		</joint>
+
+
+		<!-- right Camera -->
+		<link name="${camera_name}_${right_name}_frame" />
+
+		<joint name="${camera_name}_right_camera_joint" type="fixed">
+			<parent link="${camera_name}" />
+			<child link="${camera_name}_${right_name}_frame" />
+			<origin xyz="0 -${baseline/2} 0" rpy="0 0 0" />
+		</joint>
+
+		<link name="${camera_name}_${right_name}_optical_frame" />
+
+		<joint name="${camera_name}_right_camera_optical_joint" type="fixed">
+			<origin xyz="0 0 0" rpy="-${pi/2} 0.0 -${pi/2}" />
+			<parent link="${camera_name}_${right_name}_frame" />
+			<child link="${camera_name}_${right_name}_optical_frame" />
+		</joint>
+
+		
+	</xacro:macro>
+
+</robot>

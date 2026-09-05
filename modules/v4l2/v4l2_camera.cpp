@@ -1,3 +1,4 @@
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include <pond/data_types/cv_img_frame.hpp>
 
@@ -13,6 +14,12 @@ private:
 };
 
 POND_MODULE_CPP_DECLARE(V4L2Camera, "v4l2_camera", "v4l2 camera image distributor")
+
+POND_BUNDLE_DECLARE(
+    "v4l2 bundle", 
+    1,
+    POND_MODULE(V4L2Camera),
+)
 
 pond_result V4L2Camera::onStartup(const std::vector<void*>& args)
 {

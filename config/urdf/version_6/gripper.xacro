@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <material name="gripper_material">
+        <color rgba="0.7 0.2 0.2 1.0" />
+    </material>
+
+    <link name="gripper_base">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+        </inertial>
+    </link>
+
+    <xacro:sensor_d435 parent="gripper_base" name="camera_gripper" use_nominal_extrinsics="true">
+        <origin xyz="0.022 -0.0255 0.0225" rpy="0 0 0"/>
+    </xacro:sensor_d435>
+
+    <joint name="gripper_joint" type="continuous">
+        <parent link="gripper_base" />
+        <child link="gripper_link" />
+        <origin xyz="-0.0207 0.0125 0.0355" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+    </joint>
+
+    <link name="gripper_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+        </inertial>
+    </link>
+
+    <xacro:macro name="gripper_side" params="side multiplier">
+        <joint name="gripper_${side}_back_piece_joint" type="continuous">
+            <parent link="gripper_base" />
+            <child link="gripper_${side}_back_piece" />
+            <origin xyz="-0.021 ${-multiplier * 0.0315} 0.0105" rpy="0 0 0"/>
+            <mimic joint="gripper_joint" multiplier="${-multiplier}" offset="${multiplier * pi/2}"/>
+            <axis xyz="0 0 1" />
+        </joint>
+
+        <link name="gripper_${side}_back_piece">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="0.02"/>
+                <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
+                <geometry>
+                    <mesh filename="package://quac/meshes/version_6/gripper_back_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </visual>
+        </link>
+
+        <joint name="gripper_${side}_front_piece_joint" type="continuous">
+            <parent link="gripper_base" />
+            <child link="gripper_${side}_front_piece" />
+            <origin xyz="0.0 ${-multiplier * 0.0105} 0.0" rpy="0 0 0"/>
+            <mimic joint="gripper_joint" multiplier="${-multiplier}" offset="${multiplier * pi/2}"/>
+            <axis xyz="0 0 1" />
+        </joint>
+
+        <link name="gripper_${side}_front_piece">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="0.02"/>
+                <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
+                <geometry>
+                    <mesh filename="package://quac/meshes/version_6/gripper_front_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </visual>
+        </link>
+
+        <joint name="gripper_${side}_joint" type="continuous">
+            <parent link="gripper_${side}_back_piece" />
+            <child link="gripper_${side}" />
+            <origin xyz="0.0 ${-multiplier * 0.043} 0.006" rpy="0 0 0"/>
+            <mimic joint="gripper_joint" multiplier="${multiplier}" offset="${-multiplier * pi/2}"/>
+            <axis xyz="0 0 1" />
+        </joint>
+
+        <link name="gripper_${side}">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="0.1"/>
+                <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://quac/meshes/version_6/gripper_${side}.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </visual>
+        </link>
+
+    </xacro:macro>
+
+    <xacro:gripper_side side="left" multiplier="-1.0" />
+    <xacro:gripper_side side="right" multiplier="1.0" />
+
+</robot>

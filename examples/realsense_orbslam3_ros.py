@@ -155,7 +155,7 @@ def main():
             "topic0.ros.qos.reliable" : False,
 
             "topic1.direction" : "POND_TO_ROS",
-            "topic1.pond.topic" : "camera_transform",
+            "topic1.pond.topic" : "slam_transform",
             "topic1.pond.type" : "FrameTransform",
             "topic1.ros.topic" : "pose",
             "topic1.ros.type" : "geometry_msgs::msg::PoseStamped",

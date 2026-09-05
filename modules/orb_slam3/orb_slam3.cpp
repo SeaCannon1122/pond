@@ -110,8 +110,8 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     else mono.use = false;
     
     use_imu = parameter("use_imu").asBool().get(false);
-    transform.stamp.frame_id = parameter("frame_id").asString().get("camera");
-    transform.parent_frame_id = parameter("parent_frame_id").asString().get("base_link");
+    transform.stamp.frame_id = parameter("base_frame_id").asString().get("world");
+    transform.child_frame_id = parameter("camera_frame_id").asString().get("camera");
 
     transform_distributor = createDistributor<FrameTransform>({"slam_transform"});
     keypoint_frame_distributor = createDistributor<ImgFrameSPtr>({stereo.use ? "mono_left_with_keypoints/image" : (rgbd.use ? "color_with_keypoints/image" : "mono_with_keypoints/image")});

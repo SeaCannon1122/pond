@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:include filename="arm_v2.xacro" />
+    <xacro:include filename="wheels.xacro" />
+
+    <material name="chassis_material">
+        <color rgba="1.0 1.0 1.0 1.0" />
+    </material>
+
+    <joint name="chassis_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="chassis"/>
+        <origin xyz="0 0 0.13" rpy="0 0 0"/>
+    </joint>
+
+    <link name="chassis">
+        <inertial>
+            <origin xyz="-0.006592503505638408 -1.5301626995551604e-17 0.04294027543409115" rpy="0 0 0"/>
+            <mass value="6.419279977222798"/>
+            <inertia ixx="0.031932" iyy="0.058111" izz="0.057234" ixy="-0.0" iyz="-0.0" ixz="0.003075"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://quac/meshes/version_6/chassis_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+            </geometry>
+            <material name="chassis_material"/>
+        </visual>
+    </link>
+
+    <joint name="laser_joint" type="fixed">
+        <parent link="chassis"/>
+        <child link="laser"/>
+        <origin xyz="-0.035 0.0 0.127" rpy="0 0 ${-pi/2}"/>
+    </joint>
+
+    <link name="laser"/>
+    
+    <xacro:sensor_d435 parent="chassis" name="camera_back" use_nominal_extrinsics="true">
+        <origin xyz="-0.09 0.0 0.09" rpy="0 0 ${pi}"/>
+    </xacro:sensor_d435>
+
+	<xacro:oak_d_lite camera_name="camera_front" parent="chassis" xyz="0.16 0 -0.025" rpy="${pi} 0 0"/>
+
+</robot>

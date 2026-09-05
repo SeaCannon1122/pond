@@ -1,3 +1,4 @@
+#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 
 class TemplateModule : public pond::ModuleBase
@@ -9,7 +10,13 @@ public:
 private:
 };
 
-POND_MODULE_CPP_DECLARE(TemplateModule, "template_module", "template info")
+POND_MODULE_CPP_DECLARE(TemplateModule, "template_module", "template module info")
+
+POND_BUNDLE_DECLARE(
+    "template bundle info", 
+    1,
+    POND_MODULE(TemplateModule),
+)
 
 pond_result TemplateModule::onStartup(const std::vector<void*>& args)
 {

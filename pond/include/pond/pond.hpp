@@ -15,6 +15,7 @@
 
 namespace pond
 {
+    inline double get_time() {return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(); }
 
     #define _CPP_PARAM_REF(p_ptr, extra_ptr) (*(c_type*extra_ptr)((uint8_t*)(p_ptr) + val_offset))
 

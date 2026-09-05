@@ -45,10 +45,15 @@ function(pond_module_common_setup TARGET)
 
 endfunction()
 
-add_subdirectory(camera)
+add_subdirectory(utility)
+
+add_subdirectory(v4l2)
 add_subdirectory(depthai)
 add_subdirectory(realsense)
 add_subdirectory(gstreamer)
+add_subdirectory(rplidar)
+
+add_subdirectory(robot_state)
 
 add_subdirectory(orb_slam3)
 add_subdirectory(rtabmap)
