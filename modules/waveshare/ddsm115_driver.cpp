@@ -1,7 +1,6 @@
 #include <pond/pond.hpp>
 #include <pond/data_types/motor_types.hpp>
 #include "DDSM115CMD.h"
-#include <chrono>
 
 struct ddsm115_motor
 {
@@ -83,7 +82,7 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
             return;
         }
 
-        double current_time = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        double current_time = pond::get_time();
         double dt = current_time - last_time;
         last_time = current_time;
 
@@ -112,21 +111,22 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
                 if (delta > M_PI) delta -= 2.0 * M_PI;
                 else if (delta < -M_PI) delta += 2.0 * M_PI;
 
-                pos = feedback[i].vel - (double)motors[i].scalar * delta;
+                pos = feedback[i].pos - (double)motors[i].scalar * delta;
                 cur = fb_cur;
             }
 
             feedback[i].vel = vel;
             feedback[i].pos = pos;
             feedback[i].current = cur;
+            feedback[i].time = current_time;
+            feedback[i].hw_time = current_time;
         }
         
         for (size_t i = 0; i < motors.size(); i++)
         {
             motors[i].cmd_velocity = (*commands)[i].vel;
 
-            if (cmd.drive(motors[i].id, motors[i].cmd_velocity  * motors[i].scalar, act, 0) == false)
-                POND_LOG(cmd.get_error());
+            if (cmd.drive(motors[i].id, motors[i].cmd_velocity * motors[i].scalar, act, 0) == false) POND_LOG(cmd.get_error());
         }
 
         distributor.distribute(feedback); 

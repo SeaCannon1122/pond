@@ -1,3 +1,4 @@
+#include "pond/data_types/robot_state_types.hpp"
 #include <rclcpp/executors.hpp>
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include "ros2_bridge.hpp"
@@ -169,6 +170,13 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     ));
                     else return false;
                 }
+                else if (pond_type == "std::vector<JointState>")
+                {
+                    if (ros_type == "sensor_msgs::msg::JointState") bridges.emplace_back(create_pond_to_ros<std::vector<JointState>, sensor_msgs::msg::JointState>(
+                        pond_topic, ros_topic, std_vector_JointState__to__sensor_msgs_msg_JointState, qos, is_vector
+                    ));
+                    else return false;
+                }
                 else return false;
     
                 return true;
@@ -218,6 +226,13 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 {
                     if (ros_type == "sensor_msgs::msg::LaserScan") bridges.emplace_back(create_ros_to_pond<LaserScanSPtr, sensor_msgs::msg::LaserScan>(
                         pond_topic, ros_topic, sensor_msgs_msg_LaserScan__to__LaserScanSPtr, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::vector<JointState>")
+                {
+                    if (ros_type == "sensor_msgs::msg::JointState") bridges.emplace_back(create_ros_to_pond<std::vector<JointState>, sensor_msgs::msg::JointState>(
+                        pond_topic, ros_topic, sensor_msgs_msg_JointState__to__std_vector_JointState, qos
                     ));
                     else return false;
                 }

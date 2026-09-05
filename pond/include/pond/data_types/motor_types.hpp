@@ -4,7 +4,6 @@
 
 struct MotorCommand
 {
-    Stamp stamp;
     double pos = 0;
     double vel = 0;
     double torque = 0;
@@ -12,7 +11,8 @@ struct MotorCommand
 
 struct MotorFeedback
 {
-    Stamp stamp;
+    double time = 0;
+    double hw_time = 0;
     double pos = 0;
     double vel = 0;
     double current = 0;

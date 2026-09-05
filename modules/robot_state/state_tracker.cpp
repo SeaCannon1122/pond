@@ -54,9 +54,7 @@ private:
     pond::Distributor<std::vector<FrameTransform>> tf_static_distributor;
 
     std::string description;
-    pond::Distributor<std::string> discription_distributor;
-    uint32_t description_interval;
-    uint32_t interval_i;
+    pond::Distributor<std::string> description_distributor;
 
     urdf::ModelInterfaceSharedPtr model;
 
@@ -80,13 +78,11 @@ POND_BUNDLE_DECLARE(
 pond_result StateTracker::onStartup(const std::vector<void*>& args)
 {
     bool verbose_model_info = parameter("verbose_model_info").asBool().get(false);
-    description_interval = parameter("description_interval").asInt().get(50);
-    interval_i = 0;
 
     auto description_path_o = parameter("description_path").asString().getStrict();
     if (!description_path_o) return POND_ERROR;
     
-    tf_store_duration = parameter("tf_store_duration").asDouble().get(2);
+    tf_store_duration = parameter("tf_store_duration").asDouble().get(5);
 
     std::ifstream file(*description_path_o);
 
@@ -135,7 +131,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         joint->child_link = links_map[j.second->child_link_name];
         joint->parent_link = links_map[j.second->parent_link_name];
         joint->is_static = (j.second->type == urdf::Joint::FIXED);
-        joint->axis = Eigen::Vector3d(j.second->axis.x, j.second->axis.y, j.second->axis.z);
+        joint->axis = Eigen::Vector3d(j.second->axis.x, j.second->axis.y, j.second->axis.z).normalized();
         
         joint->tf = Sophus::SE3d(
             Eigen::Quaterniond(
@@ -195,7 +191,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     rec_set_link_level(root, 0, rec_set_link_level);
 
-    discription_distributor = createDistributor<std::string>({"robot_description"});
+    description_distributor = createDistributor<std::string>({"robot_description"});
 
     tf_request_receiver = createReceiver<GetFrameTransformRequest>({"get_robot_transform"}, [this](GetFrameTransformRequest* request) {
 
@@ -286,52 +282,58 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
     tf_distributor = createDistributor<std::vector<FrameTransform>>({"tf"});
     tf_static_distributor = createDistributor<std::vector<FrameTransform>>({"tf_static"});
 
+    joint_states_receiver = createReceiver<std::vector<JointState>>({"joint_states"}, [this](std::vector<JointState>* states){
+
+        std::vector<FrameTransform> tfs; tfs.reserve(states->size());
+
+        for (auto& state : *states)
+        {
+            const auto& joint = joints_map.find(state.joint_name);
+            if (joint == joints_map.end()) return;
+
+            FrameTransform tf;
+            tf.stamp.frame_id = joint->second->parent_link->name;
+            tf.stamp.time = state.time;
+            tf.stamp.hw_time = state.hw_time;
+            tf.child_frame_id = joint->second->child_link->name;
+            tf.tf = joint->second->tf * Sophus::SE3d(Sophus::SO3d::exp(joint->second->axis * state.angle),Eigen::Vector3d::Zero());
+
+            tfs.push_back(tf);
+
+            std::unique_lock<std::shared_mutex> lock(joint->second->child_link->tf_mutex);
+            joint->second->child_link->past_parent_transforms.push_back({state.time, tf.tf});
+            while (state.time - std::get<0>(joint->second->child_link->past_parent_transforms.front()) > tf_store_duration) joint->second->child_link->past_parent_transforms.pop_front();
+        }
+
+        tf_distributor.distribute(tfs);
+    });
+
     return POND_SUCCESS;
 }
 
 void StateTracker::onShutdown()
 {
+    joint_states_receiver.destroy();
+    tf_request_receiver.destroy();
+    joint_request_receiver.destroy();
     tf_distributor.destroy();
     tf_static_distributor.destroy();
-    discription_distributor.destroy();
+    description_distributor.destroy();
 }
 
 void StateTracker::onFrame()
 {
-    std::vector<FrameTransform> tfs, static_tfs;
-    tfs.reserve(100), static_tfs.reserve(100);
-
+    std::vector<FrameTransform> static_tfs; static_tfs.reserve(100);
     double time = pond::get_time();
 
-    for (uint32_t i = 0; i < joints.size(); i++)
-    {
-        if (joints[i].is_static) static_tfs.push_back({
-            .stamp={.time = time, .hw_time = time, .frame_id = joints[i].parent_link->name}, 
-            .child_frame_id = joints[i].child_link->name,
-            .tf = joints[i].tf
-        });
-        else
+    for (auto& joint : joints) if (joint.is_static) static_tfs.push_back(
         {
-            std::shared_lock<std::shared_mutex> lock(joints[i].child_link->tf_mutex);
-            if (joints[i].child_link->past_parent_transforms.empty()) continue;
-
-            auto& latest_tf = joints[i].child_link->past_parent_transforms.back();
-
-            tfs.push_back({
-                .stamp={.time = std::get<0>(latest_tf), .hw_time = std::get<0>(latest_tf), .frame_id = joints[i].parent_link->name}, 
-                .child_frame_id = joints[i].child_link->name,
-                .tf = std::get<1>(latest_tf)
-            });
+            .stamp={.time = time, .hw_time = time, .frame_id = joint.parent_link->name}, 
+            .child_frame_id = joint.child_link->name,
+            .tf = joint.tf
         }
-    }
+    );
 
-    tf_distributor.distribute(tfs);
-
-    if (interval_i % description_interval == 0)
-    {
-        discription_distributor.distribute(description);
-        tf_static_distributor.distribute(static_tfs);
-    }
-
-    interval_i++;
+    tf_static_distributor.distribute(static_tfs);
+    description_distributor.distribute(description);
 }

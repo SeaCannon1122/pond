@@ -1,5 +1,6 @@
 #pragma once
 #include "geometry_msgs/msg/transform.hpp"
+#include "sensor_msgs/msg/joint_state.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <chrono>
@@ -13,12 +14,16 @@
 #include <tf2_msgs/msg/tf_message.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 
 #include <pond/pond.hpp>
 #include <pond/data_types/imu_types.hpp>
 #include <pond/data_types/command_types.hpp>
 #include <pond/data_types/transform_types.hpp>
 #include <pond/data_types/laser_scan_types.hpp>
+#include <pond/data_types/robot_state_types.hpp>
+
+inline rclcpp::Time to_ros_time(double time) { return rclcpp::Time(static_cast<int64_t>(time * (double)1e9), RCL_SYSTEM_TIME); }
 
 static void std_string__to__std_msgs_msg_String(const std::string& pond, std_msgs::msg::String& ros)
 {
@@ -33,7 +38,7 @@ static void std_msgs_msg_String__to__std_string(std::string& pond, const std_msg
 static void ImuData__to__sensor_msgs_msg_Imu(const ImuData& pond, sensor_msgs::msg::Imu& ros)
 {
     ros.header.frame_id = pond.stamp.frame_id;
-    ros.header.stamp = rclcpp::Time(static_cast<int64_t>(pond.stamp.time * 1e9), RCL_SYSTEM_TIME);
+    ros.header.stamp = to_ros_time(pond.stamp.time);
 
     ros.angular_velocity.x = pond.ang_vel[0];
     ros.angular_velocity.y = pond.ang_vel[1];
@@ -66,7 +71,7 @@ static void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransfo
 {
     FrameTransform__to__geometry_msgs_msg_Pose(pond, ros.pose);
     ros.header.frame_id = pond.stamp.frame_id;
-    ros.header.stamp = rclcpp::Time(static_cast<int64_t>(pond.stamp.time * 1e9), RCL_SYSTEM_TIME);
+    ros.header.stamp = to_ros_time(pond.stamp.time);
 }
 
 static void FrameTransform__to__geometry_msgs_msg_TransformStamped(const FrameTransform& pond, geometry_msgs::msg::TransformStamped& ros)
@@ -84,7 +89,7 @@ static void FrameTransform__to__geometry_msgs_msg_TransformStamped(const FrameTr
     ros.transform.rotation.w = q.w();
 
     ros.header.frame_id = pond.stamp.frame_id;
-    ros.header.stamp = rclcpp::Time(static_cast<int64_t>(pond.stamp.time * 1e9), RCL_SYSTEM_TIME);
+    ros.header.stamp = to_ros_time(pond.stamp.time);
     ros.child_frame_id = pond.child_frame_id;
 }
 
@@ -136,7 +141,7 @@ static void tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform(std::vector<Fr
 static void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros)
 {
     pond.stamp.frame_id = "base_link";
-    pond.stamp.time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    pond.stamp.time = pond::get_time();
     pond.stamp.hw_time = pond.stamp.time;
 
     pond.lin[0] = ros.linear.x;
@@ -185,7 +190,7 @@ static void sensor_msgs_msg_LaserScan__to__LaserScanSPtr(LaserScanSPtr& pond, co
 static void LaserScanSPtr__to__sensor_msgs_msg_LaserScan(const LaserScanSPtr& pond, sensor_msgs::msg::LaserScan& ros)
 {
     ros.header.frame_id = pond->stamp.frame_id;
-    ros.header.stamp = rclcpp::Time(static_cast<int64_t>(pond->stamp.time * 1e9), RCL_SYSTEM_TIME);
+    ros.header.stamp = to_ros_time(pond->stamp.time);
 
     ros.angle_min = pond->angle_min;
     ros.angle_max = pond->angle_max;
@@ -196,4 +201,44 @@ static void LaserScanSPtr__to__sensor_msgs_msg_LaserScan(const LaserScanSPtr& po
     ros.range_max = pond->range_max;
     ros.ranges = pond->ranges;
     ros.intensities = pond->intensities;
+}
+
+static void sensor_msgs_msg_JointState__to__std_vector_JointState(std::vector<JointState>& pond, const sensor_msgs::msg::JointState& ros)
+{
+    pond.resize(ros.name.size());
+    for (uint32_t i = 0; i < ros.name.size(); i++)
+    {
+        pond[i].joint_name = ros.name[i];
+        pond[i].angle = ros.position[i];
+        pond[i].time = rclcpp::Time(ros.header.stamp).seconds();
+        pond[i].hw_time = pond[i].time;
+    }
+}
+
+static void std_vector_JointState__to__sensor_msgs_msg_JointState(const std::vector<JointState>& pond, sensor_msgs::msg::JointState& ros)
+{
+    if (pond.size() == 0)
+    {
+        ros.header.stamp = to_ros_time(0);
+        return;
+    }
+
+    double time = 0;
+    
+    ros.name.resize(pond.size());
+    ros.position.resize(pond.size());
+    ros.velocity.resize(pond.size());
+    ros.effort.resize(pond.size());
+
+    for (uint32_t i = 0; i < pond.size(); i++)
+    {
+        time += pond[i].time / (double)pond.size();
+
+        ros.name[i] = pond[i].joint_name;
+        ros.position[i] = pond[i].angle;
+        ros.velocity[i] = 0;
+        ros.effort[i] = 0;
+    }
+
+    ros.header.stamp = to_ros_time(time);
 }

@@ -25,6 +25,8 @@ struct GetJointInfoRequest
 
 struct JointState
 {
-    std::string joint_name;
-    double angle;
+    std::string joint_name = "";
+    double time = 0;
+    double hw_time = 0;
+    double angle = 0;
 };

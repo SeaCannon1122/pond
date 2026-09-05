@@ -26,7 +26,7 @@ def main():
         bundle_name="utility",
         module_name="frame_timer",
         thread_name="robot_state_thread",
-        parameters={"min_time" : 0.10},
+        parameters={"min_time" : 1.0},
         topic_mappings={}
     )
 
@@ -37,8 +37,6 @@ def main():
         thread_name="robot_state_thread",
         parameters={
             "description_path" : "/home/pilot/pond/config/robot.urdf",
-            #"verbose_model_info" : True,
-            "description_interval" : 20,
         },
         topic_mappings={}
     )

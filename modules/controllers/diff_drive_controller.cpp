@@ -1,10 +1,7 @@
-#include "pond/pond.h"
 #include <pond/pond.hpp>
 #include <pond/data_types/command_types.hpp>
 #include <pond/data_types/motor_types.hpp>
 #include <pond/data_types/robot_state_types.hpp>
-#include <mutex>
-#include <vector>
 
 class DiffDriveController : public pond::ModuleBase
 {
@@ -20,8 +17,10 @@ private:
 
     pond::Distributor<std::vector<MotorCommand>> command_distributor;
     pond::Receiver<std::vector<MotorFeedback>> feedback_receiver;
+    pond::Distributor<std::vector<JointState>> joint_states_distributor;
 
     std::vector<MotorCommand> motor_commands;
+    std::vector<JointState> joint_states;
 
     std::vector<std::string> joint_names;
     std::vector<double> wheel_radii;
@@ -45,12 +44,15 @@ pond_result DiffDriveController::onStartup(const std::vector<void*>& args)
     joint_names = std::move(*joint_names_o); wheel_radii = std::move(*wheel_radii_o); slip_multiplier = *slip_multiplier_o;
     wheel_y_offsets.reserve(joint_names.size());
     motor_commands.resize(joint_names.size());
+    joint_states.reserve(joint_names.size());
 
     pond::Distributor<GetJointInfoRequest> joint_requester = createDistributor<GetJointInfoRequest>({"get_robot_joint_info"});
     pond::Distributor<GetFrameTransformRequest> tf_requester = createDistributor<GetFrameTransformRequest>({"get_robot_transform"});
 
     for (auto& name : joint_names)
     {
+        joint_states.push_back({.joint_name = name});
+
         GetJointInfoRequest joint_request;
         joint_request.joint_name = name;
         joint_requester.distribute(joint_request);
@@ -87,9 +89,24 @@ pond_result DiffDriveController::onStartup(const std::vector<void*>& args)
     joint_requester.destroy();
 
     command_distributor = createDistributor<std::vector<MotorCommand>>({"motor_cmd"});
+    joint_states_distributor = createDistributor<std::vector<JointState>>({"joint_states"});
+
     feedback_receiver = createReceiver<std::vector<MotorFeedback>>({"motor_feedback"}, [this](std::vector<MotorFeedback>* feedback)
         {
+            if (feedback->size() != joint_names.size())
+            {
+                POND_LOG("Error: feedback.size (%d) != joints.size (%d)", feedback->size(), joint_names.size());
+                return;
+            }
 
+            for (uint32_t i = 0; i < feedback->size(); i++)
+            {
+                joint_states[i].angle = feedback->at(i).pos;
+                joint_states[i].time = feedback->at(i).time;
+                joint_states[i].hw_time = feedback->at(i).hw_time;
+            }
+
+            joint_states_distributor.distribute(joint_states);
         }
     );
 
@@ -108,6 +125,7 @@ void DiffDriveController::onShutdown()
     feedback_receiver.destroy();
     twist_receiver.destroy();
     command_distributor.destroy();
+    joint_states_distributor.destroy();
 }
 
 void DiffDriveController::onFrame()
