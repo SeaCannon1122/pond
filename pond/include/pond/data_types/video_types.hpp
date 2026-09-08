@@ -67,11 +67,10 @@ struct CameraInfo
     uint32_t width = 0;
     std::string distortion_model = "";
     std::vector<double> d = {};
-    std::array<double, 9> k = {};
-    std::array<double, 9> r = {};
-    std::array<double, 12> p = {};
-    uint32_t binning_x = 0;
-    uint32_t binning_y = 0;
+
+    Eigen::Matrix3d k;
+    Sophus::SO3d r;
+    Eigen::Matrix<double, 3, 4> p;
 };
 
 using ImgFrameSPtr = std::shared_ptr<ImgFrame>;

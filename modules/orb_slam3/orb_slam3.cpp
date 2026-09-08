@@ -19,72 +19,31 @@ private:
     std::shared_ptr<ORB_SLAM3::System> slam;
 
     ORB_SLAM3::System::eSensor mode;
-    bool use_imu;
 
-    std::mutex input_mutex;
+    std::mutex frame_mutex;
+    std::mutex imu_mutex;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points;
-    std::atomic<bool> new_data;
-
-    void store_imu_data(std::vector<ImuData>* imu_data)
-    {
-        imu_data_points.reserve((*imu_data).size());
-        for (auto& d : *imu_data)
-        {
-            imu_data_points.push_back(ORB_SLAM3::IMU::Point(
-                d.lin_acc[0], d.lin_acc[1], d.lin_acc[2],
-                d.ang_vel[0], d.ang_vel[1], d.ang_vel[2],
-                d.stamp.hw_time
-            ));
-        }
-    }
+    std::atomic<bool> new_frame;
 
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
     } stereo;
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
     } rgbd;
     struct {
         bool use;
-        pond::Receiver<ImgFrameSPtr, std::vector<ImuData>> receiver_imu;
         pond::Receiver<ImgFrameSPtr> receiver;
     } mono;
+
+    pond::Receiver<ImuData> imu_receiver;
 
     ImgFrameSPtr first_frame, second_frame;
     pond::Distributor<FrameTransform> transform_distributor;
     FrameTransform transform;
     pond::Distributor<ImgFrameSPtr> keypoint_frame_distributor;
-
-    void image_imu_callback(ImgFrameSPtr* first, ImgFrameSPtr* second, std::vector<ImuData>* imu_data)
-    {
-        std::lock_guard<std::mutex> lock(input_mutex);
-
-        if (stereo.use) if ((*first)->format != ImgFrame::Format::Mono8 || (*second)->format != ImgFrame::Format::Mono8)
-        {
-            POND_LOG("ERROR: left->format (%s) != Mono8 || right->format (%s) != Mono8", ImgFrame::formatToString((*first)->format).c_str(), ImgFrame::formatToString((*second)->format).c_str());
-            return;
-        }
-        if (rgbd.use) if ((*first)->format != ImgFrame::Format::RGB8 || (*second)->format != ImgFrame::Format::Depth16)
-        {
-            POND_LOG("ERROR: rgb->format (%s) != RGB8 || depth->format (%s) != Depth16", ImgFrame::formatToString((*first)->format).c_str(), ImgFrame::formatToString((*second)->format).c_str());
-            return;
-        }
-        if (mono.use)if ((*first)->format != ImgFrame::Format::Mono8)
-        {
-            POND_LOG("ERROR: frame->format (%s) != Mono8", ImgFrame::formatToString((*first)->format).c_str());
-            return;
-        }
-        
-        new_data.store(true);
-
-        first_frame = *first;
-        if (!mono.use) second_frame = *second;
-        if (use_imu) store_imu_data(imu_data);
-    }
 };
 
 POND_MODULE_CPP_DECLARE(OrbSlam3, "slam", "Supports mono, stereo and rgbd vslam")
@@ -109,14 +68,13 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
     if (slam_mode == "Mono") mono.use = true;
     else mono.use = false;
     
-    use_imu = parameter("use_imu").asBool().get(false);
     transform.stamp.frame_id = parameter("base_frame_id").asString().get("world");
     transform.child_frame_id = parameter("camera_frame_id").asString().get("camera");
 
     transform_distributor = createDistributor<FrameTransform>({"slam_transform"});
     keypoint_frame_distributor = createDistributor<ImgFrameSPtr>({stereo.use ? "mono_left_with_keypoints/image" : (rgbd.use ? "color_with_keypoints/image" : "mono_with_keypoints/image")});
 
-    new_data.store(false);
+    new_frame.store(false);
 
     slam = std::make_shared<ORB_SLAM3::System>(
         *vocabulary_path,
@@ -125,57 +83,63 @@ pond_result OrbSlam3::onStartup(const std::vector<void*>& args)
         false
     );
 
-    if (stereo.use)
-    {
-        if (use_imu) stereo.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>>(
-            {"mono_left/image", "mono_right/image", "imu_data"},
-            [this](ImgFrameSPtr* left, ImgFrameSPtr* right, std::vector<ImuData>* imu_data)
+    if (stereo.use) stereo.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
+        {"stereo_left/image", "stereo_right/image"},
+        [this](ImgFrameSPtr* left, ImgFrameSPtr* right)
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+
+            if ((*left)->format != ImgFrame::Format::Mono8 || (*right)->format != ImgFrame::Format::Mono8)
             {
-                image_imu_callback(left, right, imu_data);
+                POND_LOG("ERROR: left->format (%s) != Mono8 || right->format (%s) != Mono8", ImgFrame::formatToString((*left)->format).c_str(), ImgFrame::formatToString((*right)->format).c_str());
+                return;
             }
-        );
-        else stereo.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
-            {"mono_left/image", "mono_right/image"},
-            [this](ImgFrameSPtr* left, ImgFrameSPtr* right)
+            new_frame.store(true);
+            first_frame = *left; second_frame = *right;
+        }
+    );
+    if (rgbd.use) rgbd.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
+        {"color/image", "depth/image"},
+        [this](ImgFrameSPtr* color, ImgFrameSPtr* depth)
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+
+            if ((*color)->format != ImgFrame::Format::RGB8 || (*depth)->format != ImgFrame::Format::Depth16)
             {
-                image_imu_callback(left, right, NULL);
+                POND_LOG("ERROR: rgb->format (%s) != RGB8 || depth->format (%s) != Depth16", ImgFrame::formatToString((*color)->format).c_str(), ImgFrame::formatToString((*depth)->format).c_str());
+                return;
             }
-        );
-    }
-    if (rgbd.use)
-    {
-        if (use_imu) rgbd.receiver_imu = createReceiver<ImgFrameSPtr, ImgFrameSPtr, std::vector<ImuData>>(
-            {"color/image", "depth/image", "imu_data"},
-            [this](ImgFrameSPtr* color, ImgFrameSPtr* depth, std::vector<ImuData>* imu_data)
+            new_frame.store(true);
+            first_frame = *color; second_frame = *depth;
+        }
+    );
+    if (mono.use) mono.receiver = createReceiver<ImgFrameSPtr>(
+        {"mono/image"},
+        [this](ImgFrameSPtr* frame)
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+
+            if ((*frame)->format != ImgFrame::Format::Mono8)
             {
-                image_imu_callback(color, depth, imu_data);
+                POND_LOG("ERROR: frame->format (%s) != Mono8", ImgFrame::formatToString((*frame)->format).c_str());
+                return;
             }
-        );
-        else rgbd.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
-            {"color/image", "depth/image"},
-            [this](ImgFrameSPtr* color, ImgFrameSPtr* depth)
-            {
-                image_imu_callback(color, depth, NULL);
-            }
-        );
-    }
-    if (mono.use)
-    {
-        if (use_imu) mono.receiver_imu = createReceiver<ImgFrameSPtr, std::vector<ImuData>>(
-            {"mono/image", "imu_data"},
-            [this](ImgFrameSPtr* frame, std::vector<ImuData>* imu_data)
-            {
-                image_imu_callback(frame, NULL, imu_data);
-            }
-        );
-        else mono.receiver = createReceiver<ImgFrameSPtr>(
-            {"mono/image"},
-            [this](ImgFrameSPtr* frame)
-            {
-                image_imu_callback(frame, NULL, NULL);
-            }
-        );
-    }
+            new_frame.store(true);
+            first_frame = *frame;
+        }
+    );
+
+    imu_data_points.reserve(100);
+    imu_receiver = createReceiver<ImuData>({"imu"}, [this](ImuData* data){
+    
+        std::lock_guard<std::mutex> lock(imu_mutex);
+
+        imu_data_points.push_back(ORB_SLAM3::IMU::Point(
+            data->lin_acc[0], data->lin_acc[1], data->lin_acc[2],
+            data->ang_vel[0], data->ang_vel[1], data->ang_vel[2],
+            data->stamp.hw_time
+        ));
+    });
 
     return POND_SUCCESS;
 }
@@ -185,21 +149,11 @@ void OrbSlam3::onShutdown()
     slam->Shutdown();
     slam.reset();
 
-    if (stereo.use)
-    {
-        if (use_imu) stereo.receiver_imu.destroy();
-        else stereo.receiver.destroy();
-    }
-    if (rgbd.use)
-    {
-        if (use_imu) rgbd.receiver_imu.destroy();
-        else rgbd.receiver.destroy();
-    }
-    if (mono.use)
-    {
-        if (use_imu) mono.receiver_imu.destroy();
-        else mono.receiver.destroy();
-    }
+    if (stereo.use) stereo.receiver.destroy();
+    if (rgbd.use) rgbd.receiver.destroy();
+    if (mono.use) mono.receiver.destroy();
+
+    imu_receiver.destroy();
 
     transform_distributor.destroy();
     keypoint_frame_distributor.destroy();
@@ -210,19 +164,25 @@ void OrbSlam3::onFrame()
     ImgFrameSPtr first_frame_c, second_frame_c;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points_c;
 
-    if (new_data.load())
+    if (new_frame.load())
     {
-        std::lock_guard<std::mutex> lock(input_mutex);
-        new_data.store(false);
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        new_frame.store(false);
 
         first_frame_c = std::move(first_frame);
         if (!mono.use) second_frame_c = std::move(second_frame);
-        if (use_imu) imu_data_points_c = std::move(imu_data_points);
     }
     else
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(imu_mutex);
+        imu_data_points_c = std::move(imu_data_points);
+        imu_data_points.clear();
+        imu_data_points.reserve(100);
     }
 
     cv::Mat no_keypoint_mat;

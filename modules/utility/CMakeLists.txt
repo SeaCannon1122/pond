@@ -7,6 +7,7 @@ add_library(utility-pond_bundle SHARED
   depth_colorizer.cpp
   motor_tester.cpp
   dummy_motor.cpp
+  topic_filter.cpp
 )
 
 pond_module_common_setup(utility-pond_bundle)

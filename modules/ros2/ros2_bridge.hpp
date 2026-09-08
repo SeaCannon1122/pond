@@ -15,8 +15,10 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 
 #include <pond/pond.hpp>
+#include <pond/data_types/video_types.hpp>
 #include <pond/data_types/imu_types.hpp>
 #include <pond/data_types/command_types.hpp>
 #include <pond/data_types/transform_types.hpp>
@@ -241,4 +243,37 @@ static void std_vector_JointState__to__sensor_msgs_msg_JointState(const std::vec
     }
 
     ros.header.stamp = to_ros_time(time);
+}
+
+static void CameraInfo__to__sensor_msgs_msg_CameraInfo(const CameraInfo& pond, sensor_msgs::msg::CameraInfo& ros)
+{
+    ros.header.frame_id = pond.stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond.stamp.time);
+
+    ros.width = pond.width;
+    ros.height = pond.height;
+    ros.distortion_model = pond.distortion_model;
+    ros.d = pond.d;
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.k.data()) = pond.k;
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.r.data()) = pond.r.matrix();
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>(ros.p.data()) = pond.p;
+}
+
+static void sensor_msgs_msg_CameraInfo__to__CameraInfo(CameraInfo& pond, const sensor_msgs::msg::CameraInfo& ros)
+{
+    pond.stamp.frame_id = ros.header.frame_id;
+    pond.stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.width = ros.width;
+    pond.height = ros.height;
+    pond.distortion_model = ros.distortion_model;
+    pond.d = ros.d;
+    pond.k = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.k.data());
+
+    Eigen::Matrix3d r = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.r.data());
+    if (r.isZero()) pond.r = Sophus::SO3d();
+    else pond.r = Sophus::SO3d(r);
+
+    pond.p = Eigen::Map<const Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>(ros.p.data());
 }

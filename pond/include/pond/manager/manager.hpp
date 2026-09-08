@@ -73,6 +73,7 @@ struct Module
     std::string thread_name;
     uint32_t discovery_id;
     std::unordered_map<std::string, std::string> topic_mappings;
+    std::string topic_namespace;
     pond_api native_api;
     ModuleContext context;
     std::vector<void*> args;
@@ -130,6 +131,7 @@ public:
         const std::string& thread_name,
         const std::unordered_map<std::string, pond_parameter*>& parameters = {},
         const std::unordered_map<std::string, std::string>& topic_mappings = {},
+        const std::string& topic_namespace = "",
         const std::vector<void*>& args = {}
     );
 
@@ -163,6 +165,7 @@ private:
         std::string& message
     );
 
+    bool construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count);
     bool try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections);
     void thread_function(pond_internal::Thread* thread);
     void cleanup_module(pond_internal::Module* module);

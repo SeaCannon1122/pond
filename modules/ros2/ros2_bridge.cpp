@@ -177,6 +177,13 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     ));
                     else return false;
                 }
+                else if (pond_type == "CameraInfo")
+                {
+                    if (ros_type == "sensor_msgs::msg::CameraInfo") bridges.emplace_back(create_pond_to_ros<CameraInfo, sensor_msgs::msg::CameraInfo>(
+                        pond_topic, ros_topic, CameraInfo__to__sensor_msgs_msg_CameraInfo, qos, is_vector
+                    ));
+                    else return false;
+                }
                 else return false;
     
                 return true;
@@ -233,6 +240,13 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 {
                     if (ros_type == "sensor_msgs::msg::JointState") bridges.emplace_back(create_ros_to_pond<std::vector<JointState>, sensor_msgs::msg::JointState>(
                         pond_topic, ros_topic, sensor_msgs_msg_JointState__to__std_vector_JointState, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "CameraInfo")
+                {
+                    if (ros_type == "sensor_msgs::msg::CameraInfo") bridges.emplace_back(create_ros_to_pond<CameraInfo, sensor_msgs::msg::CameraInfo>(
+                        pond_topic, ros_topic, sensor_msgs_msg_CameraInfo__to__CameraInfo, qos
                     ));
                     else return false;
                 }

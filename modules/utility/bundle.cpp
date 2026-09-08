@@ -7,13 +7,15 @@ EXTERN_POND_MODULE(DummyCamera);
 EXTERN_POND_MODULE(DepthColorizer);
 EXTERN_POND_MODULE(MotorTester);
 EXTERN_POND_MODULE(DummyMotor);
+EXTERN_POND_MODULE(TopicFilter);
 
 POND_BUNDLE_DECLARE(
     "Camera modules", 
-    5,
+    6,
     POND_MODULE(FrameTimer),
     POND_MODULE(DummyCamera),
     POND_MODULE(DepthColorizer),
     POND_MODULE(MotorTester),
-    POND_MODULE(DummyMotor)
+    POND_MODULE(DummyMotor),
+    POND_MODULE(TopicFilter)
 )

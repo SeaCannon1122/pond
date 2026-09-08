@@ -196,7 +196,7 @@ private:
     bool scan_frequency_tunning_after_scan = false;
 };
 
-POND_MODULE_CPP_DECLARE(RPLidar, "rplidar", "modulefor rplidars")
+POND_MODULE_CPP_DECLARE(RPLidar, "lidar", "modulefor rplidars")
 
 POND_BUNDLE_DECLARE(
     "rplidar bundle", 

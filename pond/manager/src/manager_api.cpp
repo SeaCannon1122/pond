@@ -76,7 +76,7 @@ pond_parameter* PondManager::api_get_parameter(pond_internal::Module* module, ui
     }
 }
 
-void construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count)
+bool PondManager::construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count)
 {
     slots.resize(c_slot_count);
     for (uint32_t i = 0; i < c_slot_count; i++)
@@ -84,9 +84,28 @@ void construct_slots(pond_internal::Module* module, std::vector<pond_internal::S
         slots[i].type = std::string((char*)c_slots[i].type);
         slots[i].topic = std::string((char*)c_slots[i].topic);
 
+        if (slots[i].topic == "")
+        {
+            log("In module " + module->name + ": cannot communicate on topic without name");
+            return false;
+        }
+
         auto it = module->topic_mappings.find(slots[i].topic);
-        if (it != module->topic_mappings.end()) slots[i].topic = it->second;
+        if (it != module->topic_mappings.end())
+        {
+            if (it->second == "")
+            {
+                log("In module " + module->name + ": cannot map topic '"+ slots[i].topic +"' to topic without name");
+                return false;
+            }
+
+            slots[i].topic = it->second;
+        }
+
+        if (slots[i].topic[0] != '/') slots[i].topic = module->topic_namespace + slots[i].topic;
     }
+
+    return true;
 }
 
 bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections)
@@ -130,7 +149,7 @@ bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributo
 int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count)
 {
     auto d = std::make_shared<pond_internal::Distributor>();
-    construct_slots(module, d->slots, slots, slot_count);
+    if (!construct_slots(module, d->slots, slots, slot_count)) return -1;
     d->module_name = module->name;
 
     std::unordered_set<std::string> all_topics;
@@ -242,7 +261,7 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
 int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds_slot_info* slots, uint32_t slot_count, pfn_pond_receiver_callback callback, void* callback_pointer)
 {
     auto r = std::make_shared<pond_internal::Receiver>();
-    construct_slots(module, r->slots, slots, slot_count);
+    if (!construct_slots(module, r->slots, slots, slot_count)) return -1;
     r->module_name = module->name;
     r->api = &module->native_api;
     r->active.store(true);

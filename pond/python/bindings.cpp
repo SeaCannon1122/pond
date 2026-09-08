@@ -184,6 +184,30 @@ static pond_parameter* make_parameter(const py::handle& value)
     );
 }
 
+void make_parameters(const py::dict& parameters, std::unordered_map<std::string, pond_parameter*>& native_parameters, const std::string& prefix)
+{
+    for (auto item : parameters)
+    {
+        std::string key = item.first.cast<std::string>();
+
+        std::string full_key =
+            prefix.empty()
+                ? key
+                : prefix + "." + key;
+
+        if (py::isinstance<py::dict>(item.second)) {
+            make_parameters(
+                item.second.cast<py::dict>(),
+                native_parameters,
+                full_key
+            );
+        } else {
+            pond_parameter* parameter = make_parameter(item.second);
+            native_parameters.emplace(std::move(full_key), parameter);
+        }
+    }
+}
+
 PYBIND11_MODULE(_pond, m)
 {
     m.doc() = "Python bindings for pond";
@@ -198,38 +222,21 @@ PYBIND11_MODULE(_pond, m)
         .def(
             "load_module",
 
-            [](PondManager& self,
-               const std::string& name,
-               const std::string& bundle_name,
-               const std::string& module_name,
-               const std::string& thread_name,
-               const py::dict& parameters,
-               const std::unordered_map<std::string, std::string>& topic_mappings)
+            [](
+                PondManager& self,
+                const std::string& name,
+                const std::string& bundle_name,
+                const std::string& module_name,
+                const std::string& thread_name,
+                const py::dict& parameters,
+                const std::unordered_map<std::string, std::string>& topic_mappings,
+                const std::string& topic_namespace
+            )
             {
-                std::unordered_map<
-                    std::string,
-                    pond_parameter*
-                > native_parameters;
+                std::unordered_map<std::string, pond_parameter*> native_parameters;
+                native_parameters.reserve(parameters.size());
 
-                native_parameters.reserve(
-                    parameters.size()
-                );
-
-
-                // Convert Python dict -> C++ unordered_map
-                for (auto item : parameters) {
-                    std::string key =
-                        item.first.cast<std::string>();
-
-                    pond_parameter* parameter =
-                        make_parameter(item.second);
-
-                    native_parameters.emplace(
-                        std::move(key),
-                        parameter
-                    );
-                }
-
+                make_parameters(parameters, native_parameters, "");
 
                 return self.load_module(
                     name,
@@ -238,6 +245,7 @@ PYBIND11_MODULE(_pond, m)
                     thread_name,
                     native_parameters,
                     topic_mappings,
+                    topic_namespace,
                     {}
                 );
             },
@@ -247,7 +255,8 @@ PYBIND11_MODULE(_pond, m)
             py::arg("module_name"),
             py::arg("thread_name"),
             py::arg("parameters"),
-            py::arg("topic_mappings")
+            py::arg("topic_mappings"),
+            py::arg("topic_namespace")
         )
 
         .def(

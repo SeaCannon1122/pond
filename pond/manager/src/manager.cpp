@@ -166,6 +166,7 @@ std::string PondManager::load_module(
     const std::string& thread_name,
     const std::unordered_map<std::string, pond_parameter*>& parameters,
     const std::unordered_map<std::string, std::string>& topic_mappings,
+    const std::string& topic_namespace,
     const std::vector<void*>& args
 )
 {
@@ -187,6 +188,10 @@ std::string PondManager::load_module(
     module->parameters = parameters;
     module->thread_name = thread_name;
     module->args = args;
+
+    if (topic_namespace != "")
+        module->topic_namespace = (topic_namespace[0] != '/' ? "/" : "") + topic_namespace + (topic_namespace[topic_namespace.size()-1] != '/' ? "/" : "");
+    else module->topic_namespace = "/";
 
     module->context.module = module.get();
     module->context.manager = this;

@@ -28,8 +28,6 @@ function(pond_module_common_setup TARGET)
         CXX_EXTENSIONS OFF
     )
 
-    target_link_libraries(${TARGET} pond_module_common)
-
     target_precompile_headers(${TARGET}
         PRIVATE
             <Eigen/Core>
@@ -39,9 +37,15 @@ function(pond_module_common_setup TARGET)
             <opencv2/opencv.hpp>
     )
 
+    target_compile_options(${TARGET} PRIVATE
+        -Werror=return-type
+    )
+
     target_link_options(${TARGET} PRIVATE
         -Wl,--no-undefined
     )
+
+    target_link_libraries(${TARGET} pond_module_common)
 
 endfunction()
 

@@ -2,7 +2,7 @@ class Manager:
     def __init__(
         self,
         connect_log: bool,
-        distribute_log: bool,
+        distribute_log: bool
     ) -> None: ...
 
     def load_module(
@@ -13,6 +13,7 @@ class Manager:
         thread_name: str,
         parameters: dict[str, object],
         topic_mappings: dict[str, str],
+        topic_namespace: str
     ) -> str: ...
 
     def shutdown_module(self, name: str) -> None: ...
