@@ -8,8 +8,6 @@ def ros2_bridge(pm: Manager):
         module_name="frame_timer",
         thread_name="ros2_bridge_thread",
         parameters={"min_time" : 0.010},
-        topic_mappings={},
-        topic_namespace=""
     )
 
     pm.load_module(
@@ -122,7 +120,7 @@ def ros2_bridge(pm: Manager):
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_front/color/cam_info_reduced_rate",
+                    "topic" : "camera_front/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -137,7 +135,7 @@ def ros2_bridge(pm: Manager):
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_back/color/cam_info_reduced_rate",
+                    "topic" : "camera_back/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -152,7 +150,7 @@ def ros2_bridge(pm: Manager):
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_gripper/color/cam_info_reduced_rate",
+                    "topic" : "camera_gripper/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -162,8 +160,6 @@ def ros2_bridge(pm: Manager):
                 }  
             },
         },
-        topic_mappings={},
-        topic_namespace=""
     )
 
     pm.load_module(
@@ -173,37 +169,31 @@ def ros2_bridge(pm: Manager):
         thread_name="ros2_bridge_thread",
         parameters={
             "rate": 30,
-            "topics_in": {"camera_front/color/cam_info", "a"},
-            "topics_out" : {"camera_front/color/cam_info_reduced_rate", "b"}
+            "topics_in": ["camera_front/color/info"],
+            "topics_out" : ["camera_front/color/info_reduced_rate"],
         },
-        topic_mappings={},
-        topic_namespace=""
     )
 
-    # pm.load_module(
-    #     name="camera_back_info_rate_reducer",
-    #     bundle_name="utility",
-    #     module_name="topic_filter",
-    #     thread_name="ros2_bridge_thread",
-    #     parameters={
-    #         "rate": 30,
-    #         "topics_in": {"camera_back/color/cam_info"},
-    #         "topics_out" : {"camera_back/color/cam_info_reduced_rate"}
-    #     },
-    #     topic_mappings={},
-    #     topic_namespace=""
-    # )
+    pm.load_module(
+        name="camera_back_info_rate_reducer",
+        bundle_name="utility",
+        module_name="topic_filter",
+        thread_name="ros2_bridge_thread",
+        parameters={
+            "rate": 30,
+            "topics_in": ["camera_back/color/info"],
+            "topics_out" : ["camera_back/color/info_reduced_rate"]
+        },
+    )
 
-    # pm.load_module(
-    #     name="camera_gripper_info_rate_reducer",
-    #     bundle_name="utility",
-    #     module_name="topic_filter",
-    #     thread_name="ros2_bridge_thread",
-    #     parameters={
-    #         "rate": 30,
-    #         "topics_in": {"camera_gripper/color/cam_info"},
-    #         "topics_out" : {"camera_gripper/color/cam_info_reduced_rate"}
-    #     },
-    #     topic_mappings={},
-    #     topic_namespace=""
-    # )
+    pm.load_module(
+        name="camera_gripper_info_rate_reducer",
+        bundle_name="utility",
+        module_name="topic_filter",
+        thread_name="ros2_bridge_thread",
+        parameters={
+            "rate": 30,
+            "topics_in": ["camera_gripper/color/info"],
+            "topics_out" : ["camera_gripper/color/info_reduced_rate"]
+        }
+    )

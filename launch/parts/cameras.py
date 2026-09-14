@@ -21,10 +21,8 @@ def camera_front(pm: Manager):
             "imu": {
                 "frame_id" : "imu",
                 "rate" : 100,
-            }
-            
+            }  
         },
-        topic_mappings={},
         topic_namespace="camera_front"
     )
 
@@ -44,7 +42,6 @@ def camera_front_streamer(pm: Manager, ip: str):
             "key_int_max:": 60
         },
         topic_mappings={"in": "camera_front/color/image",},
-        topic_namespace=""
     )
 
 def camera_back(pm: Manager):
@@ -72,7 +69,6 @@ def camera_back(pm: Manager):
             },
             "mode": "color_stereo"
         },
-        topic_mappings={},
         topic_namespace="camera_back"
     )
 
@@ -92,7 +88,6 @@ def camera_back_streamer(pm: Manager, ip: str):
             "key_int_max:": 60
         },
         topic_mappings={"in": "camera_back/color/image",},
-        topic_namespace=""
     )
 
 def camera_gripper(pm: Manager):
@@ -120,7 +115,6 @@ def camera_gripper(pm: Manager):
             },
             "mode": "color_stereo"
         },
-        topic_mappings={},
         topic_namespace="camera_gripper"
     )
 
@@ -140,5 +134,4 @@ def camera_gripper_streamer(pm: Manager, ip: str):
             "key_int_max:": 60
         },
         topic_mappings={"in": "camera_gripper/color/image",},
-        topic_namespace=""
     )

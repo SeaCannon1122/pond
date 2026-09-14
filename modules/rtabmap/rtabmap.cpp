@@ -14,7 +14,6 @@ POND_MODULE_CPP_DECLARE(RTABMap, "rtabmap", "rtabmap module")
 
 POND_BUNDLE_DECLARE(
     "rtabmap", 
-    1,
     POND_MODULE(RTABMap),
 )
 

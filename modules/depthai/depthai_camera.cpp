@@ -9,7 +9,7 @@ class DepthaiImgFrame : public ImgFrame
 {
 public:
 
-    explicit DepthaiImgFrame(std::shared_ptr<dai::ImgFrame>& frame_, ImgFrame::Format format_, const std::string& frame_id) : frame(frame_)
+    explicit DepthaiImgFrame(std::shared_ptr<dai::ImgFrame>& frame_, ImgFrame::Format format_, const std::string& frame_id, double time) : frame(frame_)
     {
         data = frame->getFrame().data;
         width = frame->getWidth();
@@ -18,7 +18,7 @@ public:
         format = format_;
         stamp.frame_id = frame_id;
         stamp.hw_time = std::chrono::duration<double>(frame->getTimestampDevice().time_since_epoch()).count();
-        stamp.time = std::chrono::duration<double>(frame->getTimestamp().time_since_epoch()).count();
+        stamp.time = time;
     }
 
 private:
@@ -48,10 +48,10 @@ private:
     std::shared_ptr<dai::MessageQueue> imu_queue;
     bool imu_running = true;
     std::thread imu_thread;
-    uint32_t imu_rate;
+    ImuInfo imu_info;
 
     pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> image_distributor;
-    pond::Distributor<ImuData> imu_distributor;
+    pond::Distributor<ImuData, ImuInfo> imu_distributor;
     CameraInfo stereo_left_info, stereo_right_info, color_info;
     ImuData imu_data;
 };
@@ -59,10 +59,11 @@ private:
 POND_MODULE_CPP_DECLARE(DepthaiCamera, "camera", "driver module for the Oak D Lite")
 
 POND_BUNDLE_DECLARE(
-    "Depthai modules", 
-    1,
+    "Depthai modules",
     POND_MODULE(DepthaiCamera),
 )
+
+Eigen::Vector3d std_vec_to_eigen(const std::vector<double>& vec) {return {vec[0], vec[1], vec[2]};}
 
 pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
 {
@@ -70,20 +71,34 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
     std::vector<int32_t> stereo_dims = parameter("stereo.dims").asIntArray().get({640, 480}, 2, 2);
     uint32_t fps = parameter("fps").asInt().get(30);
 
+    imu_info.ang_vel.bias = std_vec_to_eigen(parameter("imu.ang_vel.bias").asDoubleArray().get({0, 0, 0}, 3, 3));
+    imu_info.ang_vel.noise = std_vec_to_eigen(parameter("imu.ang_vel.noise").asDoubleArray().get({0.001, 0.001, 0.001}, 3, 3));
+    imu_info.ang_vel.random_walk = std_vec_to_eigen(parameter("imu.ang_vel.random_walk").asDoubleArray().get({0.001, 0.001, 0.001}, 3, 3));
+    imu_info.ang_vel.covariance = Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(parameter("imu.ang_vel.covariance").asDoubleArray().get({0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001}, 9, 9).data());
+
+    imu_info.lin_acc.bias = std_vec_to_eigen(parameter("imu.lin_acc.bias").asDoubleArray().get({0, 0, 0}, 3, 3));
+    imu_info.lin_acc.noise = std_vec_to_eigen(parameter("imu.lin_acc.noise").asDoubleArray().get({0.001, 0.001, 0.001}, 3, 3));
+    imu_info.lin_acc.random_walk = std_vec_to_eigen(parameter("imu.lin_acc.random_walk").asDoubleArray().get({0.001, 0.001, 0.001}, 3, 3));
+    imu_info.lin_acc.covariance = Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(parameter("imu.lin_acc.covariance").asDoubleArray().get({0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001}, 9, 9).data());
+
+    color_info.fps = fps; stereo_left_info.fps = fps; stereo_right_info.fps = fps;
+    color_info.format = ImgFrame::Format::RGB8; stereo_right_info.format = ImgFrame::Format::Mono8; stereo_left_info.format = ImgFrame::Format::Mono8;
+
     color_info.stamp.frame_id = parameter("color.frame_id").asString().get("color_optical_frame");
     stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get("stereo_left_optical_frame");
     stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get("stereo_right_optical_frame");
     imu_data.stamp.frame_id = parameter("imu.frame_id").asString().get("imu");
+    imu_info.stamp.frame_id = imu_data.stamp.frame_id;
 
     image_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
-            "color/image", "color/cam_info", 
-            "stereo_left/image", "stereo_left/cam_info", 
-            "stereo_right/image", "stereo_right/cam_info",
+            "color/image", "color/info", 
+            "stereo_left/image", "stereo_left/info", 
+            "stereo_right/image", "stereo_right/info",
         }
     );
 
-    imu_distributor = createDistributor<ImuData>({"imu"});
+    imu_distributor = createDistributor<ImuData, ImuInfo>({"imu/data", "imu/info"});
 
     if (auto mxid = parameter("MxId").asString().getStrict({}, false))
     {
@@ -126,7 +141,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
     stereo_out_queue = stereo_sync_node->out.createOutputQueue(1);
 
     imu_node = pipeline->create<dai::node::IMU>();
-    imu_node->enableIMUSensor({dai::IMUSensor::ACCELEROMETER_RAW, dai::IMUSensor::GYROSCOPE_RAW}, imu_rate = parameter("imu.rate").asInt().get(10));
+    imu_node->enableIMUSensor({dai::IMUSensor::ACCELEROMETER_RAW, dai::IMUSensor::GYROSCOPE_RAW}, imu_info.rate = parameter("imu.rate").asInt().get(10));
     imu_node->setBatchReportThreshold(1);
     imu_node->setMaxBatchReports(4);
     imu_queue = imu_node->out.createOutputQueue();
@@ -153,16 +168,18 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
                 double gyro_time = std::chrono::duration<double>(gyro.getTimestamp().time_since_epoch()).count();
                 double gyro_hw_time = std::chrono::duration<double>(gyro.getTimestampDevice().time_since_epoch()).count();
 
-                if (std::abs(accel_hw_time - gyro_hw_time) > 1.0 / (double)imu_rate) POND_LOG(
+                if (std::abs(accel_hw_time - gyro_hw_time) > 1.0 / (double)imu_info.rate) POND_LOG(
                     "| accel_time (%f) - gyro_time (%f) | = %f > %f = 1 / imu_rate (%d)", 
                     accel_hw_time, gyro_hw_time, 
                     std::abs(accel_hw_time - gyro_hw_time),
-                    1.0 / (double)imu_rate,
-                    imu_rate
+                    1.0 / (double)imu_info.rate,
+                    imu_info.rate
                 );
 
                 imu_data.stamp.time = (accel_time + gyro_time) / 2.0;
-                imu_data.stamp.time = (accel_hw_time + gyro_hw_time) / 2.0;
+                imu_data.stamp.hw_time = (accel_hw_time + gyro_hw_time) / 2.0;
+                imu_info.stamp.time = imu_data.stamp.time;
+                imu_info.stamp.hw_time = imu_data.stamp.hw_time;
 
                 imu_data.lin_acc[0] = accel.x;
                 imu_data.lin_acc[1] = accel.y;
@@ -171,8 +188,8 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
                 imu_data.ang_vel[0] = gyro.x;
                 imu_data.ang_vel[0] = gyro.y;
                 imu_data.ang_vel[0] = -gyro.z;
-
-                imu_distributor.distribute(imu_data);
+                
+                imu_distributor.distribute(imu_data, imu_info);
             }
         }
     });
@@ -236,6 +253,7 @@ void DepthaiCamera::onFrame()
             shutdown();
             return;
         }
+        double stereo_time = pond::get_time();
 
         auto color_frame = color_out_queue->get<dai::ImgFrame>(std::chrono::seconds(1), has_timeout);
         if (has_timeout)
@@ -244,19 +262,23 @@ void DepthaiCamera::onFrame()
             shutdown();
             return;
         }
+        double color_time = pond::get_time();
     
         auto left_frame = stereo_group->get<dai::ImgFrame>("left");
         auto right_frame = stereo_group->get<dai::ImgFrame>("right");
 
         if (left_frame && right_frame && color_frame)
         {
-            ImgFrameSPtr color_msg = std::make_shared<DepthaiImgFrame>(color_frame, ImgFrame::Format::RGB8, color_info.stamp.frame_id);
-            ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8, stereo_left_info.stamp.frame_id);
-            ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8, stereo_right_info.stamp.frame_id);
+            ImgFrameSPtr color_msg = std::make_shared<DepthaiImgFrame>(color_frame, ImgFrame::Format::RGB8, color_info.stamp.frame_id, color_time);
+            ImgFrameSPtr left_msg = std::make_shared<DepthaiImgFrame>(left_frame, ImgFrame::Format::Mono8, stereo_left_info.stamp.frame_id, stereo_time);
+            ImgFrameSPtr right_msg = std::make_shared<DepthaiImgFrame>(right_frame, ImgFrame::Format::Mono8, stereo_right_info.stamp.frame_id, stereo_time);
 
-            color_info.stamp = color_msg->stamp;
-            stereo_left_info.stamp = left_msg->stamp;
-            stereo_right_info.stamp = right_msg->stamp;
+            color_info.stamp.time = color_msg->stamp.time;
+            color_info.stamp.hw_time = color_msg->stamp.hw_time;
+            stereo_left_info.stamp.time = left_msg->stamp.time;
+            stereo_left_info.stamp.hw_time = left_msg->stamp.hw_time;
+            stereo_right_info.stamp.time = right_msg->stamp.time;
+            stereo_right_info.stamp.hw_time = right_msg->stamp.hw_time;
 
             image_distributor.distribute(color_msg, color_info, left_msg, stereo_left_info, right_msg, stereo_right_info);
         }

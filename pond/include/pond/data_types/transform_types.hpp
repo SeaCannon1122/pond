@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stamp.hpp"
+#include <sophus/se3.hpp>
 
 struct FrameTransform
 {

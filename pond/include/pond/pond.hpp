@@ -256,6 +256,48 @@ namespace pond
         pond_api* api; 
     };
 
+    class DynamicDistributorInfo
+    {
+    friend class ModuleBase;
+    
+    public:
+        DynamicDistributorInfo() {infos.reserve(16);info_strings.reserve(16);}
+
+        template<typename T>
+        DynamicDistributorInfo& topic(const std::string& name)
+        {
+            info_strings.push_back({name, std::string(typeid(T).name()) + "_" + std::to_string(typeid(T).hash_code())});
+            infos.push_back({.topic = (uint8_t*)info_strings[infos.size()][0].c_str(), .type = (uint8_t*)info_strings[infos.size()][1].c_str()});
+
+            return *this;
+        }
+    private:
+        std::vector<std::array<std::string, 2>> info_strings;
+        std::vector<pond_dds_slot_info> infos;
+    };
+
+    class DynamicDistributor
+    {
+    friend class ModuleBase;
+    public:
+        void destroy()
+        {
+            if (id == -1) return;
+            api->destroy_distributor(api->ctx, id);
+        }
+
+        void distribute(const std::vector<void*>& data)
+        {
+            if (id == -1) return;
+            if(data.size() != data_count) api->log(api->ctx, (uint8_t*)"DynamicDistributor data count mismatch: expected %d, got %d", data_count, data.size());
+            api->distribute(api->ctx, id, (void**)data.data());
+        }
+    private:
+        int32_t id;
+        pond_api* api; 
+        uint32_t data_count;
+    };
+
     template<size_t i> using argtype_void_int = void*;
 
     template<typename... Args>
@@ -297,6 +339,15 @@ namespace pond
             Distributor<Args...> d;
             d.api = &_pond_api;
             d.id = d.api->create_distributor(d.api->ctx, slot_infos.data(), sizeof...(Args));
+            return d;
+        }
+
+        DynamicDistributor createDynamicDistributor(const DynamicDistributorInfo& info)
+        {
+            DynamicDistributor d;
+            d.api = &_pond_api;
+            d.id = d.api->create_distributor(d.api->ctx, (pond_dds_slot_info*)info.infos.data(), info.infos.size());
+            d.data_count = info.infos.size();
             return d;
         }
 

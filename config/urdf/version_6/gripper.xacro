@@ -18,14 +18,30 @@
         <origin xyz="0.022 -0.0255 0.0225" rpy="0 0 0"/>
     </xacro:sensor_d435>
 
-    <joint name="gripper_joint" type="continuous">
+    <joint name="gripper_joint" type="revolute">
         <parent link="gripper_base" />
         <child link="gripper_link" />
         <origin xyz="-0.0207 0.0125 0.0355" rpy="0 0 0"/>
         <axis xyz="0 0 1" />
+
+        <limit lower="0" upper="0" velocity="0" effort="0"/>
     </joint>
 
     <link name="gripper_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+        </inertial>
+    </link>
+
+    <joint name="arm_end_effector_joint" type="fixed">
+        <parent link="gripper_base" />
+        <child link="arm_end_effector" />
+        <origin xyz="0.1 -0.0002 0" rpy="${pi/2} 0 0"/>
+    </joint>
+
+    <link name="arm_end_effector">
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <mass value="0.1"/>

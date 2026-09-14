@@ -253,10 +253,10 @@ PYBIND11_MODULE(_pond, m)
             py::arg("name"),
             py::arg("bundle_name"),
             py::arg("module_name"),
-            py::arg("thread_name"),
-            py::arg("parameters"),
-            py::arg("topic_mappings"),
-            py::arg("topic_namespace")
+            py::arg("thread_name") = "default_thread",
+            py::arg("parameters") = py::dict{},
+            py::arg("topic_mappings") = py::dict{},
+            py::arg("topic_namespace") = ""
         )
 
         .def(

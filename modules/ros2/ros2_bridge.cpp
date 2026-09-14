@@ -85,7 +85,6 @@ POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types 
 
 POND_BUNDLE_DECLARE(
     "ros2 integration", 
-    1,
     POND_MODULE(Ros2Bridge),
 )
 

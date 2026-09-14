@@ -199,8 +199,7 @@ private:
 POND_MODULE_CPP_DECLARE(RPLidar, "lidar", "modulefor rplidars")
 
 POND_BUNDLE_DECLARE(
-    "rplidar bundle", 
-    1,
+    "rplidar bundle",
     POND_MODULE(RPLidar),
 )
 

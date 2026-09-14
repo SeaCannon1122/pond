@@ -13,6 +13,4 @@ def lidar(pm: Manager):
             "frame_id" : "laser",
             "angle_compensate" : True
         },
-        topic_mappings={},
-        topic_namespace=""
     )

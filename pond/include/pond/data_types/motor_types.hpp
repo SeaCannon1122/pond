@@ -1,20 +1,24 @@
 #pragma once
-
-#include "stamp.hpp"
+#include <cstdint>
+#include <optional>
 
 struct MotorCommand
 {
-    double pos = 0;
-    double vel = 0;
-    double torque = 0;
+    std::optional<double> pos = std::nullopt;
+    std::optional<double> vel = std::nullopt;
+    std::optional<double> acc = std::nullopt;
+    std::optional<double> torque = std::nullopt;
+    std::optional<bool> disable = std::nullopt;
 };
 
 struct MotorFeedback
 {
     double time = 0;
     double hw_time = 0;
-    double pos = 0;
-    double vel = 0;
-    double current = 0;
-    double temperature = 0;
+
+    std::optional<double> pos = std::nullopt;
+    std::optional<double> vel = std::nullopt;
+    std::optional<double> torque = std::nullopt;
+    std::optional<double> current = std::nullopt;
+    std::optional<double> temperature = std::nullopt;
 };

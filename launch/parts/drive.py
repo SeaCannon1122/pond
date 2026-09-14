@@ -7,8 +7,6 @@ def drive(pm: Manager, real: bool):
         module_name="frame_timer",
         thread_name="drive_thread",
         parameters={"min_time" : 0.1},
-        topic_mappings={},
-        topic_namespace=""
     )
 
     pm.load_module(
@@ -29,10 +27,9 @@ def drive(pm: Manager, real: bool):
             "slip_multiplier" : 1.6
         },
         topic_mappings={
-            "motor_cmd" : "drive_motor_cmd",
-            "motor_feedback" : "drive_motor_feedback"
+            "motor_cmd" : "wheels/motor_cmd",
+            "get_motor_feedback" : "wheels/get_motor_feedback"
         },
-        topic_namespace=""
     )
 
     if real:
@@ -59,10 +56,9 @@ def drive(pm: Manager, real: bool):
                 "motor3.invert" : True,
             },
             topic_mappings={
-                "motor_cmd" : "drive_motor_cmd",
-                "motor_feedback" : "drive_motor_feedback"
+                "motor_cmd" : "wheels/motor_cmd",
+                "get_motor_feedback" : "wheels/get_motor_feedback"
             },
-            topic_namespace=""
         )
     else:
         pm.load_module(
@@ -72,8 +68,7 @@ def drive(pm: Manager, real: bool):
             thread_name="drive_thread",
             parameters={"mode" : "velocity"},
             topic_mappings={
-                "motor_cmd" : "drive_motor_cmd",
-                "motor_feedback" : "drive_motor_feedback"
+                "motor_cmd" : "wheels/motor_cmd",
+                "get_motor_feedback" : "wheels/get_motor_feedback"
             },
-            topic_namespace=""
         )

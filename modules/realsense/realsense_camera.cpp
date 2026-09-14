@@ -41,21 +41,21 @@ private:
     bool mode_color;
     pond::Distributor<ImgFrameSPtr, CameraInfo> color_distributor;
     bool mode_color_depth;
+    bool align_depth;
     pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_depth_distributor;
+    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_depth_aligned_distributor;
     bool mode_color_stereo;
     pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_stereo_distributor;
 
-    CameraInfo color_info, depth_info, stereo_left_info, stereo_right_info;
-    std::string color_frame_id, depth_frame_id, stereo_left_frame_id, stereo_right_frame_id;
-    bool align_depth;
+    CameraInfo color_info, depth_info, aligned_depth_info, stereo_left_info, stereo_right_info;
+    
     rs2::align align_depth_to_color;
 };
 
 POND_MODULE_CPP_DECLARE(RealsenseCamera, "camera", "driver for the intel realsense d435")
 
 POND_BUNDLE_DECLARE(
-    "realsense pond bundle", 
-    1,
+    "realsense pond bundle",
     POND_MODULE(RealsenseCamera),
 )
 
@@ -70,12 +70,18 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
     std::vector<int32_t> depth_dims = parameter("depth.dims").asIntArray().get({640, 480}, 2, 2);
     std::vector<int32_t> stereo_dims = parameter("stereo.dims").asIntArray().get({640, 480}, 2, 2);
     uint32_t fps = parameter("fps").asInt().get(30);
-    color_frame_id = parameter("color.frame_id").asString().get("color_optical_frame");
-    depth_frame_id = parameter("depth.frame_id").asString().get("depth_optical_frame");
-    stereo_left_frame_id = parameter("stereo.left_frame_id").asString().get("stereo_left_optical_frame");
-    stereo_right_frame_id = parameter("stereo.right_frame_id").asString().get("stereo_right_optical_frame");
+
+    color_info.stamp.frame_id = parameter("color.frame_id").asString().get("color_optical_frame");
+    depth_info.stamp.frame_id = parameter("depth.frame_id").asString().get("depth_optical_frame");
+    stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get("stereo_left_optical_frame");
+    stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get("stereo_right_optical_frame");
+
+    color_info.fps = fps; depth_info.fps = fps; aligned_depth_info.fps = fps; stereo_right_info.fps = fps; stereo_left_info.fps = fps;
+    color_info.format = ImgFrame::Format::RGB8; depth_info.format = ImgFrame::Format::Depth16; aligned_depth_info.format = ImgFrame::Format::Depth16;
+    stereo_right_info.format = ImgFrame::Format::Mono8; stereo_left_info.format = ImgFrame::Format::Mono8;
 
     align_depth = parameter("depth.align_to_color").asBool().get(false);
+    aligned_depth_info.stamp.frame_id = color_info.stamp.frame_id;
 
     if (auto serial_number = parameter("serial_number").asString().getStrict({}, false))
     {
@@ -144,18 +150,28 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
         if (sensor.supports(RS2_OPTION_EMITTER_ENABLED))
             sensor.set_option(RS2_OPTION_EMITTER_ENABLED, mode_color_depth ? 1 : 0);
 
-    if (mode_color) color_distributor = createDistributor<ImgFrameSPtr, CameraInfo>({"color/image", "color/cam_info", });
-    if (mode_color_depth) color_depth_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
-        {
-            "color/image", "color/cam_info", 
-            "depth/image", "depth/cam_info", 
-        }
-    );
+    if (mode_color) color_distributor = createDistributor<ImgFrameSPtr, CameraInfo>({"color/image", "color/info", });
+    if (mode_color_depth)
+    {
+        if (align_depth) color_depth_aligned_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+            {
+                "color/image", "color/info", 
+                "depth/image", "depth/info", 
+                "depth_aligned/image", "depth_aligned/info", 
+            }
+        );
+        else color_depth_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+            {
+                "color/image", "color/info", 
+                "depth/image", "depth/info", 
+            }
+        );
+    }
     if (mode_color_stereo) color_stereo_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
-            "color/image", "color/cam_info", 
-            "stereo_left/image", "stereo_left/cam_info", 
-            "stereo_right/image", "stereo_right/cam_info"
+            "color/image", "color/info", 
+            "stereo_left/image", "stereo_left/info", 
+            "stereo_right/image", "stereo_right/info"
         }
     );
 
@@ -166,7 +182,7 @@ void RealsenseCamera::onShutdown()
 {
     pipe.stop();
     if (mode_color) color_distributor.destroy();
-    if (mode_color_depth) color_depth_distributor.destroy();
+    if (mode_color_depth) { if (align_depth) color_depth_aligned_distributor.destroy(); else  color_depth_distributor.destroy(); }
     if (mode_color_stereo) color_stereo_distributor.destroy();
 }
 
@@ -210,7 +226,7 @@ void RealsenseCamera::onFrame()
     
     if (auto color_frame = frames.get_color_frame())
     {
-        ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8, color_frame_id);
+        ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8, color_info.stamp.frame_id);
 
         if (color_info.stamp.time == 0) set_camera_info(color_info, color_frame);
         color_info.stamp = color_msg->stamp;
@@ -219,14 +235,26 @@ void RealsenseCamera::onFrame()
 
         if (mode_color_depth)
         {
-            if (auto depth_frame = (align_depth ? align_depth_to_color.process(frames).get_depth_frame() : frames.get_depth_frame()))
+            if (auto depth_frame = frames.get_depth_frame())
             {
-                ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, align_depth ? color_frame_id : depth_frame_id);
-                
+                ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, depth_info.stamp.frame_id);
                 if (depth_info.stamp.time == 0) set_camera_info(depth_info, depth_frame);
                 depth_info.stamp = depth_msg->stamp;
 
-                color_depth_distributor.distribute(color_msg, color_info, depth_msg, depth_info);
+                if (align_depth)
+                {
+                    if (auto aligned_depth_frame = align_depth_to_color.process(frames).get_depth_frame())
+                    {
+                        ImgFrameSPtr aligned_depth_msg = std::make_shared<RealSenseImgFrame>(aligned_depth_frame, ImgFrame::Format::Depth16, aligned_depth_info.stamp.frame_id);
+                        if (aligned_depth_info.stamp.time == 0) set_camera_info(aligned_depth_info, aligned_depth_frame);
+                        aligned_depth_info.stamp = aligned_depth_msg->stamp;
+
+                        color_depth_aligned_distributor.distribute(color_msg, color_info, depth_msg, depth_info, aligned_depth_msg, aligned_depth_info);
+                    }
+                    else POND_LOG("aligned depth frame is empty");  
+                }
+                else color_depth_distributor.distribute(color_msg, color_info, depth_msg, depth_info);
+
             }
             else POND_LOG("depth frame is empty");            
         }
@@ -237,8 +265,8 @@ void RealsenseCamera::onFrame()
             {
                 if (auto right_frame = frames.get_infrared_frame(2))
                 {
-                    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8, stereo_left_frame_id);
-                    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8, stereo_right_frame_id);
+                    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8, stereo_left_info.stamp.frame_id);
+                    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8, stereo_right_info.stamp.frame_id);
 
                     if (stereo_left_info.stamp.time == 0) set_camera_info(stereo_left_info, left_frame);
                     if (stereo_right_info.stamp.time == 0) set_camera_info(stereo_right_info, right_frame);

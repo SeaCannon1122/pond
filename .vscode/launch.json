@@ -2,15 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug my_program",
+            "name": "Debug pond",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/test/pond_test",
-            "args": [],
+            "program": "/usr/bin/python3",
+            "args": ["launch/run.py"],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,
             "env": {
-                "POND_BUNDLE_PATH": "${workspaceFolder}/build/modules"
+                "PYTHONPATH": "/home/pilot/pond/build/python:${env:PYTHONPATH}",
+                "POND_BUNDLE_PATH": "${workspaceFolder}/build/modules/controllers/:${workspaceFolder}/build/modules/depthai/:${workspaceFolder}/build/modules/gstreamer/:${workspaceFolder}/build/modules/orb_slam3/:${workspaceFolder}/build/modules/realsense/:${workspaceFolder}/build/modules/robot_state/:${workspaceFolder}/build/modules/ros2/:${workspaceFolder}/build/modules/rplidar/:${workspaceFolder}/build/modules/rtabmap/:${workspaceFolder}/build/modules/utility/:${workspaceFolder}/build/modules/v4l2/:${workspaceFolder}/build/modules/waveshare/:${workspaceFolder}/build/modules/CMakeFiles/:${workspaceFolder}/build/modules/controllers/:${workspaceFolder}/build/modules/depthai/:${workspaceFolder}/build/modules/gstreamer/:${workspaceFolder}/build/modules/orb_slam3/:${workspaceFolder}/build/modules/realsense/:${workspaceFolder}/build/modules/robot_state/:${workspaceFolder}/build/modules/ros2/:${workspaceFolder}/build/modules/rplidar/:${workspaceFolder}/build/modules/rtabmap/:${workspaceFolder}/build/modules/utility/:${workspaceFolder}/build/modules/v4l2/:${workspaceFolder}/build/modules/waveshare/"
             }
         }
     ]

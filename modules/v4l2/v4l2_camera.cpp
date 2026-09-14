@@ -17,7 +17,6 @@ POND_MODULE_CPP_DECLARE(V4L2Camera, "v4l2_camera", "v4l2 camera image distributo
 
 POND_BUNDLE_DECLARE(
     "v4l2 bundle", 
-    1,
     POND_MODULE(V4L2Camera),
 )
 

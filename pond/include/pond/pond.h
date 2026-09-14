@@ -218,7 +218,7 @@ typedef struct pond_bundle_metadata
 {
     uint8_t* info;
     uint32_t module_count;
-    pond_module_metadata modules[];
+    pond_module_metadata* modules;
 } pond_bundle_metadata;
 
 #if defined(_WIN32)
@@ -229,9 +229,10 @@ typedef struct pond_bundle_metadata
     #define POND_EXPORT
 #endif
 
-#define POND_BUNDLE_DECLARE(_info, _count, ...)\
+#define POND_BUNDLE_DECLARE(_info, ...)\
+pond_module_metadata pond_bundle_module_metadata_list[] = {__VA_ARGS__};\
 POND_EXPORT pond_bundle_metadata pond_bundle_metadata_ = {\
     .info = (uint8_t*)_info,\
-    .module_count = _count,\
-    .modules = {__VA_ARGS__},\
+    .module_count = sizeof(pond_bundle_module_metadata_list) / sizeof(pond_bundle_module_metadata_list[0]),\
+    .modules = pond_bundle_module_metadata_list\
 };

@@ -4,7 +4,6 @@
 EXTERN_POND_MODULE(RTPServer);
 
 POND_BUNDLE_DECLARE(
-    "Gstreamer modules", 
-    1,
+    "Gstreamer modules",
     POND_MODULE(RTPServer),
 )

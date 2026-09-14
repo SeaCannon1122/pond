@@ -5,7 +5,7 @@ add_library(utility-pond_bundle SHARED
   frame_timer.cpp
   dummy_camera.cpp
   depth_colorizer.cpp
-  motor_tester.cpp
+  motor_test.cpp
   dummy_motor.cpp
   topic_filter.cpp
 )

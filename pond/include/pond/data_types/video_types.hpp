@@ -65,6 +65,8 @@ struct CameraInfo
     Stamp stamp;
     uint32_t height = 0;
     uint32_t width = 0;
+    uint32_t fps = 0;
+    ImgFrame::Format format = ImgFrame::Format::ERROR;
     std::string distortion_model = "";
     std::vector<double> d = {};
 

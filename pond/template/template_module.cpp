@@ -13,8 +13,7 @@ private:
 POND_MODULE_CPP_DECLARE(TemplateModule, "template_module", "template module info")
 
 POND_BUNDLE_DECLARE(
-    "template bundle info", 
-    1,
+    "template bundle info",
     POND_MODULE(TemplateModule),
 )
 

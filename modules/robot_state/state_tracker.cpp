@@ -1,4 +1,4 @@
-#include <vector>
+#include <mutex>
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include <pond/data_types/robot_state_types.hpp>
@@ -30,12 +30,24 @@ struct Joint
     std::shared_mutex tf_mutex;
     
     bool is_static;
+    
+    struct
+    {
+        bool is;
+        double multiplier;
+        double offset;
+    } mimic;
+
     Link* parent_link;
     Link* child_link;
 
     Sophus::SE3d tf;
+    std::optional<double> min_angle = std::nullopt;
+    std::optional<double> max_angle = std::nullopt;
     Eigen::Vector3d axis;
     std::deque<std::tuple<double, double>> past_states;
+
+    std::vector<Joint*> mimicing_joints;
 };
 
 class StateTracker : public pond::ModuleBase
@@ -45,11 +57,14 @@ public:
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
+    void set_joint(Joint* joint, double angle, double time, double hw_time, std::vector<FrameTransform>* tfs);
+
     pond::Receiver<GetFrameTransformRequest> tf_request_receiver;
     pond::Receiver<GetJointInfoRequest> joint_request_receiver;
 
     pond::Receiver<std::vector<JointState>> joint_states_receiver;
     
+    std::mutex tf_distributor_mutex;
     pond::Distributor<std::vector<FrameTransform>> tf_distributor;
     pond::Distributor<std::vector<FrameTransform>> tf_static_distributor;
 
@@ -70,8 +85,7 @@ private:
 POND_MODULE_CPP_DECLARE(StateTracker, "state_tracker", "tracks the transform state of the robot and makes it available to other modules")
 
 POND_BUNDLE_DECLARE(
-    "template bundle info", 
-    1,
+    "template bundle info",
     POND_MODULE(StateTracker),
 )
 
@@ -131,6 +145,22 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         joint->child_link = links_map[j.second->child_link_name];
         joint->parent_link = links_map[j.second->parent_link_name];
         joint->is_static = (j.second->type == urdf::Joint::FIXED);
+
+        if (j.second->mimic)
+        {
+            joint->mimic.is = true;
+            joint->mimic.multiplier = j.second->mimic->multiplier;
+            joint->mimic.offset = j.second->mimic->offset;
+            joints_map[j.second->mimic->joint_name]->mimicing_joints.push_back(joint);
+        }
+        else joint->mimic.is = false;
+
+        if (j.second->limits)
+        {
+            joint->min_angle = j.second->limits->lower;
+            joint->max_angle = j.second->limits->upper;
+        }
+
         joint->axis = Eigen::Vector3d(j.second->axis.x, j.second->axis.y, j.second->axis.z).normalized();
         
         joint->tf = Sophus::SE3d(
@@ -147,7 +177,20 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
             )
         );
 
-        if (verbose_model_info) POND_LOG("Joint: %s", joint->name.c_str());
+        if (verbose_model_info)
+        {
+            std::string type;
+
+            switch (j.second->type)
+            {
+            case urdf::Joint::REVOLUTE: {type = "revolute"; break;}
+            case urdf::Joint::CONTINUOUS: {type = "continuous"; break;}
+            case urdf::Joint::FIXED: {type = "fixed"; break;}
+            default: type = "other";
+            }
+
+            POND_LOG("Joint: %s (%s)", joint->name.c_str(), type.c_str());
+        }
         joints_i++;
     }
 
@@ -277,6 +320,8 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         request->is_static = joint->second->is_static;
         request->fufilled = true;
         request->tf = joint->second->tf;
+        request->min_angle = joint->second->min_angle;
+        request->max_angle = joint->second->max_angle;
     });
 
     tf_distributor = createDistributor<std::vector<FrameTransform>>({"tf"});
@@ -284,31 +329,42 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     joint_states_receiver = createReceiver<std::vector<JointState>>({"joint_states"}, [this](std::vector<JointState>* states){
 
-        std::vector<FrameTransform> tfs; tfs.reserve(states->size());
+        std::vector<FrameTransform> tfs; tfs.reserve(states->size()+10);
 
         for (auto& state : *states)
         {
             const auto& joint = joints_map.find(state.joint_name);
-            if (joint == joints_map.end()) return;
+            if (joint == joints_map.end()) continue;
+            if (joint->second->mimic.is) continue;
 
-            FrameTransform tf;
-            tf.stamp.frame_id = joint->second->parent_link->name;
-            tf.stamp.time = state.time;
-            tf.stamp.hw_time = state.hw_time;
-            tf.child_frame_id = joint->second->child_link->name;
-            tf.tf = joint->second->tf * Sophus::SE3d(Sophus::SO3d::exp(joint->second->axis * state.angle),Eigen::Vector3d::Zero());
-
-            tfs.push_back(tf);
-
-            std::unique_lock<std::shared_mutex> lock(joint->second->child_link->tf_mutex);
-            joint->second->child_link->past_parent_transforms.push_back({state.time, tf.tf});
-            while (state.time - std::get<0>(joint->second->child_link->past_parent_transforms.front()) > tf_store_duration) joint->second->child_link->past_parent_transforms.pop_front();
+            set_joint(joint->second, state.angle, state.time, state.hw_time, &tfs);
         }
 
+        std::lock_guard<std::mutex> lock(tf_distributor_mutex);
         tf_distributor.distribute(tfs);
     });
 
     return POND_SUCCESS;
+}
+
+void StateTracker::set_joint(Joint* joint, double angle, double time, double hw_time, std::vector<FrameTransform>* tfs)
+{
+    FrameTransform tf;
+    tf.stamp.frame_id = joint->parent_link->name;
+    tf.stamp.time = time;
+    tf.stamp.hw_time = hw_time;
+    tf.child_frame_id = joint->child_link->name;
+    tf.tf = joint->tf * Sophus::SE3d(Sophus::SO3d::exp(joint->axis * angle),Eigen::Vector3d::Zero());
+
+    tfs->push_back(tf);
+
+    {
+        std::unique_lock<std::shared_mutex> lock(joint->child_link->tf_mutex);
+        joint->child_link->past_parent_transforms.push_back({time, tf.tf});
+        while (time - std::get<0>(joint->child_link->past_parent_transforms.front()) > tf_store_duration) joint->child_link->past_parent_transforms.pop_front();
+    }
+ 
+    for (auto mimic : joint->mimicing_joints) set_joint(mimic, angle * mimic->mimic.multiplier + mimic->mimic.offset, time, hw_time, tfs);
 }
 
 void StateTracker::onShutdown()

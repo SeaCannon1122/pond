@@ -31,16 +31,17 @@ def main():
 
     ip = "192.168.137.26"
 
-    camera_front(pm)
-    camera_front_streamer(pm, ip)
+    #camera_front(pm)
+    #camera_front_streamer(pm, ip)
     # camera_back(pm)
     # camera_back_streamer(pm, ip)
     # camera_gripper(pm)
     # camera_gripper_streamer(pm, ip)
-    lidar(pm)
+    # lidar(pm)
     state_tracker(pm)
     ros2_bridge(pm)
-    drive(pm, False)
+    #drive(pm, False)
+    arm(pm, True)
     
 
     try:

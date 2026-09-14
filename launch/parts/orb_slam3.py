@@ -20,5 +20,4 @@ def orb_slam3(pm: Manager):
             "depth/image" : "camera_back/depth/image",
             "imu" : "camera_front/imu"
         },
-        topic_namespace=""
     )
