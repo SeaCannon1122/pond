@@ -1,7 +1,8 @@
-#include <pond/module_base_tf.hpp>
-#include <pond/data_types/command_types.hpp>
-#include <pond/data_types/motor_types.hpp>
-#include <pond/data_types/robot_state_types.hpp>
+#include "pond_data_types/transform_types.hpp"
+#include <pond/pond.hpp>
+#include <pond/hpp/module_base_tf.hpp>
+#include <pond_data_types/command_types.hpp>
+#include <pond_data_types/motor_types.hpp>
 
 struct segment
 {
@@ -18,41 +19,30 @@ class ArmController : public pond::ModuleBaseTF
 public:
     virtual pond_result onStartupTF(const std::vector<void*>& args) override;
     virtual void onShutdownTF() override;
-    virtual void onFrame() override;
 private:
 
     struct
     {
-        pond::Receiver<FrameTransform> receiver;
+        pond::Receiver receiver;
         FrameTransform received;
         std::mutex mutex;
     } target;
 
     struct
     {
-        pond::Receiver<double> receiver;
+        pond::Receiver receiver;
         std::atomic<double> received{0.02};
     } arm_speed;
 
     struct
     {
-        pond::Receiver<bool> receiver;
+        pond::Receiver receiver;
         std::atomic<bool> received{false};
         bool disabled = false;
     } disable_arm;
 
-    struct
-    {
-        pond::Receiver<double> width_receiver;
-        std::atomic<double> received_width{-1};
-        double radius, offset;
-    } gripper;
+    pond::Receiver update_receiver;
 
-    pond::Distributor<std::vector<MotorCommand>> command_distributor;
-    pond::Distributor<std::vector<MotorFeedback>> feedback_distributor;
-
-    std::vector<MotorCommand> motor_commands;
-    std::vector<MotorFeedback> motor_feedback;
     std::vector<JointState> joint_states;
 
     segment segments[3];
@@ -65,20 +55,12 @@ POND_MODULE_CPP_DECLARE(ArmController, "arm_controller", "Control the robotic ar
 pond_result ArmController::onStartupTF(const std::vector<void*>& args)
 {
     auto arm_joint_names_o = parameter("arm_joint_names").asStringArray().getStrict(3, 3);
-    auto gripper_joint_o = parameter("gripper_joint_name").asString().getStrict();
     auto target_link_o = parameter("target_link_name").asString().getStrict();
-    if (!arm_joint_names_o || !target_link_o || !gripper_joint_o) return POND_ERROR;
+    if (!arm_joint_names_o || !target_link_o) return POND_ERROR;
     target_link = *target_link_o;
 
-    gripper.radius = parameter("gripper_radius").asDouble().get(0.1);
-    gripper.offset = parameter("gripper_offset").asDouble().get(0.1);
     timeout = parameter("timeout").asDouble().get(1);
-
-    joint_states.resize(4);
-    motor_commands.resize(4);
-    motor_feedback.resize(4);
-    
-    joint_states[3].joint_name = *gripper_joint_o;
+    joint_states.resize(3);    
 
     GetJointInfoRequest joint_requests[3];
     for (uint32_t i = 0; i < 3; i++)
@@ -100,9 +82,6 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         segments[i].y = total.translation().y();
     }
 
-    command_distributor = createDistributor<std::vector<MotorCommand>>({"motor_cmd"});
-    feedback_distributor = createDistributor<std::vector<MotorFeedback>>({"get_motor_feedback"});
-
     target.receiver = createReceiver<FrameTransform>({"arm_target"}, [this](FrameTransform* tf)
         {
             if (tf->stamp.time + timeout < pond::get_time()) return;
@@ -112,57 +91,67 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         }
     );
 
-    gripper.width_receiver = createReceiver<double>({"gripper_width"}, [this](double* width) {gripper.received_width.store(*width);});
     arm_speed.receiver = createReceiver<double>({"arm_speed"}, [this](double* speed) {arm_speed.received.store(*speed);});
     disable_arm.receiver = createReceiver<bool>({"disable_arm"}, [this](bool* disable) {disable_arm.received.store(*disable);});
+
+    update_receiver = createReceiver<MotorInterface>(pond::ChannelsInfo().channels<MotorInterface, MotorInterface, MotorInterface>("arm_motor0/update", "arm_motor1/update", "arm_motor2/update"), [this](MotorInterface** ifs) {
+    
+        for (uint32_t i = 0; i < 3; i++)
+        {
+            joint_states[i].angle = (ifs[i]->feedback.pos ? *ifs[i]->feedback.pos : 0);
+            joint_states[i].time = ifs[i]->feedback.time;
+            joint_states[i].hw_time = ifs[i]->feedback.hw_time;
+        }
+
+        tfSetJointStates(joint_states);
+
+        target.mutex.lock();
+        FrameTransform target_tf = target.received;
+        target.mutex.unlock();
+
+        double target_x = msg->position.x; double target_y = msg->position.z;
+
+        double seg_0 = sqrt(segments[0].x * segments[0].x + segments[0].y * segments[0].y);
+        double seg_1 = sqrt(segments[1].x * segments[1].x + segments[1].y * segments[1].y);
+        double target = sqrt(target_x * target_x + target_y * target_y);
+
+        if (seg_0 + seg_1 < target)
+        {
+        double factor = (seg_0 + seg_1) / target;
+        target_x *= factor;
+        target_y *= factor;
+        target *= factor;
+        }
+
+        double angle_0 = atan2(target_y, target_x) + safeAcos((seg_0 * seg_0 + target * target - seg_1 * seg_1) / (2.0 * seg_0 * target));
+        double angle_1 = safeAcos((seg_1 * seg_1 + seg_0 * seg_0 - target * target) / (2.0 * seg_0 * seg_1)) - M_PI;
+
+        double joint_angle_0 = angle_0 - atan2(segments[0].y,  segments[0].x);
+        double joint_angle_1 = angle_1 - atan2(segments[1].y,  segments[1].x) + atan2(segments[0].y,  segments[0].x);
+
+        joint_trajectory.joint_names.push_back(segments[0].joint);
+        joint_trajectory.joint_names.push_back(segments[1].joint);
+
+        point.positions.push_back(joint_angle_0);
+        point.positions.push_back(joint_angle_1);
+
+        if (segments.size() == 3)
+        {
+        joint_trajectory.joint_names.push_back(segments[2].joint);
+        point.positions.push_back(- joint_angle_0 - joint_angle_1 + msg->orientation.y);
+        }
+
+        joint_trajectory.points.push_back(point);
+        joint_trajectory_publisher->publish(joint_trajectory);
+    });
 
     return POND_SUCCESS;
 }
 
 void ArmController::onShutdownTF()
 {
+    update_receiver.destroy();
     disable_arm.receiver.destroy();
     arm_speed.receiver.destroy();
     target.receiver.destroy();
-    gripper.width_receiver.destroy();
-    feedback_distributor.destroy();
-    command_distributor.destroy();
-}
-
-void ArmController::onFrame()
-{
-    feedback_distributor.distribute(motor_feedback);
-
-    for (uint32_t i = 0; i < motor_feedback.size(); i++)
-    {
-        joint_states[i].angle = (motor_feedback[i].pos ? *motor_feedback[i].pos : 0);
-        joint_states[i].time = motor_feedback[i].time;
-        joint_states[i].hw_time = motor_feedback[i].hw_time;
-    }
-
-    tfSetJointStates(joint_states);
-
-    if (disable_arm.received.load())
-    {
-        if (disable_arm.disabled == false)
-        {
-            disable_arm.disabled = true;
-            for (uint32_t i = 0; i < 4; i++) motor_commands[i].disable = true;
-            command_distributor.distribute(motor_commands);
-        }
-        return;
-    }
-
-    if (disable_arm.disabled)
-    {
-        disable_arm.disabled = false;
-        for (uint32_t i = 0; i < 4; i++) motor_commands[i].disable = false;
-    }
-    else for (uint32_t i = 0; i < 4; i++) motor_commands[i].disable = std::nullopt;
-
-    target.mutex.lock();
-    FrameTransform target_tf = target.received;
-    target.mutex.unlock();
-    
-    //command_distributor.distribute(motor_commands);
 }

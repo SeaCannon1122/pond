@@ -1,7 +1,8 @@
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
-#include <pond/module_base_tf.hpp>
-#include <pond/data_types/cv_img_frame.hpp>
-#include <pond/data_types/imu_types.hpp>
+#include <pond/pond.hpp>
+#include <pond/hpp/module_base_tf.hpp>
+#include <pond_data_types/cv_img_frame.hpp>
+#include <pond_data_types/imu_types.hpp>
 
 #include "System.h"
 
@@ -13,7 +14,7 @@ public:
     virtual void onFrame() override;
 private:
 
-    bool get_cam_info(CameraInfo& cam_info, const std::string& topic);
+    bool get_cam_info(CameraInfo& cam_info, const std::string& channel);
     bool get_imu_info(ImuInfo& info);
     bool create_config();
 
@@ -21,41 +22,22 @@ private:
     bool slam_setup = false;
     std::string vocabulary_path;
 
-    ORB_SLAM3::System::eSensor mode;
-    uint32_t n_features;
-    double scale_factor;
-    uint32_t n_levels;
-    uint32_t ini_th_fast;
-    uint32_t min_th_fast;
-    double far_threshold;
+    int32_t n_features, n_levels, ini_th_fast, min_th_fast;
+    double scale_factor, far_threshold;
     bool imu_insert_kfs_when_lost;
 
-    std::mutex frame_mutex;
-    std::mutex imu_mutex;
+    std::mutex frame_mutex, imu_mutex;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points;
     std::atomic<bool> new_frame;
 
-    bool use_imu;
+    bool use_imu, stereo_mode, rgbd_mode, mono_mode;
 
-    struct {
-        bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
-    } stereo;
-    struct {
-        bool use;
-        pond::Receiver<ImgFrameSPtr, ImgFrameSPtr> receiver;
-    } rgbd;
-    struct {
-        bool use;
-        pond::Receiver<ImgFrameSPtr> receiver;
-    } mono;
-
-    pond::Receiver<ImuData> imu_receiver;
+    pond::Receiver image_receiver, imu_receiver;
 
     ImgFrameSPtr first_frame, second_frame;
-    pond::Distributor<FrameTransform> transform_distributor;
+    pond::DistributorTyped<FrameTransform> transform_distributor;
     FrameTransform transform;
-    pond::Distributor<ImgFrameSPtr> keypoint_frame_distributor;
+    pond::DistributorTyped<ImgFrameSPtr> keypoint_frame_distributor;
 };
 
 POND_MODULE_CPP_DECLARE(OrbSlam3, "slam", "Supports mono, stereo and rgbd vslam")
@@ -81,66 +63,28 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     
     vocabulary_path = *vocabulary_path_o;
 
-    if (slam_mode == "Stereo") stereo.use = true;
-    else stereo.use = false;
-    if (slam_mode == "RGBD") rgbd.use = true;
-    else rgbd.use = false;
-    if (slam_mode == "Mono") mono.use = true;
-    else mono.use = false;
+    stereo_mode =  (slam_mode == "Stereo"); rgbd_mode = (slam_mode == "RGBD"); mono_mode = (slam_mode == "Mono");
     
     transform.stamp.frame_id = parameter("base_frame_id").asString().get("world");
     transform.child_frame_id = parameter("camera_frame_id").asString().get("camera");
 
-    transform_distributor = createDistributor<FrameTransform>({"slam_transform"});
-    keypoint_frame_distributor = createDistributor<ImgFrameSPtr>({stereo.use ? "mono_left_with_keypoints/image" : (rgbd.use ? "color_with_keypoints/image" : "mono_with_keypoints/image")});
+    transform_distributor = createDistributorTyped<FrameTransform>({"slam_transform"});
+    keypoint_frame_distributor = createDistributorTyped<ImgFrameSPtr>({stereo_mode ? "mono_left_with_keypoints/image" : (rgbd_mode ? "color_with_keypoints/image" : "mono_with_keypoints/image")});
 
     new_frame.store(false);
 
-    if (stereo.use) stereo.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
-        {"stereo_left/image", "stereo_right/image"},
-        [this](ImgFrameSPtr* left, ImgFrameSPtr* right)
-        {
-            std::lock_guard<std::mutex> lock(frame_mutex);
+    pond::ChannelsInfo channels_info;
+    if (stereo_mode) channels_info.channels<ImgFrameSPtr, ImgFrameSPtr>("stereo_left/image", "stereo_right/image");
+    if (rgbd_mode) channels_info.channels<ImgFrameSPtr, ImgFrameSPtr>("color/image", "depth/image");
+    if (mono_mode) channels_info.channel<ImgFrameSPtr>("mono/image");
 
-            if ((*left)->format != ImgFrame::Format::Mono8 || (*right)->format != ImgFrame::Format::Mono8)
-            {
-                POND_LOG("ERROR: left->format (%s) != Mono8 || right->format (%s) != Mono8", ImgFrame::formatToString((*left)->format).c_str(), ImgFrame::formatToString((*right)->format).c_str());
-                return;
-            }
-            new_frame.store(true);
-            first_frame = *left; second_frame = *right;
-        }
-    );
-    if (rgbd.use) rgbd.receiver = createReceiver<ImgFrameSPtr, ImgFrameSPtr>(
-        {"color/image", "depth/image"},
-        [this](ImgFrameSPtr* color, ImgFrameSPtr* depth)
-        {
-            std::lock_guard<std::mutex> lock(frame_mutex);
+    image_receiver = createReceiver<ImgFrameSPtr>(channels_info, [this](ImgFrameSPtr** frames){
 
-            if ((*color)->format != ImgFrame::Format::RGB8 || (*depth)->format != ImgFrame::Format::Depth16)
-            {
-                POND_LOG("ERROR: rgb->format (%s) != RGB8 || depth->format (%s) != Depth16", ImgFrame::formatToString((*color)->format).c_str(), ImgFrame::formatToString((*depth)->format).c_str());
-                return;
-            }
-            new_frame.store(true);
-            first_frame = *color; second_frame = *depth;
-        }
-    );
-    if (mono.use) mono.receiver = createReceiver<ImgFrameSPtr>(
-        {"mono/image"},
-        [this](ImgFrameSPtr* frame)
-        {
-            std::lock_guard<std::mutex> lock(frame_mutex);
+        std::lock_guard<std::mutex> lock(frame_mutex);
 
-            if ((*frame)->format != ImgFrame::Format::Mono8)
-            {
-                POND_LOG("ERROR: frame->format (%s) != Mono8", ImgFrame::formatToString((*frame)->format).c_str());
-                return;
-            }
-            new_frame.store(true);
-            first_frame = *frame;
-        }
-    );
+        new_frame.store(true);
+        first_frame = *(frames[0]); if (!mono_mode) second_frame = *(frames[1]);
+    });
 
     imu_data_points.reserve(100);
     imu_receiver = createReceiver<ImuData>({"imu"}, [this](ImuData* data){
@@ -165,10 +109,7 @@ void OrbSlam3::onShutdownTF()
         slam.reset();
     }
     
-    if (stereo.use) stereo.receiver.destroy();
-    if (rgbd.use) rgbd.receiver.destroy();
-    if (mono.use) mono.receiver.destroy();
-
+    image_receiver.destroy();
     imu_receiver.destroy();
 
     transform_distributor.destroy();
@@ -177,49 +118,44 @@ void OrbSlam3::onShutdownTF()
 
 #define SETTINGS_PATH "~/.cache/orbslam_config.yaml"
 
-bool OrbSlam3::get_cam_info(CameraInfo& info, const std::string& topic)
+bool OrbSlam3::get_cam_info(CameraInfo& info, const std::string& channel)
 {
-    pond::Receiver<CameraInfo> info_receiver = createReceiver<CameraInfo>({topic}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
-    for (int i = 0; i < 100 && info.stamp.time == 0; i++) this_thread::sleep_for(std::chrono::milliseconds(10));
+    pond::Receiver info_receiver = createReceiver<CameraInfo>({channel}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
     info_receiver.destroy();
-    if (info.stamp.time == 0) {POND_LOG("Did not receive camera info on topic '%s'", topic.c_str()); return false;}
+    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive camera info on channel '%s'", channel.c_str());
     return true;
 }
 
 bool OrbSlam3::get_imu_info(ImuInfo& info)
 {
-    pond::Receiver<ImuInfo> info_receiver = createReceiver<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
-    for (int i = 0; i < 100 && info.stamp.time == 0; i++) this_thread::sleep_for(std::chrono::milliseconds(10));
+    pond::Receiver info_receiver = createReceiver<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
     info_receiver.destroy();
-    if (info.stamp.time == 0) {POND_LOG("Did not receive imu info on topic 'imu/info'"); return false;}
+    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive imu info on channel 'imu/info'");
     return true;
 }
 
 bool OrbSlam3::create_config()
 {
-    CameraInfo cam_info;
-    
     GetFrameTransformRequest cam_request;
-    if (stereo.use)
+
+    if (stereo_mode)
     {
-        if (!get_cam_info(cam_info, "stereo_right/info")) return false;
-        cam_request.source_frame = cam_info.stamp.frame_id;
-        if (!get_cam_info(cam_info, "stereo_left/info")) return false;
-        cam_request.target_frame = cam_info.stamp.frame_id;
-        cam_request.time_point = 0;
+        CameraInfo cam_info_left, cam_info_right;
+        if (!get_cam_info(cam_info_right, "stereo_right/info")) return false;
+        if (!get_cam_info(cam_info_left, "stereo_left/info")) return false;
 
-        pond::Distributor<GetFrameTransformRequest> request_distributor = createDistributor<GetFrameTransformRequest>({"get_robot_transform"});
-        request_distributor.distribute(cam_request);
-        request_distributor.destroy();
-
-        if (cam_request.fufilled == false) {POND_LOG("Did not get camera optical frame transform"); return false;}
+        if (!tfGetTransform(cam_info_right.stamp.frame_id, cam_info_left.stamp.frame_id, 0, cam_request))
+            POND_LOG_RETURN_FALSE("Did not get camera optical frame transform");
     }
     
-    std::string info_topic;
-    if (stereo.use) info_topic = "stereo_left/info";
-    if (rgbd.use) info_topic = "color/info"; 
-    if (mono.use) info_topic = "mono/info";
-    if (!get_cam_info(cam_info, info_topic)) return false;
+    CameraInfo cam_info;
+    std::string info_channel;
+    if (stereo_mode) info_channel = "stereo_left/info";
+    if (rgbd_mode) info_channel = "color/info"; 
+    if (mono_mode) info_channel = "mono/info";
+    if (!get_cam_info(cam_info, info_channel)) return false;
 
     std::ofstream file(SETTINGS_PATH);
     file << "%YAML:1.0\n\n";
@@ -231,7 +167,7 @@ bool OrbSlam3::create_config()
     file << "Camera1.cx: " + std::to_string(cam_info.k(0, 2)) + "\n";
     file << "Camera1.cy: " + std::to_string(cam_info.k(1, 2)) + "\n\n";
 
-    if (stereo.use)
+    if (stereo_mode)
     {
         file << "Camera2.fx: " + std::to_string(cam_info.k(0, 0)) + "\n";
         file << "Camera2.fy: " + std::to_string(cam_info.k(1, 1)) + "\n";
@@ -240,19 +176,19 @@ bool OrbSlam3::create_config()
     }
 
     // Stereo baseline * focal length
-    if (stereo.use) file << "Camera.bf: " + std::to_string(cam_info.k(0, 0) * cam_request.tf.translation().x()) + "\n\n";
+    if (stereo_mode) file << "Camera.bf: " + std::to_string(cam_info.k(0, 0) * cam_request.tf.translation().x()) + "\n\n";
 
     file << "Camera.width: " + std::to_string(cam_info.width) + "\n";
     file << "Camera.height: " + std::to_string(cam_info.height) + "\n";
     file << "Camera.fps: " + std::to_string(cam_info.fps) + "\n\n";
     
-    if (rgbd.use)
+    if (rgbd_mode)
     {
         file << "RGBD.DepthMapFactor: 1.0\n";
         file << "Camera.RGB: " + std::to_string(cam_info.format == ImgFrame::Format::RGB8 ? 1 : 0) + "\n";
     }
 
-    double base_line = (stereo.use ? cam_request.tf.translation().x() : 0.1);
+    double base_line = (stereo_mode ? cam_request.tf.translation().x() : 0.1);
     file << "Stereo.ThDepth: " + std::to_string(far_threshold / base_line) + "\n";
     file << "Stereo.b: " + std::to_string(base_line) + "\n\n";
 
@@ -311,27 +247,24 @@ void OrbSlam3::onFrame()
         std::lock_guard<std::mutex> lock(frame_mutex);
         new_frame.store(false);
 
-        first_frame_c = std::move(first_frame);
-        if (!mono.use) second_frame_c = std::move(second_frame);
+        first_frame_c = std::move(first_frame); if (!mono_mode) second_frame_c = std::move(second_frame);
     }
-    else
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        return;
-    }
+    else { pond::sleep(0.01); return; }
 
     {
         std::lock_guard<std::mutex> lock(imu_mutex);
         imu_data_points_c = std::move(imu_data_points);
         imu_data_points.clear();
-        imu_data_points.reserve(100);
     }
 
     cv::Mat no_keypoint_mat;
     Sophus::SE3f Tcw;
 
-    if (stereo.use)
+    if (stereo_mode)
     {
+        if (first_frame_c->format != ImgFrame::Format::Mono8 || first_frame_c->format != ImgFrame::Format::Mono8)
+            POND_LOG_RETURN("ERROR: left->format (%s) != Mono8 || right->format (%s) != Mono8", ImgFrame::formatToString(first_frame_c->format).c_str(), ImgFrame::formatToString(second_frame_c->format).c_str());
+
         cv::Mat left(first_frame_c->height, first_frame_c->width, CV_8UC1, first_frame_c->data);
         cv::Mat right(second_frame_c->height, second_frame_c->width, CV_8UC1, second_frame_c->data);
 
@@ -341,8 +274,11 @@ void OrbSlam3::onFrame()
         Tcw = slam->TrackStereo(left, right, transform.stamp.hw_time, imu_data_points_c);
         no_keypoint_mat = left;
     }
-    if (rgbd.use)
+    if (rgbd_mode)
     {
+        if (first_frame_c->format != ImgFrame::Format::RGB8 || first_frame_c->format != ImgFrame::Format::Depth16)
+            POND_LOG_RETURN("ERROR: rgb->format (%s) != RGB8 || depth->format (%s) != Depth16", ImgFrame::formatToString(first_frame_c->format).c_str(), ImgFrame::formatToString(second_frame_c->format).c_str());
+
         cv::Mat rgb(first_frame_c->height, first_frame_c->width, CV_8UC3, first_frame_c->data);
         cv::Mat depth(second_frame_c->height, second_frame_c->width, CV_8UC2, second_frame_c->data);
         cv::Mat depth32;
@@ -353,8 +289,11 @@ void OrbSlam3::onFrame()
         Tcw = slam->TrackRGBD(rgb, depth32, transform.stamp.hw_time, imu_data_points_c);
         no_keypoint_mat = rgb;
     }
-    if (mono.use)
+    if (mono_mode)
     {
+        if (first_frame_c->format != ImgFrame::Format::Mono8)
+            POND_LOG_RETURN("ERROR: frame->format (%s) != Mono8", ImgFrame::formatToString(first_frame_c->format).c_str());
+
         cv::Mat mono(first_frame_c->height, first_frame_c->width, CV_8UC1, first_frame_c->data);
 
         transform.stamp.hw_time = first_frame_c->stamp.hw_time;
@@ -366,7 +305,7 @@ void OrbSlam3::onFrame()
     if(!Tcw.matrix().isZero())
     {
         transform.tf = Tcw.cast<double>().inverse();
-        transform_distributor.distribute(transform);
+        transform_distributor.distribute(&transform);
     }
 
     std::vector<cv::KeyPoint> keypoints = slam->GetTrackedKeyPointsUn();
@@ -379,6 +318,6 @@ void OrbSlam3::onFrame()
         cv::Scalar(0, 255, 0)
     );
 
-    ImgFrameSPtr keypoint_frame = std::make_shared<CVImgFrame>(keypoint_mat, rgbd.use ? ImgFrame::Format::RGB8 : ImgFrame::Format::BGR8);
-    keypoint_frame_distributor.distribute(keypoint_frame);
+    ImgFrameSPtr keypoint_frame = std::make_shared<CVImgFrame>(keypoint_mat, rgbd_mode ? ImgFrame::Format::RGB8 : ImgFrame::Format::BGR8);
+    keypoint_frame_distributor.distribute(&keypoint_frame);
 }

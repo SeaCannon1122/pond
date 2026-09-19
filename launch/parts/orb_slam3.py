@@ -13,7 +13,7 @@ def orb_slam3(pm: Manager):
             "frame_id" : "camera",
             "parent_frame_id" : "base_link"
         },
-        topic_mappings={
+        channel_mappings={
             "stereo_left/image" : "camera_back/stereo_left/image",
             "stereo_right/image" : "camera_back/stereo_right/image",
             "color/image" : "camera_back/color/image",

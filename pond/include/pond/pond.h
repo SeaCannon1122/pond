@@ -147,7 +147,7 @@ typedef struct pond_api pond_api;
 
 typedef struct pond_dds_slot_info
 {
-    uint8_t* topic;
+    uint8_t* channel;
     uint8_t* type;
 } pond_dds_slot_info;
 

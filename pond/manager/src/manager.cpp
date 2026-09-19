@@ -1,4 +1,5 @@
-#include <pond/manager/manager.hpp>
+#include <algorithm>
+#include <pond_manager/manager.hpp>
 #include <dlfcn.h>
 #include <sstream>
 #include <filesystem>
@@ -165,8 +166,8 @@ std::string PondManager::load_module(
     const std::string& module_name,
     const std::string& thread_name,
     const std::unordered_map<std::string, pond_parameter*>& parameters,
-    const std::unordered_map<std::string, std::string>& topic_mappings,
-    const std::string& topic_namespace,
+    const std::unordered_map<std::string, std::string>& channel_mappings,
+    const std::string& channel_namespace,
     const std::vector<void*>& args
 )
 {
@@ -184,14 +185,14 @@ std::string PondManager::load_module(
     module->name = name;
     module->alive.store(true);
     module->should_shutdown.store(false);
-    module->topic_mappings = topic_mappings;
+    module->channel_mappings = channel_mappings;
     module->parameters = parameters;
     module->thread_name = thread_name;
     module->args = args;
 
-    if (topic_namespace != "")
-        module->topic_namespace = (topic_namespace[0] != '/' ? "/" : "") + topic_namespace + (topic_namespace[topic_namespace.size()-1] != '/' ? "/" : "");
-    else module->topic_namespace = "/";
+    if (channel_namespace != "")
+        module->channel_namespace = (channel_namespace[0] != '/' ? "/" : "") + channel_namespace + (channel_namespace[channel_namespace.size()-1] != '/' ? "/" : "");
+    else module->channel_namespace = "/";
 
     module->context.module = module.get();
     module->context.manager = this;
@@ -228,8 +229,11 @@ std::string PondManager::load_module(
         );
 
         thread->id = threads.insert(thread);
+        if (auto ft_it = set_thread_frame_times.find(thread_name); ft_it != set_thread_frame_times.end()) thread->frame_time.store(ft_it->second);
+        else thread->frame_time.store(0);
     }
 
+    thread->last_time = 0;
     thread->load_request.module = std::move(module);
     thread->load_request.is.store(true);
     while (thread->load_request.is.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -305,11 +309,36 @@ void PondManager::cleanup_module(pond_internal::Module* module)
     dlclose(module->lib_handle);
 }
 
+
+void PondManager::set_thread_frame_time(const std::string& thread_name, double frame_time)
+{
+    frame_time = std::clamp(frame_time, 0.0, MAX_THREA_FRAME_TIME);
+
+    set_thread_frame_times[thread_name] = frame_time;
+    for (auto& t : threads) if (t->name == thread_name) t->frame_time.store(frame_time);
+}
+
 void PondManager::thread_function(pond_internal::Thread* thread)
 {
     bool shutdown = false;
     while (!shutdown)
     {
+        double this_time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+        if (thread->last_time != 0.0)
+        {
+            double ft = thread->frame_time.load();
+            double remaining = ft - (this_time - thread->last_time);
+
+            if (remaining > 0.0005)
+            {
+                std::this_thread::sleep_for(std::chrono::duration<double>(remaining));
+                thread->last_time += ft; 
+            }
+            else thread->last_time = this_time;
+        }
+        else thread->last_time = this_time;
+
+
         if (thread->load_request.is.load())
         {
             log("[" + thread->name + "] Starting module '" + thread->load_request.module->name + "' ...");

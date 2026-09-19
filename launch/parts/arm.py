@@ -2,13 +2,8 @@ from pond import Manager
 import math
 
 def arm(pm: Manager, real: bool):
-    pm.load_module(
-        name="arm_controller_frame_timer",
-        bundle_name="utility",
-        module_name="frame_timer",
-        thread_name="arm_thread",
-        parameters={"min_time" : 0.1},
-    )
+
+    pm.set_thread_frame_time("arm_thread", 0.1)
 
     pm.load_module(
         name="arm_controller",
@@ -17,12 +12,19 @@ def arm(pm: Manager, real: bool):
         thread_name="arm_thread",
         parameters={
             "arm_joint_names": ["arm_segment_0_joint", "arm_segment_1_joint", "arm_segment_2_joint"],
-            "gripper_joint_name": "gripper_joint",
             "target_link_name": "arm_end_effector"
         },
-        topic_mappings={
-            "motor_cmd" : "arm/motor_cmd",
-            "get_motor_feedback" : "arm/get_motor_feedback"
+    )
+
+    pm.load_module(
+        name="gripper_controller",
+        bundle_name="controllers",
+        module_name="angle_gripper_controller",
+        thread_name="arm_thread",
+        parameters={
+            "joint_name": "gripper_joint",
+            "radius": 0.045,
+            "offset": 0.005
         },
     )
 
@@ -69,7 +71,7 @@ def arm(pm: Manager, real: bool):
                 #     "offset": 1.75
                 # }
             },
-            topic_mappings={
+            channel_mappings={
                 "motor_cmd" : "arm/motor_cmd",
                 "get_motor_feedback" : "arm/get_motor_feedback"
             },
@@ -77,13 +79,20 @@ def arm(pm: Manager, real: bool):
         pass
     else:
         pm.load_module(
-            name="dummy_servos",
+            name="dummy_wheels",
             bundle_name="utility",
             module_name="dummy_motor",
             thread_name="arm_thread",
-            parameters={"mode" : "position"},
-            topic_mappings={
-                "motor_cmd" : "arm/motor_cmd",
-                "get_motor_feedback" : "arm/get_motor_feedback"
+            parameters={
+                "mode" : "position",
+                "motor_names": ["arm_motor0", "arm_motor1", "arm_motor2", "gripper_motor"]
             },
         )
+
+    pm.load_module(
+        name="arm_controller_manager",
+        bundle_name="utility",
+        module_name="motor_controller_manager",
+        thread_name="arm_thread",
+        parameters={"motor_names": ["arm_motor0", "arm_motor1", "arm_motor2", "gripper_motor"]},
+    )

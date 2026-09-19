@@ -1,8 +1,7 @@
-#include "pond/pond.h"
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include "sl_lidar.h"
-#include <pond/data_types/laser_scan_types.hpp>
+#include <pond_data_types/laser_scan_types.hpp>
 
 enum {
     LIDAR_A_SERIES_MINUM_MAJOR_ID   = 0,
@@ -21,7 +20,7 @@ public:
     virtual void onFrame() override;
 private:
 
-    pond::Distributor<LaserScanSPtr> distributor;
+    pond::Distributor distributor;
 
     void distribute_scan(
         sl_lidar_response_measurement_node_hq_t *nodes,
@@ -69,7 +68,7 @@ private:
             scan->intensities[apply_index] = (float)(nodes[apply_index].quality >> 2);
         }
 
-        distributor.distribute(scan);
+        distributor.distribute(&scan);
     }
 
     bool checkRPLIDARHealth(sl::ILidarDriver* drv)

@@ -1,6 +1,6 @@
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
-#include <pond/data_types/video_types.hpp>
+#include <pond_data_types/video_types.hpp>
 
 #include <librealsense2/rs.hpp>
 
@@ -8,9 +8,8 @@ class RealSenseImgFrame : public ImgFrame
 {
 public:
 
-    explicit RealSenseImgFrame(rs2::video_frame& frame_, ImgFrame::Format format_, const std::string& frame_id) : frame(frame_)
+    explicit RealSenseImgFrame(const rs2::video_frame& frame_, ImgFrame::Format format_, const std::string& frame_id) : frame(frame_)
     {
-
         data = (void*)frame.get_data();
         width = frame.get_width();
         height = frame.get_height();
@@ -35,17 +34,17 @@ public:
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
+
+    bool enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name);
+
     rs2::pipeline pipe;
     rs2::config cfg;
 
     bool mode_color;
-    pond::Distributor<ImgFrameSPtr, CameraInfo> color_distributor;
+    pond::Distributor distributor;
     bool mode_color_depth;
     bool align_depth;
-    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_depth_distributor;
-    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_depth_aligned_distributor;
     bool mode_color_stereo;
-    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> color_stereo_distributor;
 
     CameraInfo color_info, depth_info, aligned_depth_info, stereo_left_info, stereo_right_info;
     
@@ -97,51 +96,17 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
             break;
         }
 
-        if (!connected)
-        {
-            POND_LOG("No device with serial number '%s' connected", serial_number->c_str());
-            return POND_ERROR;
-        }
+        if (!connected) POND_LOG_RETURN_ERROR("No device with serial number '%s' connected", serial_number->c_str());
     }
 
-    cfg.enable_stream(
-        RS2_STREAM_COLOR, 
-        color_dims[0], 
-        color_dims[1], 
-        RS2_FORMAT_RGB8,
-        fps
-    );
+    cfg.enable_stream(RS2_STREAM_COLOR, color_dims[0], color_dims[1], RS2_FORMAT_RGB8, fps);
 
-    if (mode_color_depth)
-    {
-        cfg.enable_stream(
-            RS2_STREAM_DEPTH,
-            depth_dims[0],
-            depth_dims[1],
-            RS2_FORMAT_Z16,
-            fps
-        );
-    }
+    if (mode_color_depth) cfg.enable_stream(RS2_STREAM_DEPTH, depth_dims[0], depth_dims[1], RS2_FORMAT_Z16, fps);
 
     if (mode_color_stereo)
     {
-        cfg.enable_stream(
-            RS2_STREAM_INFRARED,
-            1,
-            stereo_dims[0],
-            stereo_dims[1],
-            RS2_FORMAT_Y8,
-            fps
-        );
-
-        cfg.enable_stream(
-            RS2_STREAM_INFRARED,
-            2,
-            stereo_dims[0],
-            stereo_dims[1],
-            RS2_FORMAT_Y8,
-            fps
-        );
+        cfg.enable_stream(RS2_STREAM_INFRARED, 1, stereo_dims[0], stereo_dims[1], RS2_FORMAT_Y8, fps);
+        cfg.enable_stream(RS2_STREAM_INFRARED, 2, stereo_dims[0], stereo_dims[1], RS2_FORMAT_Y8, fps);
     }
         
     rs2::pipeline_profile profile = pipe.start(cfg);
@@ -150,24 +115,24 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
         if (sensor.supports(RS2_OPTION_EMITTER_ENABLED))
             sensor.set_option(RS2_OPTION_EMITTER_ENABLED, mode_color_depth ? 1 : 0);
 
-    if (mode_color) color_distributor = createDistributor<ImgFrameSPtr, CameraInfo>({"color/image", "color/info", });
+    if (mode_color) distributor = createDistributor<ImgFrameSPtr, CameraInfo>({"color/image", "color/info", });
     if (mode_color_depth)
     {
-        if (align_depth) color_depth_aligned_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+        if (align_depth) distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
             {
                 "color/image", "color/info", 
                 "depth/image", "depth/info", 
                 "depth_aligned/image", "depth_aligned/info", 
             }
         );
-        else color_depth_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+        else distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
             {
                 "color/image", "color/info", 
                 "depth/image", "depth/info", 
             }
         );
     }
-    if (mode_color_stereo) color_stereo_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+    if (mode_color_stereo) distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
             "color/image", "color/info", 
             "stereo_left/image", "stereo_left/info", 
@@ -181,12 +146,10 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
 void RealsenseCamera::onShutdown()
 {
     pipe.stop();
-    if (mode_color) color_distributor.destroy();
-    if (mode_color_depth) { if (align_depth) color_depth_aligned_distributor.destroy(); else  color_depth_distributor.destroy(); }
-    if (mode_color_stereo) color_stereo_distributor.destroy();
+    distributor.destroy();
 }
 
-void set_camera_info(CameraInfo& info, rs2::frame& frame)
+void set_camera_info(CameraInfo& info, const rs2::frame& frame)
 {
     rs2_intrinsics intrinsics = frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
     info.width = intrinsics.width;
@@ -198,13 +161,6 @@ void set_camera_info(CameraInfo& info, rs2::frame& frame)
     info.k(1, 1) = intrinsics.fy;
     info.k(1, 2) = intrinsics.ppy;
     info.k(2, 2) = 1.0;
-
-    info.p.setZero();
-    info.p(0, 0) = intrinsics.fx;
-    info.p(0, 2) = intrinsics.ppx;
-    info.p(1, 1) = intrinsics.fy;
-    info.p(1, 2) = intrinsics.ppy;
-    info.p(2, 2) = 1.0;
 
     if (intrinsics.model == RS2_DISTORTION_KANNALA_BRANDT4)
     {
@@ -220,65 +176,38 @@ void set_camera_info(CameraInfo& info, rs2::frame& frame)
     for (int i = 0; i < info.d.size(); i++) info.d[i] = intrinsics.coeffs[i];
 }
 
+bool RealsenseCamera::enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name)
+{
+    if (!frame)
+    {
+        POND_LOG("%s frame is empty", frame_name);
+        return false;
+    }
+
+    ImgFrameSPtr msg = std::make_shared<RealSenseImgFrame>(frame, info.format, info.stamp.frame_id);
+
+    if (info.stamp.time == 0) set_camera_info(info, frame);
+    info.stamp.time = msg->stamp.time;
+    info.stamp.hw_time = msg->stamp.hw_time;
+
+    distributor.enqueue(&msg, &info);
+
+    return true;
+}
+
 void RealsenseCamera::onFrame()
 {
+    distributor.clear_queue();
+
     rs2::frameset frames = pipe.wait_for_frames();
-    
-    if (auto color_frame = frames.get_color_frame())
-    {
-        ImgFrameSPtr color_msg = std::make_shared<RealSenseImgFrame>(color_frame, ImgFrame::Format::RGB8, color_info.stamp.frame_id);
 
-        if (color_info.stamp.time == 0) set_camera_info(color_info, color_frame);
-        color_info.stamp = color_msg->stamp;
+    if (!enqueue_frame(frames.get_color_frame(), color_info, "color")) return;
 
-        if (mode_color) color_distributor.distribute(color_msg, color_info);
+    if (mode_color_depth) if (!enqueue_frame(frames.get_depth_frame(), depth_info, "depth")) return;
+    if (mode_color_depth && align_depth) if (!enqueue_frame(align_depth_to_color.process(frames).get_depth_frame(), aligned_depth_info, "aligned depth")) return;
 
-        if (mode_color_depth)
-        {
-            if (auto depth_frame = frames.get_depth_frame())
-            {
-                ImgFrameSPtr depth_msg = std::make_shared<RealSenseImgFrame>(depth_frame, ImgFrame::Format::Depth16, depth_info.stamp.frame_id);
-                if (depth_info.stamp.time == 0) set_camera_info(depth_info, depth_frame);
-                depth_info.stamp = depth_msg->stamp;
+    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(1), stereo_left_info, "stereo left")) return;
+    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(2), stereo_right_info, "stereo right")) return;
 
-                if (align_depth)
-                {
-                    if (auto aligned_depth_frame = align_depth_to_color.process(frames).get_depth_frame())
-                    {
-                        ImgFrameSPtr aligned_depth_msg = std::make_shared<RealSenseImgFrame>(aligned_depth_frame, ImgFrame::Format::Depth16, aligned_depth_info.stamp.frame_id);
-                        if (aligned_depth_info.stamp.time == 0) set_camera_info(aligned_depth_info, aligned_depth_frame);
-                        aligned_depth_info.stamp = aligned_depth_msg->stamp;
-
-                        color_depth_aligned_distributor.distribute(color_msg, color_info, depth_msg, depth_info, aligned_depth_msg, aligned_depth_info);
-                    }
-                    else POND_LOG("aligned depth frame is empty");  
-                }
-                else color_depth_distributor.distribute(color_msg, color_info, depth_msg, depth_info);
-
-            }
-            else POND_LOG("depth frame is empty");            
-        }
-
-        if (mode_color_depth)
-        {
-            if (auto left_frame = frames.get_infrared_frame(1))
-            {
-                if (auto right_frame = frames.get_infrared_frame(2))
-                {
-                    ImgFrameSPtr left_msg = std::make_shared<RealSenseImgFrame>(left_frame, ImgFrame::Format::Mono8, stereo_left_info.stamp.frame_id);
-                    ImgFrameSPtr right_msg = std::make_shared<RealSenseImgFrame>(right_frame, ImgFrame::Format::Mono8, stereo_right_info.stamp.frame_id);
-
-                    if (stereo_left_info.stamp.time == 0) set_camera_info(stereo_left_info, left_frame);
-                    if (stereo_right_info.stamp.time == 0) set_camera_info(stereo_right_info, right_frame);
-                    stereo_left_info.stamp = left_msg->stamp;
-                    stereo_right_info.stamp = right_msg->stamp;
-
-                    color_stereo_distributor.distribute(color_msg, color_info, left_msg, stereo_left_info, right_msg, stereo_right_info);
-                }
-                else POND_LOG("right stereo frame is empty");
-            }
-            else POND_LOG("left stereo frame is empty");
-        }
-    }
-    else POND_LOG("color frame is empty");
+    distributor.distribute_enqueued();
 }

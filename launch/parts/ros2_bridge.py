@@ -2,13 +2,7 @@ from pond import Manager
 
 def ros2_bridge(pm: Manager):
 
-    pm.load_module(
-        name="ros2_bridge_frame_timer",
-        bundle_name="utility",
-        module_name="frame_timer",
-        thread_name="ros2_bridge_thread",
-        parameters={"min_time" : 0.010},
-    )
+    pm.set_thread_frame_time("ros2_bridge_thread", 0.010)
 
     pm.load_module(
         name="ros2_bridge",
@@ -17,14 +11,13 @@ def ros2_bridge(pm: Manager):
         thread_name="ros2_bridge_thread",
         parameters={
             "node_name" : "pond_bridge",
-            "topic_count" : 9,
 
             ####################
-            "topic0" : {
+            "bridge0" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "robot_description",
+                    "channel" : "robot_description",
                     "type" : "std::string",
                 },
 
@@ -37,11 +30,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic1" : {
+            "bridge1" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "tf",
+                    "channel" : "tf",
                     "type" : "std::vector<FrameTransform>",
                 },
 
@@ -52,11 +45,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic2" : {
+            "bridge2" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "tf_static",
+                    "channel" : "tf_static",
                     "type" : "std::vector<FrameTransform>",
                 },
 
@@ -69,11 +62,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic3" : {
+            "bridge3" : {
                 "direction" : "ROS_TO_POND",
 
                 "pond" : {
-                    "topic" : "cmd_vel",
+                    "channel" : "cmd_vel",
                     "type" : "TwistCommand",
                 },
 
@@ -86,11 +79,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic4" : {
+            "bridge4" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "scan",
+                    "channel" : "scan",
                     "type" : "LaserScanSPtr",
                 },
 
@@ -101,11 +94,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic5" : {
+            "bridge5" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "joint_states",
+                    "channel" : "set_robot_joints",
                     "type" : "std::vector<JointState>",
                 },
 
@@ -116,11 +109,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic6" : {
+            "bridge6" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_front/color/info_reduced_rate",
+                    "channel" : "camera_front/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -131,11 +124,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic7" : {
+            "bridge7" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_back/color/info_reduced_rate",
+                    "channel" : "camera_back/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -146,11 +139,11 @@ def ros2_bridge(pm: Manager):
             },
 
             ####################
-            "topic8" : {
+            "bridge8" : {
                 "direction" : "POND_TO_ROS",
 
                 "pond" : {
-                    "topic" : "camera_gripper/color/info_reduced_rate",
+                    "channel" : "camera_gripper/color/info_reduced_rate",
                     "type" : "CameraInfo",
                 },
 
@@ -159,41 +152,56 @@ def ros2_bridge(pm: Manager):
                     "type" : "sensor_msgs::msg::CameraInfo",
                 }  
             },
+
+            ####################
+            "bridge9" : {
+                "direction" : "ROS_TO_POND",
+
+                "pond" : {
+                    "channel" : "gripper_width",
+                    "type" : "double",
+                },
+
+                "ros" : {
+                    "topic" : "/quac/gripper_width",
+                    "type" : "std_msgs::msg::Float64",
+                }  
+            },
         },
     )
 
     pm.load_module(
         name="camera_front_info_rate_reducer",
         bundle_name="utility",
-        module_name="topic_filter",
+        module_name="channel_filter",
         thread_name="ros2_bridge_thread",
         parameters={
             "rate": 30,
-            "topics_in": ["camera_front/color/info"],
-            "topics_out" : ["camera_front/color/info_reduced_rate"],
+            "channels_in": ["camera_front/color/info"],
+            "channels_out" : ["camera_front/color/info_reduced_rate"],
         },
     )
 
     pm.load_module(
         name="camera_back_info_rate_reducer",
         bundle_name="utility",
-        module_name="topic_filter",
+        module_name="channel_filter",
         thread_name="ros2_bridge_thread",
         parameters={
             "rate": 30,
-            "topics_in": ["camera_back/color/info"],
-            "topics_out" : ["camera_back/color/info_reduced_rate"]
+            "channels_in": ["camera_back/color/info"],
+            "channels_out" : ["camera_back/color/info_reduced_rate"]
         },
     )
 
     pm.load_module(
         name="camera_gripper_info_rate_reducer",
         bundle_name="utility",
-        module_name="topic_filter",
+        module_name="channel_filter",
         thread_name="ros2_bridge_thread",
         parameters={
             "rate": 30,
-            "topics_in": ["camera_gripper/color/info"],
-            "topics_out" : ["camera_gripper/color/info_reduced_rate"]
+            "channels_in": ["camera_gripper/color/info"],
+            "channels_out" : ["camera_gripper/color/info_reduced_rate"]
         }
     )

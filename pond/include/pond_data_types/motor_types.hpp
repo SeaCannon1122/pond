@@ -22,3 +22,9 @@ struct MotorFeedback
     std::optional<double> current = std::nullopt;
     std::optional<double> temperature = std::nullopt;
 };
+
+struct MotorInterface
+{
+    MotorFeedback feedback;
+    MotorCommand command;
+};

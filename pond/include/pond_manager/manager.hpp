@@ -12,9 +12,10 @@
 #include <thread>
 #include <stdarg.h>
 #include <atomic>
-#include <unordered_set>
 
 #include "slot_array.hpp"
+
+#define MAX_THREA_FRAME_TIME 10.0
 
 typedef struct PondManager PondManager;
 
@@ -24,7 +25,7 @@ namespace pond_internal
 struct Slot
 {
     std::string type;
-    std::string topic;
+    std::string channel;
 };
 
 struct Receiver
@@ -72,8 +73,8 @@ struct Module
     std::string name;
     std::string thread_name;
     uint32_t discovery_id;
-    std::unordered_map<std::string, std::string> topic_mappings;
-    std::string topic_namespace;
+    std::unordered_map<std::string, std::string> channel_mappings;
+    std::string channel_namespace;
     pond_api native_api;
     ModuleContext context;
     std::vector<void*> args;
@@ -97,6 +98,8 @@ struct Thread
     std::string name;
     uint32_t id;
     std::thread thread;
+    std::atomic<double> frame_time;
+    double last_time;
 
     SlotArray<std::shared_ptr<pond_internal::Module>> modules;
 
@@ -130,14 +133,16 @@ public:
         const std::string& module_name,
         const std::string& thread_name,
         const std::unordered_map<std::string, pond_parameter*>& parameters = {},
-        const std::unordered_map<std::string, std::string>& topic_mappings = {},
-        const std::string& topic_namespace = "",
+        const std::unordered_map<std::string, std::string>& channel_mappings = {},
+        const std::string& channel_namespace = "",
         const std::vector<void*>& args = {}
     );
 
     std::string shutdown_module(const std::string& name);
 
     std::string print_modules();
+
+    void set_thread_frame_time(const std::string& thread_name, double frame_time);
 
     void api_shutdown(pond_internal::Module* module);
     void api_log(pond_internal::Module* module, uint8_t* format, va_list args);
@@ -179,6 +184,7 @@ private:
         SlotArray<std::shared_ptr<pond_internal::Distributor>> distributors;
     } dds_discovery;
     
+    std::unordered_map<std::string, double> set_thread_frame_times;
     SlotArray<std::shared_ptr<pond_internal::Thread>> threads;
 
     struct

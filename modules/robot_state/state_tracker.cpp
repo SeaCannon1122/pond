@@ -1,9 +1,8 @@
-#include <mutex>
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
-#include <pond/data_types/robot_state_types.hpp>
-#include <urdf_parser/urdf_parser.h>
-#include <urdf_model/model.h>
+#include <pond_data_types/robot_state_types.hpp>
+#include <urdf_model/model.hpp>
+#include <urdf_parser/urdf_parser.hpp>
 #include <deque>
 #include <fstream>
 #include <sstream>
@@ -59,17 +58,14 @@ public:
 private:
     void set_joint(Joint* joint, double angle, double time, double hw_time, std::vector<FrameTransform>* tfs);
 
-    pond::Receiver<GetFrameTransformRequest> tf_request_receiver;
-    pond::Receiver<GetJointInfoRequest> joint_request_receiver;
-
-    pond::Receiver<std::vector<JointState>> joint_states_receiver;
+    pond::Receiver tf_request_receiver, joint_request_receiver, joint_states_receiver;
     
     std::mutex tf_distributor_mutex;
-    pond::Distributor<std::vector<FrameTransform>> tf_distributor;
-    pond::Distributor<std::vector<FrameTransform>> tf_static_distributor;
+    pond::DistributorTyped<std::vector<FrameTransform>> tf_distributor;
+    pond::DistributorTyped<std::vector<FrameTransform>> tf_static_distributor;
 
     std::string description;
-    pond::Distributor<std::string> description_distributor;
+    pond::DistributorTyped<std::string> description_distributor;
 
     urdf::ModelInterfaceSharedPtr model;
 
@@ -234,7 +230,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     rec_set_link_level(root, 0, rec_set_link_level);
 
-    description_distributor = createDistributor<std::string>({"robot_description"});
+    description_distributor = createDistributorTyped<std::string>({"robot_description"});
 
     tf_request_receiver = createReceiver<GetFrameTransformRequest>({"get_robot_transform"}, [this](GetFrameTransformRequest* request) {
 
@@ -306,7 +302,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
             target_traverse = target_traverse->parent_link;
         }
 
-        request->fufilled = true;
+        request->fulfilled = true;
         request->tf = target_to_common.inverse() * source_to_common;
         
     });
@@ -318,16 +314,16 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         request->parent_link_name = joint->second->parent_link->name;
         request->child_link_name = joint->second->child_link->name;
         request->is_static = joint->second->is_static;
-        request->fufilled = true;
+        request->fulfilled = true;
         request->tf = joint->second->tf;
         request->min_angle = joint->second->min_angle;
         request->max_angle = joint->second->max_angle;
     });
 
-    tf_distributor = createDistributor<std::vector<FrameTransform>>({"tf"});
-    tf_static_distributor = createDistributor<std::vector<FrameTransform>>({"tf_static"});
+    tf_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf"});
+    tf_static_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf_static"});
 
-    joint_states_receiver = createReceiver<std::vector<JointState>>({"joint_states"}, [this](std::vector<JointState>* states){
+    joint_states_receiver = createReceiver<std::vector<JointState>>({"set_robot_joints"}, [this](std::vector<JointState>* states){
 
         std::vector<FrameTransform> tfs; tfs.reserve(states->size()+10);
 
@@ -341,7 +337,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         }
 
         std::lock_guard<std::mutex> lock(tf_distributor_mutex);
-        tf_distributor.distribute(tfs);
+        tf_distributor.distribute(&tfs);
     });
 
     return POND_SUCCESS;
@@ -390,6 +386,6 @@ void StateTracker::onFrame()
         }
     );
 
-    tf_static_distributor.distribute(static_tfs);
-    description_distributor.distribute(description);
+    tf_static_distributor.distribute(&static_tfs);
+    description_distributor.distribute(&description);
 }

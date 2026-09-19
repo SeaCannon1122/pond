@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/video_types.hpp>
+#include <pond_data_types/video_types.hpp>
 
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
@@ -13,7 +13,7 @@ public:
 private:
     GstElement* pipeline;
     GstElement* appsrc;
-    pond::Receiver<ImgFrameSPtr> receiver;
+    pond::Receiver receiver;
     int32_t width, height, port;
     std::string ip;
     ImgFrame::Format image_format;

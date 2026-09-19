@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/motor_types.hpp>
+#include <pond_data_types/motor_types.hpp>
 #include "DDSM115CMD.h"
 
 struct ddsm115_motor
@@ -27,8 +27,7 @@ private:
     int32_t act;
 
     double last_time = 0;
-    pond::Receiver<std::vector<MotorCommand>> command_receiver;
-    pond::Receiver<std::vector<MotorFeedback>> feedback_receiver;
+    pond::Receiver command_receiver, feedback_receiver;
 };
 
 POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115 Motors")

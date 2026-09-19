@@ -1,6 +1,6 @@
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
-#include <pond/data_types/cv_img_frame.hpp>
+#include <pond_data_types/cv_img_frame.hpp>
 
 class V4L2Camera : public pond::ModuleBase
 {
@@ -10,7 +10,7 @@ public:
     virtual void onFrame() override;
 private:
     cv::VideoCapture cap;
-    pond::Distributor<ImgFrameSPtr> distributor;
+    pond::Distributor distributor;
 };
 
 POND_MODULE_CPP_DECLARE(V4L2Camera, "v4l2_camera", "v4l2 camera image distributor")
@@ -57,6 +57,6 @@ void V4L2Camera::onFrame()
     }
 
     ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, ImgFrame::Format::BGR8);
-    distributor.distribute(color_msg);
+    distributor.distribute(&color_msg);
     
 }

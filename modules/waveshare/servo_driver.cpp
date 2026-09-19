@@ -1,8 +1,7 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/motor_types.hpp>
+#include <pond_data_types/motor_types.hpp>
 #include <cmath>
 
-#include "pond/pond.h"
 #include "sms_sts/SMS_STS.h"
 
 #define KT 9.0 // torque constant (kg*cm / A)
@@ -26,8 +25,7 @@ public:
     virtual void onShutdown() override;
 
 private:
-    pond::Receiver<std::vector<MotorCommand>> command_receiver;
-    pond::Receiver<std::vector<MotorFeedback>> feedback_receiver;
+    pond::Receiver command_receiver, feedback_receiver;
 
     std::vector<servo> servos;
     std::vector<u8> ids;

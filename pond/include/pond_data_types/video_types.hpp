@@ -1,10 +1,9 @@
 #pragma once
 
 #include "stamp.hpp"
-
+#include <eigen3/Eigen/src/Core/Matrix.h>
 #include <stdint.h>
 #include <vector>
-#include <array>
 #include <memory>
 
 class ImgFrame
@@ -72,7 +71,6 @@ struct CameraInfo
 
     Eigen::Matrix3d k;
     Sophus::SO3d r;
-    Eigen::Matrix<double, 3, 4> p;
 };
 
 using ImgFrameSPtr = std::shared_ptr<ImgFrame>;

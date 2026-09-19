@@ -1,13 +1,8 @@
 from pond import Manager
 
 def drive(pm: Manager, real: bool):
-    pm.load_module(
-        name="drive_controller_frame_timer",
-        bundle_name="utility",
-        module_name="frame_timer",
-        thread_name="drive_thread",
-        parameters={"min_time" : 0.1},
-    )
+    
+    pm.set_thread_frame_time("drive_thread", 0.1)
 
     pm.load_module(
         name="drive_controller",
@@ -21,12 +16,11 @@ def drive(pm: Manager, real: bool):
                 "wheel_rear_left_joint",
                 "wheel_rear_right_joint"
             ],
-            "wheel_radii" : [
-                0.05, 0.05, 0.05, 0.05
-            ],
+            "wheel_radii" : [0.05, 0.05, 0.05, 0.05],
+            "motor_names" : ["wheel0", "wheel1", "wheel2", "wheel3"],
             "slip_multiplier" : 1.6
         },
-        topic_mappings={
+        channel_mappings={
             "motor_cmd" : "wheels/motor_cmd",
             "get_motor_feedback" : "wheels/get_motor_feedback"
         },
@@ -55,7 +49,7 @@ def drive(pm: Manager, real: bool):
                 "motor3.id" : 4,
                 "motor3.invert" : True,
             },
-            topic_mappings={
+            channel_mappings={
                 "motor_cmd" : "wheels/motor_cmd",
                 "get_motor_feedback" : "wheels/get_motor_feedback"
             },
@@ -66,9 +60,16 @@ def drive(pm: Manager, real: bool):
             bundle_name="utility",
             module_name="dummy_motor",
             thread_name="drive_thread",
-            parameters={"mode" : "velocity"},
-            topic_mappings={
-                "motor_cmd" : "wheels/motor_cmd",
-                "get_motor_feedback" : "wheels/get_motor_feedback"
+            parameters={
+                "mode" : "velocity",
+                "motor_names": ["wheel0", "wheel1", "wheel2", "wheel3"]
             },
         )
+
+    pm.load_module(
+        name="drive_controller_manager",
+        bundle_name="utility",
+        module_name="motor_controller_manager",
+        thread_name="drive_thread",
+        parameters={"motor_names": ["wheel0", "wheel1", "wheel2", "wheel3"]},
+    )

@@ -1,5 +1,6 @@
-#include <pond/manager/manager.hpp>
+#include <pond_manager/manager.hpp>
 #include <time.h>
+#include <unordered_set>
 
 void PondManager::api_shutdown(pond_internal::Module* module)
 {
@@ -81,28 +82,28 @@ bool PondManager::construct_slots(pond_internal::Module* module, std::vector<pon
     slots.resize(c_slot_count);
     for (uint32_t i = 0; i < c_slot_count; i++)
     {
-        slots[i].type = std::string((char*)c_slots[i].type);
-        slots[i].topic = std::string((char*)c_slots[i].topic);
+        slots[i].type = (c_slots[i].type != NULL ? std::string((char*)c_slots[i].type) : "");
+        slots[i].channel = std::string((char*)c_slots[i].channel);
 
-        if (slots[i].topic == "")
+        if (slots[i].channel == "")
         {
-            log("In module " + module->name + ": cannot communicate on topic without name");
+            log("In module " + module->name + ": cannot communicate on channel without name");
             return false;
         }
 
-        auto it = module->topic_mappings.find(slots[i].topic);
-        if (it != module->topic_mappings.end())
+        auto it = module->channel_mappings.find(slots[i].channel);
+        if (it != module->channel_mappings.end())
         {
             if (it->second == "")
             {
-                log("In module " + module->name + ": cannot map topic '"+ slots[i].topic +"' to topic without name");
+                log("In module " + module->name + ": cannot map channel '"+ slots[i].channel +"' to channel without name");
                 return false;
             }
 
-            slots[i].topic = it->second;
+            slots[i].channel = it->second;
         }
 
-        if (slots[i].topic[0] != '/') slots[i].topic = module->topic_namespace + slots[i].topic;
+        if (slots[i].channel[0] != '/') slots[i].channel = module->channel_namespace + slots[i].channel;
     }
 
     return true;
@@ -120,11 +121,11 @@ bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributo
         {
             if (j == d->slots.size()) return false;
 
-            if (d->slots[j].topic == r->slots[i].topic)
+            if (d->slots[j].channel == r->slots[i].channel)
             {
                 if (d->slots[j].type != "" && r->slots[i].type != "" && d->slots[j].type != r->slots[i].type)
                 {
-                    log("Mismatch of types on topic '" + d->slots[j].topic + "': '" + d->module_name + "' (" + d->slots[j].type + ") -> '" + r->slots[i].topic + "': '" + r->module_name + "' (" + r->slots[i].type + ")");
+                    log("Mismatch of types on channel '" + d->slots[j].channel + "': '" + d->module_name + "' (" + d->slots[j].type + ") -> '" + r->slots[i].channel + "': '" + r->module_name + "' (" + r->slots[i].type + ")");
                     return false;
                 }
                 
@@ -152,27 +153,27 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
     if (!construct_slots(module, d->slots, slots, slot_count)) return -1;
     d->module_name = module->name;
 
-    std::unordered_set<std::string> all_topics;
+    std::unordered_set<std::string> all_channels;
     for (auto& s : d->slots)
     {
-        if (all_topics.find(s.topic) != all_topics.end())
+        if (all_channels.find(s.channel) != all_channels.end())
         {
-            log("In module " + module->name + ": can't publish on the same topic (" + s.topic + ") multiple times in parallel");
+            log("In module " + module->name + ": can't publish on the same channel (" + s.channel + ") multiple times in parallel");
             return -1;
         }
-        all_topics.insert(s.topic);
+        all_channels.insert(s.channel);
     }
     
     if (connect_log)
     {
-        std::string topic_array_string;
-        topic_array_string.reserve(1000);
+        std::string channel_array_string;
+        channel_array_string.reserve(1000);
         for (auto& s: d->slots)
         {
-            topic_array_string.append(", ");
-            topic_array_string.append(s.topic);
+            channel_array_string.append(", ");
+            channel_array_string.append(s.channel);
         }
-        module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing on topics { %s }", &(topic_array_string.c_str()[2]));
+        module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing on channels { %s }", &(channel_array_string.c_str()[2]));
     }
 
     {
@@ -180,14 +181,14 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
         for (auto& r : dds_discovery.receivers)
             if (try_connect_receiver(d, r, false)) if (connect_log)
             {
-                std::string topic_array_string;
-                topic_array_string.reserve(1000);
+                std::string channel_array_string;
+                channel_array_string.reserve(1000);
                 for (auto& s: r->slots)
                 {
-                    topic_array_string.append(", ");
-                    topic_array_string.append(s.topic);
+                    channel_array_string.append(", ");
+                    channel_array_string.append(s.channel);
                 }
-                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to receiver on module '%s' on topics { %s }", r->module_name.c_str(), &(topic_array_string.c_str()[2]));
+                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to receiver on module '%s' on channels { %s }", r->module_name.c_str(), &(channel_array_string.c_str()[2]));
             }
     }
 
@@ -244,14 +245,14 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
         
         if (distribute_log)
         {
-            std::string topic_array_string;
-            topic_array_string.reserve(1000);
+            std::string channel_array_string;
+            channel_array_string.reserve(1000);
             for (auto& s: connection.receiver->slots)
             {
-                topic_array_string.append(", ");
-                topic_array_string.append(s.topic);
+                channel_array_string.append(", ");
+                channel_array_string.append(s.channel);
             }
-            module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing to module '%s' on topics { %s }", connection.receiver->module_name.c_str(), &(topic_array_string.c_str()[2]));
+            module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing to module '%s' on channels { %s }", connection.receiver->module_name.c_str(), &(channel_array_string.c_str()[2]));
         }
 
         connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array.data());
@@ -270,14 +271,14 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
 
     if (connect_log)
     {
-        std::string topic_array_string;
-        topic_array_string.reserve(1000);
+        std::string channel_array_string;
+        channel_array_string.reserve(1000);
         for (auto& s: r->slots)
         {
-            topic_array_string.append(", ");
-            topic_array_string.append(s.topic);
+            channel_array_string.append(", ");
+            channel_array_string.append(s.channel);
         }
-        module->native_api.log(module->native_api.ctx, (uint8_t*)"Receiving on topics { %s }", &(topic_array_string.c_str()[2]));
+        module->native_api.log(module->native_api.ctx, (uint8_t*)"Receiving on channels { %s }", &(channel_array_string.c_str()[2]));
     }
 
     {
@@ -285,14 +286,14 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
         for (auto& d : dds_discovery.distributors)
             if (try_connect_receiver(d, r, true)) if (connect_log)
             {
-                std::string topic_array_string;
-                topic_array_string.reserve(1000);
+                std::string channel_array_string;
+                channel_array_string.reserve(1000);
                 for (auto& s: r->slots)
                 {
-                    topic_array_string.append(", ");
-                    topic_array_string.append(s.topic);
+                    channel_array_string.append(", ");
+                    channel_array_string.append(s.channel);
                 }
-                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to distributor on module '%s' on topics { %s }", d->module_name.c_str(), &(topic_array_string.c_str()[2]));
+                module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to distributor on module '%s' on channels { %s }", d->module_name.c_str(), &(channel_array_string.c_str()[2]));
             }
     }
     {

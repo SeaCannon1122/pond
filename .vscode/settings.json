@@ -1,6 +1,9 @@
 {
     "python.analysis.extraPaths": [
-        "${workspaceFolder}/build/python"
+        "${workspaceFolder}/build/debug/python"
     ],
-    "python.analysis.typeCheckingMode": "strict"
+    "python.analysis.typeCheckingMode": "strict",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/debug"
+    ]
 }

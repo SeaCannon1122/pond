@@ -1,5 +1,5 @@
 #include "pond/pond.h"
-#include <pond/manager/manager.hpp>
+#include <pond_manager/manager.hpp>
 
 #include <chrono>
 #include <signal.h>
@@ -24,14 +24,8 @@ int main()
 
     {
         PondManager pm(false, false);
-        
-        pm.load_module(
-            "robot_stater_frame_timer",
-            "utility",
-            "frame_timer",
-            "robot_state_thread",
-            {{"min_time", pond_malloc_parameter_double(1.0)}}
-        );
+
+        pm.set_thread_frame_time("robot_state_thread", 1.0);
 
         pm.load_module(
             "robot_state_tracker",
@@ -41,13 +35,7 @@ int main()
             {{"description_path", pond_malloc_parameter_string((uint8_t*)"/home/pilot/.cache/robot.urdf")}}
         );
 
-        pm.load_module(
-            "arm_controller_frame_timer",
-            "utility",
-            "frame_timer",
-            "arm_thread",
-            {{"min_time", pond_malloc_parameter_double(0.1)}}
-        );
+        pm.set_thread_frame_time("arm_thread", 0.1);
 
         uint8_t* joint_names[] = {(uint8_t*)"arm_segment_0_joint", (uint8_t*)"arm_segment_1_joint", (uint8_t*)"arm_segment_2_joint"};
 

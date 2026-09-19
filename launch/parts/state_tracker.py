@@ -12,13 +12,7 @@ def state_tracker(pm: Manager):
             check=True,
         )
 
-    pm.load_module(
-        name="robot_stater_frame_timer",
-        bundle_name="utility",
-        module_name="frame_timer",
-        thread_name="robot_state_thread",
-        parameters={"min_time" : 1.0},
-    )
+    pm.set_thread_frame_time("robot_state_thread", 1.0)
 
     pm.load_module(
         name="robot_state_tracker",

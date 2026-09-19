@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond/data_types/video_types.hpp>
+#include <pond_data_types/video_types.hpp>
 #include <thread>
 
 class DummyCamera : public pond::ModuleBase
@@ -9,21 +9,22 @@ public:
     virtual void onShutdown() override;
     virtual void onFrame() override;
 private:
-    pond::Distributor<ImgFrameSPtr> distributor;
+    pond::DistributorTyped<ImgFrameSPtr> distributor;
     uint32_t width, height, fps;
-    std::chrono::steady_clock::time_point last_time;
+    double last_time = 0;
+    std::string frame_id;
 };
 
 POND_MODULE_CPP_DECLARE(DummyCamera, "dummy_camera", "distributing dummy images for testing")
 
 pond_result DummyCamera::onStartup(const std::vector<void*>& args)
 {
-    distributor = createDistributor<ImgFrameSPtr>({"out"});
+    distributor = createDistributorTyped<ImgFrameSPtr>({"color/image"});
     width = parameter("width").asInt().get(640);
     height = parameter("height").asInt().get(480);
     fps = parameter("fps").asInt().get(30);
+    frame_id = parameter("frame_id").asString().get("camera_frame");
 
-    last_time = std::chrono::steady_clock::now();
     return POND_SUCCESS;
 }
 
@@ -34,15 +35,24 @@ void DummyCamera::onShutdown()
 
 void DummyCamera::onFrame()
 {
-    auto remaining = std::chrono::duration<double>(1.0 / (double)fps) - (std::chrono::steady_clock::now() - last_time);
-    if (remaining > std::chrono::duration<double>::zero()) std::this_thread::sleep_for(remaining);
-    last_time = std::chrono::steady_clock::now();
+    double this_time = pond::get_time();
+    if (last_time != 0.0)
+    {
+        double ft = 1.0/(double)fps;
+        double remaining = ft - (this_time - last_time);
 
+        if (remaining > 0.0005)
+        {
+            std::this_thread::sleep_for(std::chrono::duration<double>(remaining));
+            last_time += ft; 
+        }
+        else last_time = this_time;
+    }
+    else last_time = this_time;
+
+    size_t t = this_time * 1000.0;
+    
     ImgFrameSPtr color_msg = std::make_shared<ImgFrame>();
-
-    auto now = std::chrono::steady_clock::now();
-    auto t = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-
     color_msg->default_data_buffer.resize(3*width*height);
 
     for (std::size_t y = 0; y < height; y++)
@@ -62,6 +72,9 @@ void DummyCamera::onFrame()
     color_msg->height = height;
     color_msg->pixel_size = 3;
     color_msg->format = ImgFrame::Format::RGB8;  
+    color_msg->stamp.frame_id = frame_id;
+    color_msg->stamp.time = this_time;
+    color_msg->stamp.hw_time = this_time;
 
-    distributor.distribute(color_msg);
+    distributor.distribute(&color_msg);
 }

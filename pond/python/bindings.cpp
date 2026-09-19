@@ -3,7 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <pond/manager/manager.hpp>
+#include <pond_manager/manager.hpp>
 
 namespace py = pybind11;
 
@@ -213,56 +213,69 @@ PYBIND11_MODULE(_pond, m)
     m.doc() = "Python bindings for pond";
 
     py::class_<PondManager>(m, "Manager")
-        .def(
-            py::init<bool, bool>(),
-            py::arg("connect_log"),
-            py::arg("distribute_log")
-        )
 
-        .def(
-            "load_module",
+    .def(
+        py::init<bool, bool>(),
+        py::arg("connect_log"),
+        py::arg("distribute_log")
+    )
 
-            [](
-                PondManager& self,
-                const std::string& name,
-                const std::string& bundle_name,
-                const std::string& module_name,
-                const std::string& thread_name,
-                const py::dict& parameters,
-                const std::unordered_map<std::string, std::string>& topic_mappings,
-                const std::string& topic_namespace
-            )
-            {
-                std::unordered_map<std::string, pond_parameter*> native_parameters;
-                native_parameters.reserve(parameters.size());
+    .def(
+        "load_module",
 
-                make_parameters(parameters, native_parameters, "");
+        [](
+            PondManager& self,
+            const std::string& name,
+            const std::string& bundle_name,
+            const std::string& module_name,
+            const std::string& thread_name,
+            const py::dict& parameters,
+            const std::unordered_map<std::string, std::string>& channel_mappings,
+            const std::string& channel_namespace
+        ) -> std::string
+        {
+            std::unordered_map<std::string, pond_parameter*> native_parameters;
+            native_parameters.reserve(parameters.size());
 
-                return self.load_module(
-                    name,
-                    bundle_name,
-                    module_name,
-                    thread_name,
-                    native_parameters,
-                    topic_mappings,
-                    topic_namespace,
-                    {}
-                );
-            },
+            make_parameters(parameters, native_parameters, "");
 
-            py::arg("name"),
-            py::arg("bundle_name"),
-            py::arg("module_name"),
-            py::arg("thread_name") = "default_thread",
-            py::arg("parameters") = py::dict{},
-            py::arg("topic_mappings") = py::dict{},
-            py::arg("topic_namespace") = ""
-        )
+            return self.load_module(
+                name,
+                bundle_name,
+                module_name,
+                thread_name,
+                native_parameters,
+                channel_mappings,
+                channel_namespace,
+                {}
+            );
+        },
 
-        .def(
-            "shutdown_module",
-            &PondManager::shutdown_module,
-            py::arg("name")
-        );
+        py::arg("name"),
+        py::arg("bundle_name"),
+        py::arg("module_name"),
+        py::arg("thread_name") = "default_thread",
+        py::arg("parameters") = py::dict{},
+        py::arg("channel_mappings") = py::dict{},
+        py::arg("channel_namespace") = ""
+    )
+
+    .def(
+        "shutdown_module",
+        &PondManager::shutdown_module,
+        py::arg("name")
+    )
+    
+    .def(
+        "print_modules",
+        &PondManager::print_modules
+    )
+
+    .def(
+        "set_thread_frame_time",
+        &PondManager::set_thread_frame_time,
+        py::arg("thread_name"),
+        py::arg("frame_time")
+    );
     
 }

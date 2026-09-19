@@ -1,6 +1,5 @@
-#include "pond/pond.h"
 #include <pond/pond.hpp>
-#include <pond/data_types/motor_types.hpp>
+#include <pond_data_types/motor_types.hpp>
 
 class MotorTestCmd : public pond::ModuleBase
 {
@@ -13,17 +12,18 @@ POND_MODULE_CPP_DECLARE(MotorTestCmd, "motor_test_cmd", "module for sending test
 
 pond_result MotorTestCmd::onStartup(const std::vector<void*>& args)
 {
-    std::vector<MotorCommand> cmds(1);
-    cmds[0].vel = parameter("velocity").asDouble().getStrict({}, false);
-    cmds[0].pos = parameter("position").asDouble().getStrict({}, false);
-    cmds[0].torque = parameter("torque").asDouble().getStrict({}, false);
-    cmds[0].disable = parameter("disable").asBool().getStrict({}, false);
+    MotorCommand cmd;
+    cmd.vel = parameter("velocity").asDouble().getStrict({}, false);
+    cmd.pos = parameter("position").asDouble().getStrict({}, false);
+    cmd.torque = parameter("torque").asDouble().getStrict({}, false);
+    cmd.disable = parameter("disable").asBool().getStrict({}, false);
+    auto motor_name = parameter("motor_name").asString().get("motor");
 
-    pond::Distributor<std::vector<MotorCommand>> command_distributor = createDistributor<std::vector<MotorCommand>>({"motor_cmd"});
-    command_distributor.distribute(cmds);
-
-    command_distributor.destroy();
+    pond::Distributor distributor = createDistributorTyped<MotorCommand>({motor_name +"/command"});
+    distributor.distribute(&cmd);
+    distributor.destroy();
     shutdown();
+
     return POND_SUCCESS;
 }
 
@@ -38,10 +38,11 @@ POND_MODULE_CPP_DECLARE(MotorTestFeedback, "motor_test_feedback", "module for re
 
 pond_result MotorTestFeedback::onStartup(const std::vector<void*>& args)
 {
-    std::vector<MotorFeedback> feedback(1);
+    MotorFeedback feedback;
+    auto motor_name = parameter("motor_name").asString().get("motor");
 
-    pond::Distributor<std::vector<MotorFeedback>> feedback_distributor = createDistributor<std::vector<MotorFeedback>>({"get_motor_feedback"});
-    feedback_distributor.distribute(feedback);
+    pond::Distributor distributor = createDistributor<MotorFeedback>({motor_name + "/get_feedback"});
+    distributor.distribute(&feedback);
 
     POND_LOG(
         "Feedback:\n"
@@ -50,14 +51,14 @@ pond_result MotorTestFeedback::onStartup(const std::vector<void*>& args)
         "  torque: %s\n"
         "  current: %s\n"
         "  temperature: %s\n",
-        feedback[0].pos ? std::to_string(*feedback[0].pos).c_str() : "--",
-        feedback[0].vel ? std::to_string(*feedback[0].vel).c_str() : "--",
-        feedback[0].torque ? std::to_string(*feedback[0].torque).c_str() : "--",
-        feedback[0].current ? std::to_string(*feedback[0].current).c_str() : "--",
-        feedback[0].temperature ? std::to_string(*feedback[0].temperature).c_str() : "--"
+        feedback.pos ? std::to_string(*feedback.pos).c_str() : "--",
+        feedback.vel ? std::to_string(*feedback.vel).c_str() : "--",
+        feedback.torque ? std::to_string(*feedback.torque).c_str() : "--",
+        feedback.current ? std::to_string(*feedback.current).c_str() : "--",
+        feedback.temperature ? std::to_string(*feedback.temperature).c_str() : "--"
     );
 
-    feedback_distributor.destroy();
+    distributor.destroy();
     shutdown();
     return POND_SUCCESS;
 }

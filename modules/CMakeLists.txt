@@ -66,3 +66,4 @@ add_subdirectory(waveshare)
 add_subdirectory(controllers)
 
 add_subdirectory(ros2)
+add_subdirectory(detection)

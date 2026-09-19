@@ -1,7 +1,7 @@
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
-#include <pond/data_types/video_types.hpp>
-#include <pond/data_types/imu_types.hpp>
+#include <pond_data_types/video_types.hpp>
+#include <pond_data_types/imu_types.hpp>
 
 #include <depthai/depthai.hpp>
 
@@ -50,8 +50,8 @@ private:
     std::thread imu_thread;
     ImuInfo imu_info;
 
-    pond::Distributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> image_distributor;
-    pond::Distributor<ImuData, ImuInfo> imu_distributor;
+    pond::DistributorTyped<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo> image_distributor;
+    pond::DistributorTyped<ImuData, ImuInfo> imu_distributor;
     CameraInfo stereo_left_info, stereo_right_info, color_info;
     ImuData imu_data;
 };
@@ -90,7 +90,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
     imu_data.stamp.frame_id = parameter("imu.frame_id").asString().get("imu");
     imu_info.stamp.frame_id = imu_data.stamp.frame_id;
 
-    image_distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
+    image_distributor = createDistributorTyped<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
             "color/image", "color/info", 
             "stereo_left/image", "stereo_left/info", 
@@ -98,7 +98,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
         }
     );
 
-    imu_distributor = createDistributor<ImuData, ImuInfo>({"imu/data", "imu/info"});
+    imu_distributor = createDistributorTyped<ImuData, ImuInfo>({"imu/data", "imu/info"});
 
     if (auto mxid = parameter("MxId").asString().getStrict({}, false))
     {
@@ -189,7 +189,7 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
                 imu_data.ang_vel[0] = gyro.y;
                 imu_data.ang_vel[0] = -gyro.z;
                 
-                imu_distributor.distribute(imu_data, imu_info);
+                imu_distributor.distribute(&imu_data, &imu_info);
             }
         }
     });
@@ -280,7 +280,7 @@ void DepthaiCamera::onFrame()
             stereo_right_info.stamp.time = right_msg->stamp.time;
             stereo_right_info.stamp.hw_time = right_msg->stamp.hw_time;
 
-            image_distributor.distribute(color_msg, color_info, left_msg, stereo_left_info, right_msg, stereo_right_info);
+            image_distributor.distribute(&color_msg, &color_info, &left_msg, &stereo_left_info, &right_msg, &stereo_right_info);
         }
         else
         {

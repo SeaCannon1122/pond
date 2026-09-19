@@ -1,6 +1,6 @@
 #pragma once
-#include "pond.hpp"
-#include "data_types/robot_state_types.hpp"
+#include "module_base.hpp"
+#include <pond_data_types/robot_state_types.hpp>
 
 namespace pond
 {
@@ -19,9 +19,9 @@ namespace pond
         void tfSetJointStates(std::vector<JointState>& joint_states);
 
     private:
-        Distributor<GetFrameTransformRequest> tf_request_distributor;
-        Distributor<GetJointInfoRequest> joint_request_distributor;
-        Distributor<std::vector<JointState>> joint_state_distributor;
+        DistributorTyped<GetFrameTransformRequest> tf_request_distributor;
+        DistributorTyped<GetJointInfoRequest> joint_request_distributor;
+        DistributorTyped<std::vector<JointState>> joint_state_distributor;
         std::vector<JointState> joint_state;
     };
 }
@@ -34,9 +34,9 @@ namespace pond
 
     pond_result ModuleBaseTF::onStartup(const std::vector<void*>& args)
     {
-        tf_request_distributor = createDistributor<GetFrameTransformRequest>({"get_robot_transform"});
-        joint_request_distributor = createDistributor<GetJointInfoRequest>({"get_robot_joint_info"});
-        joint_state_distributor = createDistributor<std::vector<JointState>>({"joint_states"});
+        tf_request_distributor = createDistributorTyped<GetFrameTransformRequest>({"get_robot_transform"});
+        joint_request_distributor = createDistributorTyped<GetJointInfoRequest>({"get_robot_joint_info"});
+        joint_state_distributor = createDistributorTyped<std::vector<JointState>>({"set_robot_joints"});
         joint_state.resize(1);
         if (onStartupTF(args) != POND_SUCCESS)
         {
@@ -62,17 +62,17 @@ namespace pond
         request.target_frame = target_frame;
         request.time_point = time_point;
 
-        tf_request_distributor.distribute(request);
-        if (verbose && !request.fufilled) POND_LOG("Failed to get transform from '%s' to '%s' at timepoint %f", source_frame.c_str(), target_frame.c_str(), time_point);
-        return request.fufilled;
+        tf_request_distributor.distribute(&request);
+        if (verbose && !request.fulfilled) POND_LOG("Failed to get transform from '%s' to '%s' at timepoint %f", source_frame.c_str(), target_frame.c_str(), time_point);
+        return request.fulfilled;
     }
 
     bool ModuleBaseTF::tfGetJointInfo(const std::string& joint_name, GetJointInfoRequest& request, bool verbose)
     {
         request.joint_name = joint_name;
-        joint_request_distributor.distribute(request);
-        if (verbose && !request.fufilled) POND_LOG("Failed to get info about joint '%s'", joint_name.c_str());
-        return request.fufilled;
+        joint_request_distributor.distribute(&request);
+        if (verbose && !request.fulfilled) POND_LOG("Failed to get info about joint '%s'", joint_name.c_str());
+        return request.fulfilled;
     }
 
     void ModuleBaseTF::tfSetJointState(const std::string& joint_name, double angle, double time)
@@ -81,12 +81,12 @@ namespace pond
         joint_state[0].hw_time = time;
         joint_state[0].joint_name = joint_name;
         joint_state[0].angle = angle;
-        joint_state_distributor.distribute(joint_state);
+        joint_state_distributor.distribute(&joint_state);
     }
 
     void ModuleBaseTF::tfSetJointStates(std::vector<JointState>& joint_states)
     {
-        joint_state_distributor.distribute(joint_states);
+        joint_state_distributor.distribute(&joint_states);
     }
 }
 
