@@ -28,7 +28,7 @@
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <axis xyz="0 0 1" />
 
-        <limit lower="0" upper="0" velocity="0" effort="0"/>
+        <limit lower="-3.826" upper="0" velocity="0" effort="0"/>
     </joint>
 
     <link name="arm_segment_0">
@@ -52,7 +52,7 @@
         <origin xyz="-0.1 0 0" rpy="0 0 0"/>
         <axis xyz="0 0 1" />
 
-        <limit lower="0" upper="0" velocity="0" effort="0"/>
+        <limit lower="-0.785398163" upper="1.570796327" velocity="0" effort="0"/>
     </joint>
 
     <link name="arm_segment_1">
@@ -76,7 +76,7 @@
         <origin xyz="-0.02 0.05 0" rpy="0 0 0"/>
         <axis xyz="0 0 1" />
 
-        <limit lower="0" upper="0" velocity="0" effort="0"/>
+        <limit lower="0" upper="3.091592654" velocity="0" effort="0"/>
     </joint>
 
     <link name="arm_segment_2">

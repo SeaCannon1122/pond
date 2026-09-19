@@ -1,4 +1,5 @@
 #include "pond_data_types/transform_types.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
@@ -10,8 +11,7 @@ struct segment
     double min;
     double max;
 
-    double x;
-    double y;
+    Eigen::Vector2d vec;
 };
 
 class ArmController : public pond::ModuleBaseTF
@@ -24,7 +24,7 @@ private:
     struct
     {
         pond::Receiver receiver;
-        FrameTransform received;
+        Pose2D received;
         std::mutex mutex;
     } target;
 
@@ -46,11 +46,17 @@ private:
     std::vector<JointState> joint_states;
 
     segment segments[3];
+    Eigen::Vector2d min_body, max_body;
     std::string target_link;
     double timeout;
 };
 
 POND_MODULE_CPP_DECLARE(ArmController, "arm_controller", "Control the robotic arm")
+
+inline double safe_acos(double x) { return std::acos(std::clamp(x, -1.0, 1.0)); }
+
+inline double law_cosines(double l1, double l2, double b) { return safe_acos((l1*l1 + l2*l2 - b*b)/(2*l1*l2));}
+
 
 pond_result ArmController::onStartupTF(const std::vector<void*>& args)
 {
@@ -71,18 +77,22 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         if (!tfGetJointInfo(segments[i].joint_name, joint_requests[i])) return POND_ERROR;
 
         if (joint_requests[i].is_static) {POND_LOG("Joint '%s' is not dynamic", segments[i].joint_name.c_str()); return POND_ERROR;}
-        if (!joint_requests[i].max_angle.has_value() || !joint_requests[i].min_angle.has_value()) {POND_LOG("Joint '%s' does not have limits set", segments[i].joint_name.c_str()); return POND_ERROR;}
+        if (!joint_requests[i].max_angle || !joint_requests[i].min_angle) {POND_LOG("Joint '%s' does not have limits set", segments[i].joint_name.c_str()); return POND_ERROR;}
+
+        segments[i].min = *joint_requests[i].min_angle; segments[i].max = *joint_requests[i].max_angle;
     }
     for (uint32_t i = 0; i < 3; i++)
     {
         GetFrameTransformRequest tf_request;
         if (!tfGetTransform(i == 2 ? target_link : joint_requests[i+1].parent_link_name, joint_requests[i].child_link_name, 0, tf_request)) return POND_ERROR;
-        Sophus::SE3d total = (i == 2 ? tf_request.tf : tf_request.tf * joint_requests[i].tf);
-        segments[i].x = total.translation().x();
-        segments[i].y = total.translation().y();
+        Sophus::SE3d total = (i == 2 ? tf_request.tf : tf_request.tf * joint_requests[i+1].tf);
+        segments[i].vec = Eigen::Vector2d(total.translation().x(), total.translation().y());
     }
 
-    target.receiver = createReceiver<FrameTransform>({"arm_target"}, [this](FrameTransform* tf)
+    min_body = segments[0].vec + Eigen::Rotation2Dd(segments[1].min) * segments[1].vec;
+    max_body = segments[0].vec.normalized() * (segments[0].vec.norm() + segments[1].vec.norm());
+
+    target.receiver = createReceiver<Pose2D>({"arm_target"}, [this](Pose2D* tf)
         {
             if (tf->stamp.time + timeout < pond::get_time()) return;
 
@@ -106,43 +116,69 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         tfSetJointStates(joint_states);
 
         target.mutex.lock();
-        FrameTransform target_tf = target.received;
+        double time = target.received.stamp.time;
+        double target_angle = target.received.theta;
+        Eigen::Vector2d end_pos(target.received.x, target.received.y);
         target.mutex.unlock();
 
-        double target_x = msg->position.x; double target_y = msg->position.z;
+        if (time == 0) return;
 
-        double seg_0 = sqrt(segments[0].x * segments[0].x + segments[0].y * segments[0].y);
-        double seg_1 = sqrt(segments[1].x * segments[1].x + segments[1].y * segments[1].y);
-        double target = sqrt(target_x * target_x + target_y * target_y);
+        double angles[3];
+        
+        Eigen::Vector2d body_target = end_pos - Eigen::Rotation2Dd(target_angle) * segments[2].vec;
 
-        if (seg_0 + seg_1 < target)
+        if (body_target.norm() < min_body.norm())
         {
-        double factor = (seg_0 + seg_1) / target;
-        target_x *= factor;
-        target_y *= factor;
-        target *= factor;
+            angles[0] = 
+                atan2(end_pos.y(), end_pos.x()) + 
+                law_cosines(end_pos.norm(), min_body.norm(), segments[2].vec.norm()) -
+                atan2(min_body.y(), min_body.x()); 
+
+            angles[1] = segments[1].min;
+
+            angles[2] = 
+                law_cosines(segments[1].vec.norm(), min_body.norm(), segments[0].vec.norm()) +
+                law_cosines(min_body.norm(), segments[2].vec.norm(), end_pos.norm()) -
+                atan2(segments[2].vec.y(), segments[2].vec.x()) -
+                atan2(segments[1].vec.x(), segments[1].vec.y()) -
+                M_PI/2;
+            
+        }
+        else if (body_target.norm() > max_body.norm())
+        {
+            angles[0] = 
+                atan2(end_pos.y(), end_pos.x()) + 
+                law_cosines(end_pos.norm(), max_body.norm(), segments[2].vec.norm()) -
+                atan2(max_body.y(), max_body.x());
+            
+            angles[1] = atan2(segments[0].vec.y(), segments[0].vec.x()) - atan2(segments[1].vec.y(), segments[1].vec.x());
+
+            angles[2] =
+                law_cosines(max_body.norm(), segments[2].vec.norm(), end_pos.norm()) -
+                atan2(segments[2].vec.y(), segments[2].vec.x()) -
+                atan2(segments[1].vec.x(), segments[1].vec.y()) -
+                M_PI/2;          
+        }
+        else
+        {
+            angles[0] = 
+                atan2(body_target.y(), body_target.x()) + 
+                law_cosines(segments[0].vec.norm(), body_target.norm(), segments[1].vec.norm()) -
+                atan2(segments[0].vec.y(),  segments[0].vec.x());
+
+
+            angles[1] = 
+                law_cosines(segments[0].vec.norm(), segments[1].vec.norm(), body_target.norm()) -
+                atan2(segments[1].vec.y(), segments[1].vec.x()) -
+                atan2(segments[0].vec.x(), segments[0].vec.y()) -
+                M_PI/2;
+
+            angles[2] = - angles[0] - angles[1] + target_angle;
         }
 
-        double angle_0 = atan2(target_y, target_x) + safeAcos((seg_0 * seg_0 + target * target - seg_1 * seg_1) / (2.0 * seg_0 * target));
-        double angle_1 = safeAcos((seg_1 * seg_1 + seg_0 * seg_0 - target * target) / (2.0 * seg_0 * seg_1)) - M_PI;
-
-        double joint_angle_0 = angle_0 - atan2(segments[0].y,  segments[0].x);
-        double joint_angle_1 = angle_1 - atan2(segments[1].y,  segments[1].x) + atan2(segments[0].y,  segments[0].x);
-
-        joint_trajectory.joint_names.push_back(segments[0].joint);
-        joint_trajectory.joint_names.push_back(segments[1].joint);
-
-        point.positions.push_back(joint_angle_0);
-        point.positions.push_back(joint_angle_1);
-
-        if (segments.size() == 3)
-        {
-        joint_trajectory.joint_names.push_back(segments[2].joint);
-        point.positions.push_back(- joint_angle_0 - joint_angle_1 + msg->orientation.y);
-        }
-
-        joint_trajectory.points.push_back(point);
-        joint_trajectory_publisher->publish(joint_trajectory);
+        ifs[0]->command.pos = std::clamp(angles[0], segments[0].min, segments[0].max);
+        ifs[1]->command.pos = std::clamp(angles[1], segments[1].min, segments[1].max);
+        ifs[2]->command.pos = std::clamp(angles[2], segments[2].min, segments[2].max);
     });
 
     return POND_SUCCESS;

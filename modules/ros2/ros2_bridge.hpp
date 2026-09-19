@@ -1,9 +1,12 @@
 #pragma once
 
+#include "geometry_msgs/msg/pose2_d.hpp"
 #include "std_msgs/msg/float64.hpp"
+#include <Eigen/src/Geometry/Quaternion.h>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -51,19 +54,16 @@ static void ImuData__to__sensor_msgs_msg_Imu(const ImuData& pond, sensor_msgs::m
 static void FrameTransform__to__geometry_msgs_msg_Pose(const FrameTransform& pond, geometry_msgs::msg::Pose& ros)
 {
     Eigen::Vector3d t = pond.tf.translation();
-    Eigen::Matrix3d R = pond.tf.rotationMatrix();
+    Eigen::Quaterniond q = pond.tf.unit_quaternion();
     
     ros.position.x = t.x();
     ros.position.y = t.y();
     ros.position.z = t.z();
 
-    ros.orientation.x = std::atan2(R(2,1), R(2,2));
-    ros.orientation.y = std::atan2(
-        -R(2,0),
-        std::sqrt(R(2,1) * R(2,1) + R(2,2) * R(2,2))
-    );
-    ros.orientation.z = std::atan2(R(1,0), R(0,0));
-    ros.orientation.w = 1;
+    ros.orientation.x = q.x();
+    ros.orientation.y = q.y();
+    ros.orientation.z = q.z();
+    ros.orientation.w = q.w();
 }
 
 static void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransform& pond, geometry_msgs::msg::PoseStamped& ros)
@@ -135,6 +135,17 @@ static void tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform(std::vector<Fr
 {
     pond.resize(ros.transforms.size());
     for (int i = 0; i < ros.transforms.size(); i++) geometry_msgs_msg_TransformStamped__to__FrameTransform(pond[i], ros.transforms[i]);
+}
+
+static void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg::Pose2D& ros)
+{
+    pond.stamp.frame_id = "";
+    pond.stamp.time = pond::get_time();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.x = ros.x;
+    pond.y = ros.y;
+    pond.theta = ros.theta;
 }
 
 static void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros)

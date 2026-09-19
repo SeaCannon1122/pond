@@ -167,6 +167,21 @@ def ros2_bridge(pm: Manager):
                     "type" : "std_msgs::msg::Float64",
                 }  
             },
+
+            ####################
+            "bridge10" : {
+                "direction" : "ROS_TO_POND",
+
+                "pond" : {
+                    "channel" : "arm_target",
+                    "type" : "Pose2D",
+                },
+
+                "ros" : {
+                    "topic" : "/quac/ee_pose",
+                    "type" : "geometry_msgs::msg::Pose2D",
+                }  
+            },
         },
     )
 

@@ -1,3 +1,5 @@
+#include "geometry_msgs/msg/pose2_d.hpp"
+#include "pond_data_types/command_types.hpp"
 #define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include "ros2_bridge.hpp"
 
@@ -204,6 +206,13 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     ));
                     else if (ros_type == "geometry_msgs::msg::TwistStamped") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::TwistStamped>(
                         pond_channel, ros_topic, geometry_msgs_msg_TwistStamped__to__TwistCommand, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "Pose2D")
+                {
+                    if (ros_type == "geometry_msgs::msg::Pose2D") bridges.emplace_back(create_ros_to_pond<Pose2D, geometry_msgs::msg::Pose2D>(
+                        pond_channel, ros_topic, geometry_msgs_msg_Pose2D__to__Pose2D, qos
                     ));
                     else return false;
                 }
