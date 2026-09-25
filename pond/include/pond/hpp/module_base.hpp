@@ -7,13 +7,15 @@
 
 namespace pond
 {
-    class ModuleBase
+    class ModuleBase : public ParameterSpace
     {
     public:
-        virtual pond_result onStartup(const std::vector<void*>& args);
-        virtual void onShutdown();
-        virtual void onFrame();
-        void shutdown();
+        void init(pond_api *_api) {_pond_api = *_api; ParameterSpace::api = &_pond_api; ParameterSpace::prefix = "";}
+
+        virtual pond_result onStartup(const std::vector<void*>& args) {return POND_SUCCESS;}
+        virtual void onShutdown() {}
+        virtual void onFrame() {}
+        void shutdown() {_pond_api.shutdown(_pond_api.ctx);}
 
         Distributor createDistributor(const ChannelsInfo& info)
         {
@@ -94,8 +96,6 @@ namespace pond
             return Receiver(&_pond_api, info, *(std::shared_ptr<void>*)&cb, raw_receiver_callback_entrypoint);
         }
 
-        _UntypedParameterBase parameter(const std::string& name);
-
         pond_api _pond_api; 
     };
 }
@@ -104,39 +104,3 @@ namespace pond
 #define POND_LOG_RETURN(format, ...) {POND_LOG(format, ##__VA_ARGS__); return;}
 #define POND_LOG_RETURN_ERROR(format, ...) {POND_LOG(format, ##__VA_ARGS__); return POND_ERROR;}
 #define POND_LOG_RETURN_FALSE(format, ...) {POND_LOG(format, ##__VA_ARGS__); return false;}
-
-#ifdef POND_MODULE_CPP_MAKE_IMPLEMENTATION
-namespace pond
-{
-
-_UntypedParameterBase ModuleBase::parameter(const std::string& name)
-{
-    return _UntypedParameterBase((std::string*)&name, &_pond_api);
-}
-
-#define TYPED_PARAM_IMPL(_type, _param_type, _param_name, _c_type)\
-    _ParameterBase<_type, _c_type> _UntypedParameterBase::as##_param_name()\
-    {\
-        return _ParameterBase<_type, _c_type>(name, api, offsetof(pond_parameter, value._param_name), _param_type);\
-    }\
-    _ParameterArrayBase<_type, _c_type> _UntypedParameterBase::as##_param_name##Array()\
-    {\
-        return _ParameterArrayBase<_type, _c_type>(name, api, offsetof(pond_parameter, value._param_name##Array), _param_type##_ARRAY);\
-    }\
-
-    TYPED_PARAM_IMPL(int32_t, POND_PARAMETER_INT, Int, int32_t)
-    TYPED_PARAM_IMPL(double, POND_PARAMETER_DOUBLE, Double, double)
-    TYPED_PARAM_IMPL(bool, POND_PARAMETER_BOOL, Bool, bool)
-    TYPED_PARAM_IMPL(std::string, POND_PARAMETER_STRING, String, char*)
-
-pond_result ModuleBase::onStartup(const std::vector<void*>& args) {return POND_SUCCESS;}
-void ModuleBase::onShutdown() {}
-void ModuleBase::onFrame() {}
-
-void ModuleBase::shutdown()
-{
-    _pond_api.shutdown(_pond_api.ctx);
-}
-
-}
-#endif

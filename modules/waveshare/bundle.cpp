@@ -1,5 +1,3 @@
-#include "pond/pond.h"
-#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 
 EXTERN_POND_MODULE(DDSM115Driver);

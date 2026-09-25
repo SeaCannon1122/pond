@@ -23,12 +23,6 @@ static pond_parameter* make_array_parameter(const py::sequence& seq)
 {
     const py::ssize_t length = py::len(seq);
 
-    if (length == 0) {
-        throw std::invalid_argument(
-            "Empty parameter arrays are not supported"
-        );
-    }
-
     // Inspect the first element to determine the array type.
     py::handle first = seq[0];
 
@@ -190,10 +184,7 @@ void make_parameters(const py::dict& parameters, std::unordered_map<std::string,
     {
         std::string key = item.first.cast<std::string>();
 
-        std::string full_key =
-            prefix.empty()
-                ? key
-                : prefix + "." + key;
+        std::string full_key = prefix.empty() ? key : prefix + "." + key;
 
         if (py::isinstance<py::dict>(item.second)) {
             make_parameters(
@@ -201,10 +192,30 @@ void make_parameters(const py::dict& parameters, std::unordered_map<std::string,
                 native_parameters,
                 full_key
             );
-        } else {
-            pond_parameter* parameter = make_parameter(item.second);
-            native_parameters.emplace(std::move(full_key), parameter);
+            continue;
         }
+        else if (py::isinstance<py::list>(item.second) || py::isinstance<py::tuple>(item.second))
+        {
+            auto sequence = item.second.cast<py::sequence>();
+
+            if (py::len(sequence) == 0) continue;
+
+            if (py::isinstance<py::dict>(sequence[0]))
+            {
+                for (uint32_t i = 0; i < py::len(sequence); i++)
+                {
+                    make_parameters(
+                        sequence[i].cast<py::dict>(),
+                        native_parameters,
+                        full_key + "[" + std::to_string(i) + "]"
+                    );
+                }
+
+                continue;
+            }
+        }
+        
+        if (pond_parameter* parameter = make_parameter(item.second)) native_parameters.emplace(std::move(full_key), parameter);
     }
 }
 

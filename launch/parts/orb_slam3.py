@@ -1,4 +1,5 @@
 from pond import Manager
+import os
 
 def orb_slam3(pm: Manager):
     pm.load_module(
@@ -7,8 +8,8 @@ def orb_slam3(pm: Manager):
         module_name="slam",
         thread_name="slam_thread",
         parameters={
-            "camera_info_path" : "/home/pilot/pond/config/Realsense.yaml",
-            "vocabulary_path" : "/home/pilot/lib/ORB_SLAM3/Vocabulary/ORBvoc.txt",
+            "camera_info_path" : os.getenv("POND_CONFIG_PATH", "") + "Realsense.yaml",
+            "vocabulary_path" : os.getenv("POND_CONFIG_PATH", "") + "ORBvoc.txt",
             "mode" : "Stereo",
             "frame_id" : "camera",
             "parent_frame_id" : "base_link"

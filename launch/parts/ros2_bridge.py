@@ -11,177 +11,148 @@ def ros2_bridge(pm: Manager):
         thread_name="ros2_bridge_thread",
         parameters={
             "node_name" : "pond_bridge",
+            "bridges" : [
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-            ####################
-            "bridge0" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "robot_description",
-                    "type" : "std::string",
+                    "pond" : {
+                        "channel" : "robot_description",
+                        "type" : "std::string",
+                    },
+                    "ros" : {
+                        "topic" : "robot_description",
+                        "type" : "std_msgs::msg::String",
+                        "qos.depth" : 1,
+                        "qos.volatile" : False,
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "robot_description",
-                    "type" : "std_msgs::msg::String",
-                    "qos.depth" : 1,
-                    "qos.volatile" : False,
-                }  
-            },
-
-            ####################
-            "bridge1" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "tf",
-                    "type" : "std::vector<FrameTransform>",
+                    "pond" : {
+                        "channel" : "tf",
+                        "type" : "std::vector<FrameTransform>",
+                    },
+                    "ros" : {
+                        "topic" : "tf",
+                        "type" : "tf2_msgs::msg::TFMessage",
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "tf",
-                    "type" : "tf2_msgs::msg::TFMessage",
-                }  
-            },
-
-            ####################
-            "bridge2" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "tf_static",
-                    "type" : "std::vector<FrameTransform>",
+                    "pond" : {
+                        "channel" : "tf_static",
+                        "type" : "std::vector<FrameTransform>",
+                    },
+                    "ros" : {
+                        "topic" : "tf_static",
+                        "type" : "tf2_msgs::msg::TFMessage",
+                        "qos.depth" : 1,
+                        "qos.volatile" : False,
+                    }  
                 },
+                ####################
+                {   "direction" : "ROS_TO_POND",
 
-                "ros" : {
-                    "topic" : "tf_static",
-                    "type" : "tf2_msgs::msg::TFMessage",
-                    "qos.depth" : 1,
-                    "qos.volatile" : False,
-                }  
-            },
-
-            ####################
-            "bridge3" : {
-                "direction" : "ROS_TO_POND",
-
-                "pond" : {
-                    "channel" : "cmd_vel",
-                    "type" : "TwistCommand",
+                    "pond" : {
+                        "channel" : "cmd_vel",
+                        "type" : "TwistCommand",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/cmd_vel_pilot",
+                        "type" : "geometry_msgs::msg::TwistStamped",
+                        "qos.reliable" : False,
+                        "qos.depth" : 1,
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "/quac/cmd_vel_pilot",
-                    "type" : "geometry_msgs::msg::TwistStamped",
-                    "qos.reliable" : False,
-                    "qos.depth" : 1,
-                }  
-            },
-
-            ####################
-            "bridge4" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "scan",
-                    "type" : "LaserScanSPtr",
+                    "pond" : {
+                        "channel" : "scan",
+                        "type" : "LaserScanSPtr",
+                    },
+                    "ros" : {
+                        "topic" : "scan",
+                        "type" : "sensor_msgs::msg::LaserScan",
+                    }  
                 },
+                ####################
+                {
+                    "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "scan",
-                    "type" : "sensor_msgs::msg::LaserScan",
-                }  
-            },
+                    "pond" : {
+                        "channel" : "set_robot_joints",
+                        "type" : "std::vector<JointState>",
+                    },
 
-            ####################
-            "bridge5" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "set_robot_joints",
-                    "type" : "std::vector<JointState>",
+                    "ros" : {
+                        "topic" : "joint_states",
+                        "type" : "sensor_msgs::msg::JointState",
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "joint_states",
-                    "type" : "sensor_msgs::msg::JointState",
-                }  
-            },
-
-            ####################
-            "bridge6" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "camera_front/color/info_reduced_rate",
-                    "type" : "CameraInfo",
+                    "pond" : {
+                        "channel" : "camera_front/color/info_reduced_rate",
+                        "type" : "CameraInfo",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/camera_front/info",
+                        "type" : "sensor_msgs::msg::CameraInfo",
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "/quac/camera_front/info",
-                    "type" : "sensor_msgs::msg::CameraInfo",
-                }  
-            },
-
-            ####################
-            "bridge7" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "camera_back/color/info_reduced_rate",
-                    "type" : "CameraInfo",
+                    "pond" : {
+                        "channel" : "camera_back/color/info_reduced_rate",
+                        "type" : "CameraInfo",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/camera_back/info",
+                        "type" : "sensor_msgs::msg::CameraInfo",
+                    }  
                 },
+                ####################
+                {   "direction" : "POND_TO_ROS",
 
-                "ros" : {
-                    "topic" : "/quac/camera_back/info",
-                    "type" : "sensor_msgs::msg::CameraInfo",
-                }  
-            },
-
-            ####################
-            "bridge8" : {
-                "direction" : "POND_TO_ROS",
-
-                "pond" : {
-                    "channel" : "camera_gripper/color/info_reduced_rate",
-                    "type" : "CameraInfo",
+                    "pond" : {
+                        "channel" : "camera_gripper/color/info_reduced_rate",
+                        "type" : "CameraInfo",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/camera_gripper/info",
+                        "type" : "sensor_msgs::msg::CameraInfo",
+                    }  
                 },
+                ####################
+                {   "direction" : "ROS_TO_POND",
 
-                "ros" : {
-                    "topic" : "/quac/camera_gripper/info",
-                    "type" : "sensor_msgs::msg::CameraInfo",
-                }  
-            },
-
-            ####################
-            "bridge9" : {
-                "direction" : "ROS_TO_POND",
-
-                "pond" : {
-                    "channel" : "gripper_width",
-                    "type" : "double",
+                    "pond" : {
+                        "channel" : "gripper_width",
+                        "type" : "double",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/gripper_width",
+                        "type" : "std_msgs::msg::Float64",
+                    }  
                 },
+                ####################
+                {   "direction" : "ROS_TO_POND",
 
-                "ros" : {
-                    "topic" : "/quac/gripper_width",
-                    "type" : "std_msgs::msg::Float64",
-                }  
-            },
-
-            ####################
-            "bridge10" : {
-                "direction" : "ROS_TO_POND",
-
-                "pond" : {
-                    "channel" : "arm_target",
-                    "type" : "Pose2D",
+                    "pond" : {
+                        "channel" : "arm_target",
+                        "type" : "Pose2D",
+                    },
+                    "ros" : {
+                        "topic" : "/quac/ee_pose",
+                        "type" : "geometry_msgs::msg::Pose2D",
+                    }  
                 },
-
-                "ros" : {
-                    "topic" : "/quac/ee_pose",
-                    "type" : "geometry_msgs::msg::Pose2D",
-                }  
-            },
+            ]
         },
     )
 

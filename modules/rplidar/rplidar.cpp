@@ -1,4 +1,3 @@
-#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include "sl_lidar.h"
 #include <pond_data_types/laser_scan_types.hpp>

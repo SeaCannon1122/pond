@@ -1,4 +1,3 @@
-#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 #include <pond_data_types/video_types.hpp>
 #include <pond_data_types/imu_types.hpp>

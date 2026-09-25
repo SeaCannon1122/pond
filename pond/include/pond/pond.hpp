@@ -16,7 +16,7 @@ pond_result pond_module_##cls##_on_startup(pond_api* api, uint32_t argc, void** 
 {\
     cls* module = new cls();\
     api->set_user_ptr(api->ctx, module);\
-    module->_pond_api = *api;\
+    module->init(api);\
     std::vector<void*> args(argc);\
     for (uint32_t i = 0; i < argc; i++) args[i] = argv[i];\
 \

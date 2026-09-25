@@ -207,23 +207,66 @@ namespace pond
 
     class _UntypedParameterBase
     {
-    friend class ModuleBase;
+    friend class ParameterSpace;
     public:
 
-    _ParameterBase<int32_t, int32_t> asInt();
-    _ParameterArrayBase<int32_t, int32_t> asIntArray();
-    _ParameterBase<double, double> asDouble();
-    _ParameterArrayBase<double, double> asDoubleArray();
-    _ParameterBase<bool, bool> asBool();
-    _ParameterArrayBase<bool, bool> asBoolArray();
-    _ParameterBase<std ::string, char*> asString();
-    _ParameterArrayBase<std ::string, char*> asStringArray();
+    #define TYPED_PARAM_IMPL(_type, _param_type, _param_name, _c_type)\
+        _ParameterBase<_type, _c_type> as##_param_name()\
+        {\
+            return _ParameterBase<_type, _c_type>(&name, api, offsetof(pond_parameter, value._param_name), _param_type);\
+        }\
+        _ParameterArrayBase<_type, _c_type> as##_param_name##Array()\
+        {\
+            return _ParameterArrayBase<_type, _c_type>(&name, api, offsetof(pond_parameter, value._param_name##Array), _param_type##_ARRAY);\
+        }\
+
+    TYPED_PARAM_IMPL(int32_t, POND_PARAMETER_INT, Int, int32_t)
+    TYPED_PARAM_IMPL(double, POND_PARAMETER_DOUBLE, Double, double)
+    TYPED_PARAM_IMPL(bool, POND_PARAMETER_BOOL, Bool, bool)
+    TYPED_PARAM_IMPL(std::string, POND_PARAMETER_STRING, String, char*)
 
     private:
 
-        _UntypedParameterBase(std::string* _name, pond_api* _api) : api(_api), name(_name) {}
+        _UntypedParameterBase(const std::string& _name, pond_api* _api) : api(_api), name(_name) {}
         pond_api* api;
-        std::string* name;
+        std::string name;
     };
 
+    class ParameterSpace
+    {
+    public: 
+        ParameterSpace() {}
+        ParameterSpace(pond_api* _api, const std::string& _prefix) : prefix(_prefix), api(_api) {}
+
+        ParameterSpace parameterSpace(const std::string& _prefix)
+        {
+            return ParameterSpace(api, prefix + _prefix);
+        }
+
+        _UntypedParameterBase parameter(const std::string& name)
+        {
+            std::string full_name = (prefix.empty() ? name : prefix + "." + name);
+            return _UntypedParameterBase(full_name, api);
+        }
+
+        _UntypedParameterBase parameterAtIndex(uint32_t i, const std::string& name)
+        {
+            std::string full_name = prefix + "[" + std::to_string(i) + "]." + name;
+            return _UntypedParameterBase(full_name, api);
+        }
+
+        uint32_t listLength(const std::string& needed_parameter_name)
+        {
+            uint32_t i = 0;
+            while (true)
+            {
+                std::string name = prefix + "[" + std::to_string(i) + "]." + needed_parameter_name;
+                if (!api->get_parameter(api->ctx, (uint8_t*)name.c_str())) return i;
+            }
+        }
+
+    protected:
+        std::string prefix;
+        pond_api* api;
+    };
 }

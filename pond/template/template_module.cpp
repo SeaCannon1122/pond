@@ -1,4 +1,3 @@
-#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include <pond/pond.hpp>
 
 class TemplateModule : public pond::ModuleBase

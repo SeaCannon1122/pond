@@ -1,6 +1,5 @@
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "pond_data_types/command_types.hpp"
-#define POND_MODULE_CPP_MAKE_IMPLEMENTATION
 #include "ros2_bridge.hpp"
 
 template<typename pond_data_type, typename ros_msg>
@@ -86,7 +85,7 @@ POND_BUNDLE_DECLARE(
 pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 {
     int bridge_count = 0;
-    while (parameter("bridge" + std::to_string(bridge_count) + ".direction").asString().getStrict({}, false)) bridge_count++;
+    while (parameter("bridges[" + std::to_string(bridge_count) + "].direction").asString().getStrict({}, false)) bridge_count++;
     
     if (bridge_count == 0) {POND_LOG("Error: Did not find any bridge definitions"); return POND_ERROR;}
 
@@ -99,7 +98,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 
     for (int i = 0; i < bridge_count; i++)
     {
-        std::string prefix = "bridge" + std::to_string(i) + ".";
+        std::string prefix = "bridges[" + std::to_string(i) + "].";
 
         auto direction_o = parameter(prefix+"direction").asString().getStrict({"POND_TO_ROS", "ROS_TO_POND"});
         auto pond_channel_o = parameter(prefix+"pond.channel").asString().getStrict();

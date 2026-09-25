@@ -1,13 +1,16 @@
 from pond import Manager
 import subprocess
+import os
 
 def state_tracker(pm: Manager):
 
-    DESCRIPTION_PATH = "/home/pilot/.cache/robot.urdf"
+    config_prefix = os.getenv("POND_CONFIG_PATH", "")
+
+    DESCRIPTION_PATH = config_prefix + "robot.urdf"
 
     with open(DESCRIPTION_PATH, "w") as f:
         subprocess.run(
-            ["xacro", "/home/pilot/pond/config/urdf/robot.urdf.xacro"],
+            ["xacro", config_prefix + "urdf/robot.urdf.xacro"],
             stdout=f,
             check=True,
         )

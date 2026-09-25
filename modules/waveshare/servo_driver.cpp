@@ -2,6 +2,7 @@
 #include <pond_data_types/motor_types.hpp>
 #include <cmath>
 
+#include "pond/hpp/module_base.hpp"
 #include "sms_sts/SMS_STS.h"
 
 #define KT 9.0 // torque constant (kg*cm / A)
@@ -43,89 +44,80 @@ pond_result ServoDriver::onStartup(const std::vector<void*>& args)
     auto baudrate = parameter("baudrate").asInt().getStrict();
     if (!device || !baudrate) return POND_ERROR;
 
-    uint32_t servo_count = 0;
-    while (parameter("servo" + std::to_string(servo_count) + ".id").asInt().getStrict({}, false)) servo_count++;
+    if (!sm_st.begin(*baudrate, device->c_str())) POND_LOG_RETURN_ERROR("Error: Failed do start on port %s", device->c_str());
 
-    if (servo_count == 0) {POND_LOG("Error: Did not find any servo definitions"); return POND_ERROR;}
+    auto servo_params = parameterSpace("servos");
+    if (auto servo_count = servo_params.listLength("id"); servo_count != 0) servos.resize(servo_count);
+    else POND_LOG_RETURN_ERROR("Error: Did not find any servo definitions"); 
 
-    servos.resize(servo_count);
-    ids.resize(servo_count);
-    positions.resize(servo_count);
-    speeds.resize(servo_count);
-    accelerations.resize(servo_count);
+    ids.resize(servos.size());
+    positions.resize(servos.size());
+    speeds.resize(servos.size());
+    accelerations.resize(servos.size());
+    pond::ChannelsInfo cmd_info, fb_info;
 
     for (uint32_t i = 0; i < servos.size(); i++)
     {
-        std::string prefix = "servo" + std::to_string(i);
+        auto min = servo_params.parameterAtIndex(i,"pos_min").asDouble().getStrict();
+        auto max = servo_params.parameterAtIndex(i,"pos_max").asDouble().getStrict();
+        auto name = servo_params.parameterAtIndex(i,"name").asString().getStrict();
+        if (!min || !max || !name) { sm_st.end(); return POND_ERROR; }
         
-        auto id = parameter(prefix+".id").asInt().getStrict();
-        auto min = parameter(prefix+".pos_min").asDouble().getStrict();
-        auto max = parameter(prefix+".pos_max").asDouble().getStrict();
-
-        if (!id || !min || !max) return POND_ERROR;
-        
-        servos[i].id = *id;
+        servos[i].id = servo_params.parameterAtIndex(i,"id").asInt().get(255);
         servos[i].pos_min = *min;
         servos[i].pos_max = *max;
+        servos[i].offset = servo_params.parameterAtIndex(i,"offset").asDouble().get(0);
+        servos[i].scalar = (servo_params.parameterAtIndex(i,"invert").asBool().get(false) ? -1 : 1);
 
-        servos[i].offset = parameter(prefix+".offset").asDouble().get(0);
-        servos[i].scalar = (parameter(prefix + ".invert").asBool().get(false) ? -1 : 1);
-    }
+        cmd_info.channel<MotorCommand>(*name + "/command");
+        fb_info.channel<MotorFeedback>(*name + "/get_feedback");
 
-    if (!sm_st.begin(*baudrate, device->c_str()))
-    {
-        POND_LOG("Error: Failed do start on port %s", device->c_str());
-        return POND_ERROR;
-    }
-
-    for (size_t i = 0; i < servos.size(); i++)
-    {
         if (sm_st.Ping(servos[i].id) == -1)
         {
-            POND_LOG("Error: unable to ping motor id '%d'", servos[i].id);
             sm_st.end();
-            return POND_ERROR;
+            POND_LOG_RETURN_ERROR("Error: unable to ping motor id '%d'", servos[i].id);
         }
         else sm_st.Mode(servos[i].id, 0);
     }
 
-    feedback_receiver = createReceiver<std::vector<MotorFeedback>>({"get_motor_feedback"}, [this](std::vector<MotorFeedback>* feedbacks) {
-        if (feedbacks->size() < servos.size()) { POND_LOG("feedbacks size (%d) < servos size (%d)", feedbacks->size(), servos.size()); return; }
+    feedback_receiver = createReceiver<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
+
+        double time = pond::get_time();
 
         for (size_t i = 0; i < servos.size(); i++)
         {
-            feedbacks->at(i).pos = servos[i].scalar * ((double)sm_st.ReadPos(servos[i].id) * 2 * M_PI / STEPS - servos[i].offset);
-            feedbacks->at(i).vel = servos[i].scalar * (double)sm_st.ReadSpeed(servos[i].id) * 2 * M_PI / STEPS;
+            feedbacks[i]->pos = servos[i].scalar * ((double)sm_st.ReadPos(servos[i].id) * 2 * M_PI / STEPS - servos[i].offset);
+            feedbacks[i]->vel = servos[i].scalar * (double)sm_st.ReadSpeed(servos[i].id) * 2 * M_PI / STEPS;
             // ReadCurrent(ID) return unitless value, multiply by static current (6mA)
-            feedbacks->at(i).current = (double)sm_st.ReadCurrent(servos[i].id) * 6.0 / 1000.0;
-            feedbacks->at(i).torque = servos[i].scalar * *feedbacks->at(i).current * KT;
-            feedbacks->at(i).temperature = sm_st.ReadTemper(servos[i].id);
-        }
+            feedbacks[i]->current = (double)sm_st.ReadCurrent(servos[i].id) * 6.0 / 1000.0;
+            feedbacks[i]->torque = servos[i].scalar * *feedbacks[i]->current * KT;
+            feedbacks[i]->temperature = sm_st.ReadTemper(servos[i].id);
 
+            feedbacks[i]->time = time;
+            feedbacks[i]->hw_time = time;
+        }
     });
 
-    command_receiver = createReceiver<std::vector<MotorCommand>>({"motor_cmd"}, [this](std::vector<MotorCommand>* commands) {
-
-        if (commands->size() < servos.size()) { POND_LOG("commands size (%d) < servos size (%d)", commands->size(), servos.size()); return; }
+    command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
 
         uint32_t cmd_count = 0;
 
         for (size_t i = 0; i < servos.size(); i++)
         {
-            if (commands->at(i).disable) sm_st.EnableTorque((u8)servos[i].id, *commands->at(i).disable ? 0 : 1);
-            else if (commands->at(i).pos)
+            if (commands[i]->disable) sm_st.EnableTorque((u8)servos[i].id, *commands[i]->disable ? 0 : 1);
+            else if (commands[i]->pos)
             {
-                double cmd_pos = *commands->at(i).pos;
+                double cmd_pos = *commands[i]->pos;
                 if (cmd_pos < servos[i].pos_min) cmd_pos = servos[i].pos_min;
                 if (cmd_pos > servos[i].pos_max) cmd_pos = servos[i].pos_max;
 
                 double pos = servos[i].scalar * cmd_pos + servos[i].offset;
                 positions[cmd_count] = static_cast<s16>((pos * STEPS) / (2 * M_PI));
 
-                if (commands->at(i).vel) speeds[cmd_count] = static_cast<u16>(std::clamp((std::abs(*commands->at(i).vel) * STEPS) / (2 * M_PI), -32767.0, 32767.0));
+                if (commands[i]->vel) speeds[cmd_count] = static_cast<u16>(std::clamp((std::abs(*commands[i]->vel) * STEPS) / (2 * M_PI), -32767.0, 32767.0));
                 else speeds[cmd_count] = 0;
 
-                if (commands->at(i).acc) accelerations[cmd_count] = static_cast<u16>(std::clamp(*commands->at(i).acc * 41.0 / (2 * M_PI), 0.0, 254.0));
+                if (commands[i]->acc) accelerations[cmd_count] = static_cast<u16>(std::clamp(*commands[i]->acc * 41.0 / (2 * M_PI), 0.0, 254.0));
                 else accelerations[cmd_count] = MAX_ACC;
 
                 ids[cmd_count] = servos[i].id;

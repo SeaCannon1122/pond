@@ -1,6 +1,7 @@
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
 #include "DDSM115CMD.h"
+#include "pond/hpp/module_base.hpp"
 
 struct ddsm115_motor
 {
@@ -34,46 +35,28 @@ POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115
 
 pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 {
+    act = parameter("act").asInt().get(3);
     auto device = parameter("device").asString().getStrict();
-    auto motor_count = parameter("motor_count").asInt().getStrict();
-    if (!device || !motor_count) return POND_ERROR;
+    if (!device) return POND_ERROR;
 
-    if (*motor_count < 1){
-        POND_LOG("ERROR: parameter 'motor_count' (%d) must be at least 1", *motor_count);
-        return POND_ERROR;
-    }
+    auto space = parameterSpace("motors");
+    if (uint32_t motor_count = space.listLength("name"); motor_count != 0) motors.resize(motor_count);
+    else POND_LOG_RETURN_ERROR("Did not find motor declaration");
 
-    motors.resize(*motor_count);
-
-    if ((act = parameter("act").asInt().get(3)) < 1) {
-        POND_LOG("ERROR: parameter 'act' (%d) must be at least 1", act);
-        return POND_ERROR;
-    }
-
+    pond::ChannelsInfo cmd_info, fb_info;
     for (uint32_t i = 0; i < motors.size(); i++)
     {
-        std::string id_param = "motor" + std::to_string(i) + ".id";
-        
-        if (auto id = parameter(id_param).asInt().getStrict())
-        {
-            if ((motors[i].id = *id) < 1) {
-                POND_LOG("ERROR: parameter '%s' (%d) must be at least 1", id_param.c_str(), *id);
-                return POND_ERROR;
-            }
-        }
-        else return POND_ERROR;
-
-        motors[i].scalar = (parameter("motor" + std::to_string(i) + ".invert").asBool().get(false) ? -1 : 1);
+        auto name = space.parameterAtIndex(i, "name").asString().get("motor_name");
+        motors[i].id = space.parameterAtIndex(i, "id").asInt().get(255);
+        motors[i].scalar = (space.parameterAtIndex(i, "invert").asBool().get(false) ? -1 : 1);
+    
+        cmd_info.channel<MotorCommand>(name + "/command");
+        fb_info.channel<MotorFeedback>(name + "/get_feedback");
     }
     
-    if (cmd.connect(*device) == false)
-    {
-        POND_LOG(cmd.get_error());
-        return POND_ERROR;
-    }
+    if (cmd.connect(*device) == false) POND_LOG_RETURN_ERROR(cmd.get_error());
 
-    feedback_receiver = createReceiver<std::vector<MotorFeedback>>({"get_motor_feedback"}, [this](std::vector<MotorFeedback>* feedbacks) {
-        if (feedbacks->size() != motors.size()) return;
+    feedback_receiver = createReceiver<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
 
         double current_time = pond::get_time();
         double dt = current_time - last_time;
@@ -102,30 +85,28 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
                 motors[i].last_position = fb_pos;
 
                 if (delta > M_PI) delta -= 2.0 * M_PI;
-                else if (delta < -M_PI) delta += 2.0 * M_PI;
+                if (delta < -M_PI) delta += 2.0 * M_PI;
 
-                pos = *feedbacks->at(i).pos - (double)motors[i].scalar * delta;
+                pos = motors[i].feedback_pos  - (double)motors[i].scalar * delta;
                 cur = fb_cur;
             }
 
-            feedbacks->at(i).vel = vel;
-            feedbacks->at(i).pos = pos;
-            feedbacks->at(i).current = cur;
-            feedbacks->at(i).time = current_time;
-            feedbacks->at(i).hw_time = current_time;
+            feedbacks[i]->vel = vel;
+            feedbacks[i]->pos = pos;
+            feedbacks[i]->current = cur;
+            feedbacks[i]->time = current_time;
+            feedbacks[i]->hw_time = current_time;
 
-            motors[i].feedback_pos = *feedbacks->at(i).pos;
-            motors[i].feedback_vel = *feedbacks->at(i).vel;
+            motors[i].feedback_pos = pos;
+            motors[i].feedback_vel = vel;
         }
-
     });
 
-    command_receiver = createReceiver<std::vector<MotorCommand>>({"motor_cmd"}, [this](std::vector<MotorCommand>* commands) {
-        if (commands->size() != motors.size()) return;        
-        
+    command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
+
         for (size_t i = 0; i < motors.size(); i++)
         {
-            motors[i].cmd_velocity = ((commands->at(i).disable || !commands->at(i).vel) ? 0 : *commands->at(i).vel);
+            motors[i].cmd_velocity = (commands[i]->vel ? *commands[i]->vel : 0);
 
             if (cmd.drive(motors[i].id, motors[i].cmd_velocity * motors[i].scalar, act, 0) == false) POND_LOG(cmd.get_error());
         }
