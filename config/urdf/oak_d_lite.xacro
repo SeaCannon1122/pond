@@ -24,10 +24,17 @@
 			<visual>
 				<origin xyz="0 0 0" rpy="0 0 0" />
 				<geometry>
-					<mesh filename="package://quac/meshes/oak_d_lite.stl" />
+					<mesh filename="${mesh_folder}oak_d_lite.stl" />
 				</geometry>
 				<material name="oak_d_lite_material"/>
 			</visual>
+			<collision>
+				<origin xyz="0 0 0" rpy="0 0 0" />
+				<geometry>
+					<mesh filename="${mesh_folder}oak_d_lite.stl" />
+				</geometry>
+				<material name="oak_d_lite_material"/>
+			</collision>
 		</link>
 
 		<joint name="${camera_name}_model_origin_joint" type="fixed">

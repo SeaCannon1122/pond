@@ -2,3 +2,5 @@ build/
 .cache/
 __pycache__/
 ORBvoc.txt
+robot.urdf
+robot_ros.urdf

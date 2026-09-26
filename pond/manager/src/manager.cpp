@@ -394,7 +394,8 @@ void PondManager::thread_function(pond_internal::Thread* thread)
                 
         }
 
-        for (auto& m : thread->modules) m->module_api.on_frame(&m->native_api);
+        if (thread->modules.get_length() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        else for (auto& m : thread->modules) m->module_api.on_frame(&m->native_api);
     }
 
     log("[" + thread->name + "] exited");

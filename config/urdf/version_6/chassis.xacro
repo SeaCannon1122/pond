@@ -15,15 +15,32 @@
     </joint>
 
     <link name="chassis">
-        <inertial>
-            <origin xyz="-0.006592503505638408 -1.5301626995551604e-17 0.04294027543409115" rpy="0 0 0"/>
-            <mass value="6.419279977222798"/>
-            <inertia ixx="0.031932" iyy="0.058111" izz="0.057234" ixy="-0.0" iyz="-0.0" ixz="0.003075"/>
-        </inertial>
+        <xacro:inertial_box mass="2.5" x="0.31" y="0.12" z="0.07">
+            <origin xyz="0 0 -0.005" rpy="0 0 0"/>
+        </xacro:inertial_box>
+        <!-- <collision>
+            <origin xyz="0 0 -0.005" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.31 0.12 0.07" />
+            </geometry>
+        </collision>
+        <collision>
+            <origin xyz="-0.055 0 0.06" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.13 0.16 0.06" />
+            </geometry>
+        </collision> -->
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="${mesh_folder}version_6/chassis_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+            </geometry>
+            <material name="chassis_material"/>
+        </collision>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://quac/meshes/version_6/chassis_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                <mesh filename="${mesh_folder}version_6/chassis_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
             <material name="chassis_material"/>
         </visual>

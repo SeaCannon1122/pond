@@ -2,17 +2,37 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug pond",
-            "type": "lldb",
+            "name": "Debug pond (GDB)",
+            "type": "cppdbg",
             "request": "launch",
+
             "program": "/usr/bin/python3",
-            "args": ["launch/run.py"],
+            "args": [ "launch/run.py"],
+
             "cwd": "${workspaceFolder}",
-            "stopOnEntry": false,
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}/build/debug/python:${env:PYTHONPATH}",
-                "POND_BUNDLE_PATH": "${workspaceFolder}/build/debug/modules/controllers/:${workspaceFolder}/build/debug/modules/depthai/:${workspaceFolder}/build/debug/modules/gstreamer/:${workspaceFolder}/build/debug/modules/orb_slam3/:${workspaceFolder}/build/debug/modules/realsense/:${workspaceFolder}/build/debug/modules/robot_state/:${workspaceFolder}/build/debug/modules/ros2/:${workspaceFolder}/build/debug/modules/rplidar/:${workspaceFolder}/build/debug/modules/rtabmap/:${workspaceFolder}/build/debug/modules/utility/:${workspaceFolder}/build/debug/modules/v4l2/:${workspaceFolder}/build/debug/modules/waveshare/:${workspaceFolder}/build/debug/modules/CMakeFiles/:${workspaceFolder}/build/debug/modules/controllers/:${workspaceFolder}/build/debug/modules/depthai/:${workspaceFolder}/build/debug/modules/gstreamer/:${workspaceFolder}/build/debug/modules/orb_slam3/:${workspaceFolder}/build/debug/modules/realsense/:${workspaceFolder}/build/debug/modules/robot_state/:${workspaceFolder}/build/debug/modules/ros2/:${workspaceFolder}/build/debug/modules/rplidar/:${workspaceFolder}/build/debug/modules/rtabmap/:${workspaceFolder}/build/debug/modules/utility/:${workspaceFolder}/build/debug/modules/v4l2/:${workspaceFolder}/build/debug/modules/waveshare/"
-            }
+            "stopAtEntry": false,
+
+            "environment": [
+                {
+                    "name": "PYTHONPATH",
+                    "value": "${workspaceFolder}/build/debug/python:${env:PYTHONPATH}"
+                },
+                {
+                    "name": "POND_BUNDLE_PATH",
+                    "value": "${workspaceFolder}/build/debug/modules/mujoco/:${workspaceFolder}/build/debug/modules/controllers/:${workspaceFolder}/build/debug/modules/depthai/:${workspaceFolder}/build/debug/modules/gstreamer/:${workspaceFolder}/build/debug/modules/orb_slam3/:${workspaceFolder}/build/debug/modules/realsense/:${workspaceFolder}/build/debug/modules/robot_state/:${workspaceFolder}/build/debug/modules/ros2/:${workspaceFolder}/build/debug/modules/rplidar/:${workspaceFolder}/build/debug/modules/rtabmap/:${workspaceFolder}/build/debug/modules/utility/:${workspaceFolder}/build/debug/modules/v4l2/:${workspaceFolder}/build/debug/modules/waveshare/:${workspaceFolder}/build/debug/modules/CMakeFiles/"
+                }
+            ],
+
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+
+            "setupCommands": [
+                {
+                    "description": "Enable pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
         }
     ]
 }

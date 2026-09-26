@@ -10,7 +10,7 @@
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <mass value="0.1"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
         </inertial>
     </link>
 
@@ -31,7 +31,7 @@
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <mass value="0.1"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
         </inertial>
     </link>
 
@@ -67,10 +67,17 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
                 <geometry>
-                    <mesh filename="package://quac/meshes/version_6/gripper_back_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                    <mesh filename="${mesh_folder}version_6/gripper_back_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
                 </geometry>
                 <material name="gripper_material"/>
             </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
+                <geometry>
+                    <mesh filename="${mesh_folder}version_6/gripper_back_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </collision>
         </link>
 
         <joint name="gripper_${side}_front_piece_joint" type="continuous">
@@ -90,10 +97,17 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
                 <geometry>
-                    <mesh filename="package://quac/meshes/version_6/gripper_front_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                    <mesh filename="${mesh_folder}version_6/gripper_front_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
                 </geometry>
                 <material name="gripper_material"/>
             </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 ${pi/2+multiplier*pi/2}"/>
+                <geometry>
+                    <mesh filename="${mesh_folder}version_6/gripper_front_piece.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </collision>
         </link>
 
         <joint name="gripper_${side}_joint" type="continuous">
@@ -113,10 +127,17 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="package://quac/meshes/version_6/gripper_${side}.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                    <mesh filename="${mesh_folder}version_6/gripper_${side}.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
                 </geometry>
                 <material name="gripper_material"/>
             </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <mesh filename="${mesh_folder}version_6/gripper_${side}.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="gripper_material"/>
+            </collision>
         </link>
 
     </xacro:macro>

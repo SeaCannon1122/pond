@@ -17,15 +17,22 @@
             <visual>
                 <origin xyz="0 0 0" rpy="${visual_rpy}"/>
                 <geometry>
-                    <mesh filename="package://quac/meshes/version_6/wheel_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                    <mesh filename="${mesh_folder}version_6/wheel_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
                 </geometry>
                 <material name="wheel_material"/>
             </visual>
             <collision>
+                <origin xyz="0 0 0" rpy="${visual_rpy}"/>
+                <geometry>
+                    <mesh filename="${mesh_folder}version_6/wheel_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                </geometry>
+                <material name="wheel_material"/>
+                <!--
                 <origin xyz="${collision_xyz}" rpy="${pi/2} 0 0"/>
                 <geometry>
                     <cylinder radius="0.06" length="0.04" />
                 </geometry>
+                -->
                 <surface>
                     <friction>
                         <ode>

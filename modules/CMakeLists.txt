@@ -55,7 +55,7 @@ add_subdirectory(v4l2)
 add_subdirectory(depthai)
 add_subdirectory(realsense)
 add_subdirectory(gstreamer)
-add_subdirectory(rplidar)
+#add_subdirectory(rplidar)
 
 add_subdirectory(robot_state)
 
@@ -64,6 +64,7 @@ add_subdirectory(rtabmap)
 
 add_subdirectory(waveshare)
 add_subdirectory(controllers)
+add_subdirectory(mujoco)
 
 add_subdirectory(ros2)
 add_subdirectory(detection)

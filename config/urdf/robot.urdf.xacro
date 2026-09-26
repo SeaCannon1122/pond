@@ -2,6 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro"  name="quac_robot">
 
     <xacro:property name="mesh_scale" value="1"/>
+    <xacro:arg name="mesh_folder" default="mesh_folder_path/"/>
+    <xacro:property name="mesh_folder" value="$(arg mesh_folder)"/>
 
     <xacro:include filename="inertial_macros.xacro" />
     <xacro:include filename="servo.xacro" />

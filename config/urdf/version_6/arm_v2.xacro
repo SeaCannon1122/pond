@@ -15,11 +15,9 @@
     </joint>
 
     <link name="arm_base_link">
-        <inertial>
+        <xacro:inertial_box mass="0.1" x="0.01" y="0.01" z="0.01">
             <origin xyz="0 0 0" rpy="0 0 0"/>
-            <mass value="0.1"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
-        </inertial>
+        </xacro:inertial_box>
     </link>
 
     <joint name="arm_segment_0_joint" type="revolute">
@@ -32,15 +30,26 @@
     </joint>
 
     <link name="arm_segment_0">
-        <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <mass value="0.2"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
-        </inertial>
+        <xacro:inertial_box mass="0.15" x="0.09" y="0.025" z="0.035">
+            <origin xyz="-0.035 0 0" rpy="0 0 0"/>
+        </xacro:inertial_box>
+        <collision>
+            <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+            <geometry>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_0_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+            </geometry>
+            <material name="arm_material"/>
+            <!--
+            <origin xyz="-0.035 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.09 0.025 0.035" />
+            </geometry>
+            -->
+        </collision>
         <visual>
             <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
             <geometry>
-                <mesh filename="package://quac/meshes/version_6/arm_v2/arm_segment_0_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_0_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
             <material name="arm_material"/>
         </visual>
@@ -56,15 +65,27 @@
     </joint>
 
     <link name="arm_segment_1">
-        <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <mass value="0.2"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
-        </inertial>
+        <xacro:inertial_box mass="0.1" x="0.025" y="0.075" z="0.035">
+            <origin xyz="-0.02 0.025 0" rpy="0 0 0"/>
+        </xacro:inertial_box>
+        <collision>
+            <origin xyz="-0.02 0.05 0" rpy="${pi/2} 0 0"/>
+            <geometry>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_1_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+            </geometry>
+            <material name="arm_material"/>
+            <!--
+            <origin xyz="-0.02 0.025 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.025 0.075 0.035" />
+            </geometry>
+            -->
+        </collision>
+
         <visual>
             <origin xyz="-0.02 0.05 0" rpy="${pi/2} 0 0"/>
             <geometry>
-                <mesh filename="package://quac/meshes/version_6/arm_v2/arm_segment_1_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_1_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
             <material name="arm_material"/>
         </visual>
@@ -80,15 +101,27 @@
     </joint>
 
     <link name="arm_segment_2">
-        <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <mass value="0.2"/>
-            <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
-        </inertial>
+        <xacro:inertial_box mass="0.05" x="0.05" y="0.03" z="0.035">
+            <origin xyz="0.045 0 0" rpy="0 0 0"/>
+        </xacro:inertial_box>
+        <collision>
+            <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+            <geometry>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_2_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+            </geometry>
+            <material name="arm_material"/>
+            <!--
+            <origin xyz="0.045 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.05 0.03 0.035" />
+            </geometry>
+            -->
+        </collision>
+
         <visual>
             <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
             <geometry>
-                <mesh filename="package://quac/meshes/version_6/arm_v2/arm_segment_2_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
+                <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_2_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
             <material name="arm_material"/>
         </visual>
