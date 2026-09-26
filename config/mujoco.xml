@@ -1,0 +1,98 @@
+<mujoco>
+
+    <asset>
+        <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="100" height="100"/>
+        <material name="grid" texture="grid" texrepeat="8 8" texuniform="true" reflectance="0.06"/>
+    </asset>
+    
+    <worldbody>
+
+        <geom
+            name="ground"
+            type="plane"
+            size="10 10 0.04"
+            pos="0 0 0"
+            rgba="1 1 1 1"
+            material="grid"
+            friction="1.0 0.3 0.01"
+            condim="3"
+        />
+
+    </worldbody>
+
+    <actuator>
+        <position
+            name="arm_segment_0_servo" joint="arm_segment_0_joint" 
+            kp="100"
+            kv="0.1"
+            ctrlrange="-3.826 0" ctrllimited="true"
+        />
+        
+        <position
+            name="arm_segment_1_servo" joint="arm_segment_1_joint" 
+            kp="100"
+            kv="0.1"
+            ctrlrange="-0.785398163 1.570796327" ctrllimited="true"
+        />
+
+        <position
+            name="arm_segment_2_servo" joint="arm_segment_2_joint" 
+            kp="100"
+            kv="0.1"
+            ctrlrange="0 3.091592654" ctrllimited="true"
+        />
+
+        <position
+            name="gripper_servo" joint="gripper_joint" 
+            kp="100"
+            kv="0.1"
+            ctrlrange="0 1.7" ctrllimited="true"
+        />
+
+        <velocity
+            name="wheel_front_left_motor" joint="wheel_front_left_joint"
+            kv="0.15"
+            ctrlrange="-5 5"
+            ctrllimited="true"
+        />
+
+        <velocity
+            name="wheel_front_right_motor" joint="wheel_front_right_joint"
+            kv="0.15"
+            ctrlrange="-5 5" ctrllimited="true"
+        />
+
+        <velocity
+            name="wheel_back_left_motor" joint="wheel_back_left_joint"
+            kv="0.15"
+            ctrlrange="-5 5" ctrllimited="true"
+        />
+
+        <velocity
+            name="wheel_back_right_motor" joint="wheel_back_right_joint"
+            kv="0.15"
+            ctrlrange="-5 5" ctrllimited="true"
+        />
+
+        <!-- <tendon>
+            <fixed name="forward">
+                <joint joint="wheel_front_left_motor" coef=".5"/>
+                <joint joint="wheel_back_left_motor" coef=".5"/>
+                <joint joint="wheel_front_right_motor" coef=".5"/>
+                <joint joint="wheel_back_right_motor" coef=".5"/>
+            </fixed>
+            <fixed name="turn">
+                <joint joint="wheel_front_left_motor" coef="-.5"/>
+                <joint joint="wheel_back_left_motor" coef="-.5"/>
+                <joint joint="wheel_front_right_motor" coef=".5"/>
+                <joint joint="wheel_back_right_motor" coef=".5"/>
+            </fixed>
+        </tendon>
+
+        <actuator>
+            <motor name="forward" tendon="forward" ctrlrange="-1 1"/>
+            <motor name="turn" tendon="turn" ctrlrange="-1 1"/>
+        </actuator> -->
+
+    </actuator>
+</mujoco>

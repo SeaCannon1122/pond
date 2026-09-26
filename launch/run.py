@@ -15,6 +15,7 @@ from parts.state_tracker import *
 from parts.mujoco import *
 
 is_running = True
+config_prefix = os.getenv("POND_CONFIG_PATH", "")
 
 def signal_handler(signum, frame):
     global is_running
@@ -26,8 +27,7 @@ def signal_handler(signum, frame):
     is_running = False
 
 def compile_urdf(mesh_prefix: str, destination: str):
-    config_prefix = os.getenv("POND_CONFIG_PATH", "")
-
+    
     with open(destination, "w") as f:
         subprocess.run(
             ["xacro", config_prefix + "urdf/robot.urdf.xacro", "mesh_folder:=" + mesh_prefix],
@@ -39,10 +39,8 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    config_prefix = os.getenv("POND_CONFIG_PATH", "")
-
-    NATIVE_DESCRIPTION_PATH = config_prefix + "robot.urdf"
-    ROS_DESCRIPTION_PATH = config_prefix + "robot_ros.urdf"
+    NATIVE_DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
+    ROS_DESCRIPTION_PATH = config_prefix + "build/robot_ros.urdf"
 
     compile_urdf(config_prefix + "meshes/", NATIVE_DESCRIPTION_PATH)
     compile_urdf("package://quac/meshes/", ROS_DESCRIPTION_PATH)    

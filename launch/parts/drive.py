@@ -13,8 +13,8 @@ def drive(pm: Manager, real: bool):
             "wheels" : [
                 { "joint" : "wheel_front_left_joint",   "radius" : 0.05, "motor_name" : "wheel_front_left_motor"    },
                 { "joint" : "wheel_front_right_joint",  "radius" : 0.05, "motor_name" : "wheel_front_right_motor"   },
-                { "joint" : "wheel_rear_left_joint",    "radius" : 0.05, "motor_name" : "wheel_back_left_motor"     },
-                { "joint" : "wheel_rear_right_joint",   "radius" : 0.05, "motor_name" : "wheel_back_right_motor"    },
+                { "joint" : "wheel_back_left_joint",    "radius" : 0.05, "motor_name" : "wheel_back_left_motor"     },
+                { "joint" : "wheel_back_right_joint",   "radius" : 0.05, "motor_name" : "wheel_back_right_motor"    },
             ],
             "slip_multiplier" : 1.6
         },

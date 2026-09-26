@@ -1,3 +1,5 @@
+#include "pond/hpp/module_base.hpp"
+#include "pond/pond.h"
 #include <pond/pond.hpp>
 
 #include <cerrno>
@@ -40,10 +42,6 @@ namespace mju = ::mujoco::sample_util;
 const double syncMisalign       = 0.1;  // maximum mis-alignment before re-sync (simulation seconds)
 const double simRefreshFraction = 0.7;  // fraction of refresh available for simulation
 const int    kErrorLength       = 1024;  // load error string length
-
-// model and data
-mjModel* m = nullptr;
-mjData*  d = nullptr;
 
 using Seconds = std::chrono::duration<double>;
 
@@ -143,42 +141,6 @@ std::string getExecutableDir() {
   return "";
 }
 
-
-// scan for libraries in the plugin directory to load additional plugins
-void scanPluginLibraries() {
-  // check and print plugins that are linked directly into the executable
-  int nplugin = mjp_pluginCount();
-  if (nplugin) {
-    std::printf("Built-in plugins:\n");
-    for (int i = 0; i < nplugin; ++i) { std::printf("    %s\n", mjp_getPluginAtSlot(i)->name); }
-  }
-
-  // define platform-specific strings
-#if defined(_WIN32) || defined(__CYGWIN__)
-  const std::string sep = "\\";
-#else
-  const std::string sep = "/";
-#endif
-
-
-  // try to open the ${EXECDIR}/MUJOCO_PLUGIN_DIR directory
-  // ${EXECDIR} is the directory containing the simulate binary itself
-  // MUJOCO_PLUGIN_DIR is the MUJOCO_PLUGIN_DIR preprocessor macro
-  const std::string executable_dir = getExecutableDir();
-  if (executable_dir.empty()) { return; }
-
-  const std::string plugin_dir = getExecutableDir() + sep + MUJOCO_PLUGIN_DIR;
-  mj_loadAllPluginLibraries(
-      plugin_dir.c_str(),
-      +[](const char* filename, int first, int count) {
-        std::printf("Plugins registered by library '%s':\n", filename);
-        for (int i = first; i < first + count; ++i) {
-          std::printf("    %s\n", mjp_getPluginAtSlot(i)->name);
-        }
-      });
-}
-
-
 //------------------------------------------- simulation -------------------------------------------
 
 const char* Diverged(int disableflags, const mjData* d) {
@@ -190,368 +152,259 @@ const char* Diverged(int disableflags, const mjData* d) {
   return nullptr;
 }
 
-mjModel* LoadModel(const char* file, mj::Simulate& sim) {
-  // this copy is needed so that the mju::strlen call below compiles
-  char filename[mj::Simulate::kMaxFilenameLength];
-  mju::strcpy_arr(filename, file);
-
-  // make sure filename is not empty
-  if (!filename[0]) { return nullptr; }
-
-  // load and compile
-  char loadError[kErrorLength] = "";
-
-  mjModel* mnew       = 0;
-  auto     load_start = mj::Simulate::Clock::now();
-
-  std::string filename_str(filename);
-  std::string extension;
-  size_t      dot_pos = filename_str.rfind('.');
-
-  if (dot_pos != std::string::npos && dot_pos < filename_str.length() - 1) {
-    extension = filename_str.substr(dot_pos);
-  }
-
-  if (extension == ".mjb") {
-    mnew = mj_loadModel(filename, nullptr);
-    if (!mnew) { mju::strcpy_arr(loadError, "could not load binary model"); }
-  } else if (extension == ".xml") {
-    mnew = mj_loadXML(filename, nullptr, loadError, kErrorLength);
-  } else {
-    mjVFS vfs;
-    mj_defaultVFS(&vfs);
-    mjSpec* spec = mj_parse(filename, nullptr, &vfs, loadError, kErrorLength);
-    if (!spec) {
-      if (!loadError[0]) { mju::strcpy_arr(loadError, "could not parse model"); }
-    } else {
-      mnew = mj_compile(spec, &vfs);
-      if (!mnew) { mju::strcpy_arr(loadError, mjs_getError(spec)); }
-      mj_deleteSpec(spec);
-    }
-    mj_deleteVFS(&vfs);
-  }
-
-  // remove trailing newline character from loadError
-  if (loadError[0]) {
-    int error_length = mju::strlen_arr(loadError);
-    if (loadError[error_length - 1] == '\n') { loadError[error_length - 1] = '\0'; }
-  }
-
-  auto   load_interval = mj::Simulate::Clock::now() - load_start;
-  double load_seconds  = Seconds(load_interval).count();
-
-  if (!mnew) {
-    std::printf("%s\n", loadError);
-    mju::strcpy_arr(sim.load_error, loadError);
-    return nullptr;
-  }
-
-  // compiler warning: print and pause
-  if (loadError[0]) {
-    // mj_forward() below will print the warning message
-    std::printf("Model compiled, but simulation warning (paused):\n  %s\n", loadError);
-    sim.run = 0;
-  }
-
-  // if no error and load took more than 1/4 seconds, report load time
-  else if (load_seconds > 0.25) {
-    mju::sprintf_arr(loadError, "Model loaded in %.2g seconds", load_seconds);
-  }
-
-  mju::strcpy_arr(sim.load_error, loadError);
-
-  return mnew;
-}
-
-// simulate in background thread (while rendering in main thread)
-void PhysicsLoop(mj::Simulate& sim) {
-  // cpu-sim synchronization point
-  std::chrono::time_point<mj::Simulate::Clock> syncCPU;
-
-  mjtNum syncSim = 0;
-
-  int last_run = -1;
-
-  // run until asked to exit
-  while (!sim.exitrequest.load()) {
-    if (sim.droploadrequest.load()) {
-      sim.LoadMessage(sim.dropfilename);
-      mjModel* mnew = LoadModel(sim.dropfilename, sim);
-      sim.droploadrequest.store(false);
-
-      mjData* dnew = nullptr;
-      if (mnew) dnew = mj_makeData(mnew);
-      if (dnew) {
-        sim.Load(mnew, dnew, sim.dropfilename);
-
-        // lock the sim mutex
-        const std::unique_lock<std::recursive_mutex> lock(sim.mtx);
-
-        mj_deleteData(d);
-        mj_deleteModel(m);
-
-        m = mnew;
-        d = dnew;
-        mj_forward(m, d);
-
-      } else {
-        sim.LoadMessageClear();
-      }
-    }
-
-    if (sim.uiloadrequest.load()) {
-      sim.uiloadrequest.fetch_sub(1);
-      sim.LoadMessage(sim.filename);
-      mjModel* mnew = LoadModel(sim.filename, sim);
-      mjData*  dnew = nullptr;
-      if (mnew) dnew = mj_makeData(mnew);
-      if (dnew) {
-        sim.Load(mnew, dnew, sim.filename);
-
-        // lock the sim mutex
-        const std::unique_lock<std::recursive_mutex> lock(sim.mtx);
-
-        mj_deleteData(d);
-        mj_deleteModel(m);
-
-        m = mnew;
-        d = dnew;
-        mj_forward(m, d);
-
-      } else {
-        sim.LoadMessageClear();
-      }
-    }
-
-    // sleep for 1 ms or yield, to let main thread run
-    //  yield results in busy wait - which has better timing but kills battery life
-    if (sim.run && sim.busywait) {
-      std::this_thread::yield();
-    } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    {
-      // lock the sim mutex
-      const std::unique_lock<std::recursive_mutex> lock(sim.mtx);
-
-      // run only if model is present
-      if (m) {
-        // reset timers on transition between running and paused
-        if (sim.run != last_run) {
-          if (last_run != -1) {
-            std::memset(d->timer, 0, sizeof(d->timer));
-            std::memset(sim.timer_prev_, 0, sizeof(sim.timer_prev_));
-          }
-          last_run = sim.run;
-        }
-
-        // running
-        if (sim.run) {
-          bool stepped = false;
-
-          // record cpu time at start of iteration
-          const auto startCPU = mj::Simulate::Clock::now();
-
-          // elapsed CPU and simulation time since last sync
-          const auto elapsedCPU = startCPU - syncCPU;
-          double     elapsedSim = d->time - syncSim;
-
-          // requested slow-down factor
-          double slowdown = 100 / sim.percentRealTime[sim.real_time_index];
-
-          // misalignment condition: distance from target sim time is bigger than syncMisalign
-          bool misaligned =
-              std::abs(Seconds(elapsedCPU).count() / slowdown - elapsedSim) > syncMisalign;
-
-          // out-of-sync (for any reason): reset sync times, step
-          if (elapsedSim < 0 ||
-              elapsedCPU.count() < 0 ||
-              syncCPU.time_since_epoch().count() == 0 ||
-              misaligned ||
-              sim.speed_changed) {
-            // re-sync
-            syncCPU           = startCPU;
-            syncSim           = d->time;
-            sim.speed_changed = false;
-
-            // inject noise
-            sim.InjectNoise(sim.key);
-
-            // run single step, let next iteration deal with timing
-            mj_step(m, d);
-            const char* message = Diverged(m->opt.disableflags, d);
-            if (message) {
-              sim.run = 0;
-              mju::strcpy_arr(sim.load_error, message);
-            } else {
-              stepped = true;
-            }
-          }
-
-          // in-sync: step until ahead of cpu
-          else {
-            bool   measured = false;
-            mjtNum prevSim  = d->time;
-
-            double refreshTime = simRefreshFraction / sim.refresh_rate;
-
-            // step while sim lags behind cpu and within refreshTime
-            while (Seconds((d->time - syncSim) * slowdown) < mj::Simulate::Clock::now() - syncCPU &&
-                   mj::Simulate::Clock::now() - startCPU < Seconds(refreshTime)) {
-              // measure slowdown before first step
-              if (!measured && elapsedSim) {
-                sim.measured_slowdown =
-                    std::chrono::duration<double>(elapsedCPU).count() / elapsedSim;
-                measured = true;
-              }
-
-              // inject noise
-              sim.InjectNoise(sim.key);
-
-              // call mj_step
-              mj_step(m, d);
-              const char* message = Diverged(m->opt.disableflags, d);
-              if (message) {
-                sim.run = 0;
-                mju::strcpy_arr(sim.load_error, message);
-              } else {
-                stepped = true;
-              }
-
-              // break if reset
-              if (d->time < prevSim) { break; }
-            }
-          }
-
-          // save current state to history buffer
-          if (stepped) { sim.AddToHistory(); }
-        }
-
-        // paused
-        else {
-          // run mj_forward, to update rendering and joint sliders
-          mj_forward(m, d);
-          if (sim.pause_update) { mju_copy(d->qacc_warmstart, d->qacc, m->nv); }
-          sim.speed_changed = true;
-        }
-      }
-    }  // release std::lock_guard<std::mutex>
-  }
-}
-}  // namespace
-
-//-------------------------------------- physics_thread --------------------------------------------
-
-void PhysicsThread(mj::Simulate* sim, const char* filename) {
-  // request loadmodel if file given (otherwise drag-and-drop)
-  if (filename != nullptr) {
-    sim->LoadMessage(filename);
-    m = LoadModel(filename, *sim);
-    if (m) {
-      // lock the sim mutex
-      const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
-
-      d = mj_makeData(m);
-    }
-    if (d) {
-      sim->Load(m, d, filename);
-
-      // lock the sim mutex
-      const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
-
-      mj_forward(m, d);
-
-    } else {
-      sim->LoadMessageClear();
-    }
-  }
-
-  PhysicsLoop(*sim);
-
-  // delete everything we allocated
-  mj_deleteData(d);
-  mj_deleteModel(m);
 }
 
 class Mujoco : public pond::ModuleBase
 {
 public:
-    virtual pond_result onStartup(const std::vector<void*>& args) override;
-    virtual void onShutdown() override;
-    virtual void onFrame() override;
+  virtual pond_result onStartup(const std::vector<void*>& args) override;
+  virtual void onShutdown() override;
+  virtual void onFrame() override;
 private:
-    std::thread gui_thread, physics_thread;
+  std::thread gui_thread;
 
-    mjvCamera cam;
-    mjvOption opt;
-    mjvPerturb pert;
+  mjvCamera cam;
+  mjvOption opt;
+  mjvPerturb pert;
 
-    std::unique_ptr<mj::Simulate> sim;
+  // model and data
+  mjModel* m = nullptr;
+  mjData*  d = nullptr;
 
-    std::atomic<bool> sim_created{false};
-    std::atomic<bool> sim_got{false};
-    std::optional<std::string> urdf_path;
+  std::chrono::time_point<mj::Simulate::Clock> syncCPU;
+  mjtNum syncSim = 0;
+  int last_run = -1;
 
-    void sim_thread_func()
-    {
-        // scan for libraries in the plugin directory to load additional plugins
-        scanPluginLibraries();
+  std::unique_ptr<mj::Simulate> sim;
 
-        mjv_defaultCamera(&cam);
-        mjv_defaultOption(&opt);
-        mjv_defaultPerturb(&pert);
+  std::atomic<bool> sim_created{false};
+  std::optional<std::string> robot_path;
 
-        // simulate object encapsulates the UI
-        sim = std::make_unique<mj::Simulate>(
-            std::make_unique<mj::GlfwAdapter>(),
-            &cam,
-            &opt,
-            &pert,
-            /* is_passive = */ false
-        );
 
-        sim_created.store(true);
-        while (!sim_got.load()) pond::sleep(0.001);
-        sim->RenderLoop();
+  void sim_thread_func()
+  {
+    // scan for libraries in the plugin directory to load additional plugins
+    // check and print plugins that are linked directly into the executable
+    int nplugin = mjp_pluginCount();
+    if (nplugin) {
+      POND_LOG("Built-in plugins:\n");
+      for (int i = 0; i < nplugin; ++i) { POND_LOG("    %s\n", mjp_getPluginAtSlot(i)->name); }
     }
+
+    // define platform-specific strings
+  #if defined(_WIN32) || defined(__CYGWIN__)
+    const std::string sep = "\\";
+  #else
+    const std::string sep = "/";
+  #endif
+
+
+    // try to open the ${EXECDIR}/MUJOCO_PLUGIN_DIR directory
+    // ${EXECDIR} is the directory containing the simulate binary itself
+    // MUJOCO_PLUGIN_DIR is the MUJOCO_PLUGIN_DIR preprocessor macro
+    const std::string executable_dir = getExecutableDir();
+    if (executable_dir.empty()) { return; }
+
+    const std::string plugin_dir = getExecutableDir() + sep + MUJOCO_PLUGIN_DIR;
+    mj_loadAllPluginLibraries(
+      plugin_dir.c_str(),
+      +[](const char* filename, int first, int count) {
+        printf("Plugins registered by library '%s':\n", filename);
+        for (int i = first; i < first + count; ++i) {
+          printf("    %s\n", mjp_getPluginAtSlot(i)->name);
+        }
+      }
+    );
+
+    mjv_defaultCamera(&cam);
+    mjv_defaultOption(&opt);
+    mjv_defaultPerturb(&pert);
+
+    // simulate object encapsulates the UI
+    sim = std::make_unique<mj::Simulate>(
+      std::make_unique<mj::GlfwAdapter>(),
+      &cam,
+      &opt,
+      &pert,
+      /* is_passive = */ false
+    );
+
+    sim_created.store(true);
+    sim->RenderLoop();
+  }
 };
 
 POND_MODULE_CPP_DECLARE(Mujoco, "mujoco", "mujoco pond binding")
 
 POND_BUNDLE_DECLARE(
-    "mojoco bundle",
-    POND_MODULE(Mujoco),
+  "mojoco bundle",
+  POND_MODULE(Mujoco),
 )
-
 
 pond_result Mujoco::onStartup(const std::vector<void*>& args)
 {
-    POND_LOG("MuJoCo version %s", mj_versionString());
+  POND_LOG("MuJoCo version %s", mj_versionString());
 
-    if (mjVERSION_HEADER != mj_version()) mju_error("Headers and library have different versions");
+  if (mjVERSION_HEADER != mj_version()) POND_LOG_RETURN_ERROR("Headers and library have different versions");
 
-    gui_thread = std::thread(&Mujoco::sim_thread_func, this);
+  if (!(robot_path = parameter("robot_path").asString().getStrict())) return POND_ERROR;
+  
+  POND_LOG("Loading robot model from '%s'", robot_path->c_str());
+  
+  // load and compile
+  char loadError[kErrorLength] = "";
 
-    while (!sim_created.load()) pond::sleep(0.001);
+  mjVFS vfs;
+  mj_defaultVFS(&vfs);
+  mjSpec* spec = mj_parse(robot_path->c_str(), nullptr, &vfs, loadError, kErrorLength);
 
-    urdf_path = parameter("urdf_path").asString().getStrict({}, false);
-    if (urdf_path) POND_LOG("Loading robot model from '%s'", urdf_path->c_str());
-    
-    physics_thread = std::thread(&PhysicsThread, sim.get(), urdf_path ? urdf_path->c_str() : nullptr);
-    sim_got.store(true);    
-   
-    return POND_SUCCESS;
+  if (!spec) POND_LOG("Error: Could not parse model: %s", loadError);
+  else
+  {
+    if (!(m = mj_compile(spec, &vfs))) POND_LOG(mjs_getError(spec));
+    mj_deleteSpec(spec);
+  }
+  mj_deleteVFS(&vfs);
+
+  if (!spec) return POND_ERROR;
+  if (!m) return POND_ERROR;
+  if (!(d = mj_makeData(m))) { mj_deleteModel(m); POND_LOG_RETURN_ERROR("Failed to create model data"); }
+
+  mj_forward(m, d);
+
+  gui_thread = std::thread(&Mujoco::sim_thread_func, this);
+  while (!sim_created.load()) pond::sleep(0.001);
+
+  sim->Load(m, d, robot_path->c_str());
+
+  return POND_SUCCESS;
 }
 
 void Mujoco::onShutdown()
 {
-    sim->exitrequest.store(1);
-    gui_thread.join();
-    physics_thread.join();
+  sim->exitrequest.store(1);
+  gui_thread.join();
+
+  mj_deleteData(d);
+  mj_deleteModel(m);
 }
 
 void Mujoco::onFrame()
 {
-    if (sim->exitrequest.load() == 2) shutdown();
+  if (sim->exitrequest.load() == 2) { shutdown(); return;}
+
+  if (sim->droploadrequest.load()) sim->droploadrequest.store(0);
+  if (sim->uiloadrequest.load()) sim->uiloadrequest.store(0);
+
+  // sleep for 1 ms or yield, to let main thread run
+  //  yield results in busy wait - which has better timing but kills battery life
+  if (sim->run && sim->busywait) std::this_thread::yield();
+  else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+  {
+    // lock the sim mutex
+    const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
+
+    // run only if model is present
+    if (m) {
+      // reset timers on transition between running and paused
+      if (sim->run != last_run) {
+        if (last_run != -1) {
+          std::memset(d->timer, 0, sizeof(d->timer));
+          std::memset(sim->timer_prev_, 0, sizeof(sim->timer_prev_));
+        }
+        last_run = sim->run;
+      }
+
+      // running
+      if (sim->run) {
+        bool stepped = false;
+
+        // record cpu time at start of iteration
+        const auto startCPU = mj::Simulate::Clock::now();
+
+        // elapsed CPU and simulation time since last sync
+        const auto elapsedCPU = startCPU - syncCPU;
+        double     elapsedSim = d->time - syncSim;
+
+        // requested slow-down factor
+        double slowdown = 100 / sim->percentRealTime[sim->real_time_index];
+
+        // misalignment condition: distance from target sim time is bigger than syncMisalign
+        bool misaligned =
+            std::abs(Seconds(elapsedCPU).count() / slowdown - elapsedSim) > syncMisalign;
+
+        // out-of-sync (for any reason): reset sync times, step
+        if (elapsedSim < 0 ||
+            elapsedCPU.count() < 0 ||
+            syncCPU.time_since_epoch().count() == 0 ||
+            misaligned ||
+            sim->speed_changed) {
+          // re-sync
+          syncCPU           = startCPU;
+          syncSim           = d->time;
+          sim->speed_changed = false;
+
+          // inject noise
+          sim->InjectNoise(sim->key);
+
+          // run single step, let next iteration deal with timing
+          mj_step(m, d);
+          const char* message = Diverged(m->opt.disableflags, d);
+          if (message) {
+            sim->run = 0;
+            mju::strcpy_arr(sim->load_error, message);
+          } else {
+            stepped = true;
+          }
+        }
+
+        // in-sync: step until ahead of cpu
+        else {
+          bool   measured = false;
+          mjtNum prevSim  = d->time;
+
+          double refreshTime = simRefreshFraction / sim->refresh_rate;
+
+          // step while sim lags behind cpu and within refreshTime
+          while (Seconds((d->time - syncSim) * slowdown) < mj::Simulate::Clock::now() - syncCPU &&
+                  mj::Simulate::Clock::now() - startCPU < Seconds(refreshTime)) {
+            // measure slowdown before first step
+            if (!measured && elapsedSim) {
+              sim->measured_slowdown =
+                  std::chrono::duration<double>(elapsedCPU).count() / elapsedSim;
+              measured = true;
+            }
+
+            // inject noise
+            sim->InjectNoise(sim->key);
+
+            // call mj_step
+            mj_step(m, d);
+            const char* message = Diverged(m->opt.disableflags, d);
+            if (message) {
+              sim->run = 0;
+              mju::strcpy_arr(sim->load_error, message);
+            } else {
+              stepped = true;
+            }
+
+            // break if reset
+            if (d->time < prevSim) { break; }
+          }
+        }
+
+        // save current state to history buffer
+        if (stepped) { sim->AddToHistory(); }
+      }
+
+      // paused
+      else {
+        // run mj_forward, to update rendering and joint sliders
+        mj_forward(m, d);
+        if (sim->pause_update) { mju_copy(d->qacc_warmstart, d->qacc, m->nv); }
+        sim->speed_changed = true;
+      }
+    }
+  }  // release std::lock_guard<std::mutex>
 }

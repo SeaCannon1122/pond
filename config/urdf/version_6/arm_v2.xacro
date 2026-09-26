@@ -34,17 +34,17 @@
             <origin xyz="-0.035 0 0" rpy="0 0 0"/>
         </xacro:inertial_box>
         <collision>
-            <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+            <!-- <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
             <geometry>
                 <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_0_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
-            <material name="arm_material"/>
-            <!--
+            <material name="arm_material"/> -->
+            
             <origin xyz="-0.035 0 0" rpy="0 0 0"/>
             <geometry>
                 <box size="0.09 0.025 0.035" />
             </geometry>
-            -->
+           
         </collision>
         <visual>
             <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
@@ -69,17 +69,17 @@
             <origin xyz="-0.02 0.025 0" rpy="0 0 0"/>
         </xacro:inertial_box>
         <collision>
-            <origin xyz="-0.02 0.05 0" rpy="${pi/2} 0 0"/>
+            <!-- <origin xyz="-0.02 0.05 0" rpy="${pi/2} 0 0"/>
             <geometry>
                 <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_1_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
-            <material name="arm_material"/>
-            <!--
+            <material name="arm_material"/> -->
+            
             <origin xyz="-0.02 0.025 0" rpy="0 0 0"/>
             <geometry>
                 <box size="0.025 0.075 0.035" />
             </geometry>
-            -->
+           
         </collision>
 
         <visual>
@@ -105,17 +105,17 @@
             <origin xyz="0.045 0 0" rpy="0 0 0"/>
         </xacro:inertial_box>
         <collision>
-            <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+            <!-- <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
             <geometry>
                 <mesh filename="${mesh_folder}version_6/arm_v2/arm_segment_2_reduced.stl" scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
             </geometry>
-            <material name="arm_material"/>
-            <!--
+            <material name="arm_material"/> -->
+            
             <origin xyz="0.045 0 0" rpy="0 0 0"/>
             <geometry>
                 <box size="0.05 0.03 0.035" />
             </geometry>
-            -->
+           
         </collision>
 
         <visual>
