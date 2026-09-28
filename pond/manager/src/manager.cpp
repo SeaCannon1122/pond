@@ -173,7 +173,7 @@ std::string PondManager::load_module(
 {
     {
         std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
-        for (auto& m : module_discovery.modules) if (m->name == module_name)
+        for (auto& m : module_discovery.modules) if (m->name == name)
             LOG_RETURN("Module with name '" + name + "' already exists on thread '" + m->thread_name + "'");
     }
     

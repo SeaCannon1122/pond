@@ -4,6 +4,7 @@ add_library(controllers-pond_bundle SHARED
   bundle.cpp
   diff_drive_controller.cpp
   arm_controller.cpp
+  arm_controller_old.cpp
   angle_gripper_controller.cpp
 )
 

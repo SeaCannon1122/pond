@@ -34,13 +34,6 @@ private:
         std::atomic<double> received{0.02};
     } arm_speed;
 
-    struct
-    {
-        pond::Receiver receiver;
-        std::atomic<bool> received{false};
-        bool disabled = false;
-    } disable_arm;
-
     pond::Receiver update_receiver;
 
     std::vector<JointState> joint_states;
@@ -103,7 +96,6 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
     );
 
     arm_speed.receiver = createReceiver<double>({"arm_speed"}, [this](double* speed) {arm_speed.received.store(*speed);});
-    disable_arm.receiver = createReceiver<bool>({"disable_arm"}, [this](bool* disable) {disable_arm.received.store(*disable);});
 
     update_receiver = createReceiver<MotorInterface>(pond::ChannelsInfo().channels<MotorInterface, MotorInterface, MotorInterface>("arm_motor0/update", "arm_motor1/update", "arm_motor2/update"), [this](MotorInterface** ifs) {
     
@@ -214,7 +206,6 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
 void ArmController::onShutdownTF()
 {
     update_receiver.destroy();
-    disable_arm.receiver.destroy();
     arm_speed.receiver.destroy();
     target.receiver.destroy();
 }

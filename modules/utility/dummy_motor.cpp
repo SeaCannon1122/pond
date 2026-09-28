@@ -1,9 +1,12 @@
 #include "pond_data_types/motor_types.hpp"
+#include <algorithm>
+#include <cstdlib>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
 
 struct motor
 {
+    double cmd_pos = 0;
     double pos = 0;
     double vel = 0;
 };
@@ -21,6 +24,7 @@ private:
     bool mode_vel;
     std::vector<motor> motors;
     double last_time = 0;
+    double max_speed = 0;
 };
 
 POND_MODULE_CPP_DECLARE(DummyMotor, "dummy_motor", "mock motor")
@@ -32,6 +36,7 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
 
     mode_pos = (*mode_o == "position");
     mode_vel = (*mode_o == "velocity");
+    max_speed = std::abs(parameter("max_speed").asDouble().get(0.0));
 
     auto names = parameter("motor_names").asStringArray().get({"motor"});
     motors.resize(names.size());
@@ -47,17 +52,45 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
 
         double time = pond::get_time();
         if (last_time == 0) last_time = time;
+        double dt = time - last_time;
 
         for (uint32_t i = 0; i < motors.size(); i++)
         {
             if (mode_pos)
             {
-                feedbacks[i]->pos = motors[i].pos;
-                feedbacks[i]->vel = 0;
+                double cmd_speed = std::abs(motors[i].vel);
+                double speed = (cmd_speed == 0 ? max_speed : cmd_speed);
+                
+                if (speed == 0)
+                {
+                    motors[i].pos = motors[i].cmd_pos;
+                    feedbacks[i]->pos = motors[i].cmd_pos;
+                    feedbacks[i]->vel = 0;
+                }
+                else
+                {
+                    double diff = motors[i].cmd_pos - motors[i].pos;
+                    double abs_diff = std::abs(diff);
+
+                    double delta = dt * speed;
+                    if (delta < abs_diff)
+                    {
+                        double sign = (motors[i].cmd_pos > motors[i].pos ? 1.0 : -1.0);
+                        motors[i].pos += sign * dt * speed;
+                        feedbacks[i]->pos = motors[i].pos;
+                        feedbacks[i]->vel = sign * speed;
+                    }
+                    else
+                    {
+                        motors[i].pos = motors[i].cmd_pos;
+                        feedbacks[i]->pos = motors[i].cmd_pos;
+                        feedbacks[i]->vel = 0;
+                    }
+                }
             }
             if (mode_vel)
             {
-                motors[i].pos += motors[i].vel * (time - last_time);
+                motors[i].pos += motors[i].vel * dt;
 
                 feedbacks[i]->pos = motors[i].pos;
                 feedbacks[i]->vel = motors[i].vel;
@@ -70,10 +103,9 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
 
     command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
 
-        if (last_time == 0) last_time = pond::get_time();
         for (uint32_t i = 0; i < motors.size(); i++)
         {
-            if (commands[i]->pos) motors[i].pos = *commands[i]->pos;
+            if (commands[i]->pos) motors[i].cmd_pos = *commands[i]->pos;
             if (commands[i]->vel) motors[i].vel = *commands[i]->vel;
         }
     });

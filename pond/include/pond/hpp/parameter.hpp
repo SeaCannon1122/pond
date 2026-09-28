@@ -257,8 +257,7 @@ namespace pond
 
         uint32_t listLength(const std::string& needed_parameter_name)
         {
-            uint32_t i = 0;
-            while (true)
+            for (uint32_t i = 0; true; i++)
             {
                 std::string name = prefix + "[" + std::to_string(i) + "]." + needed_parameter_name;
                 if (!api->get_parameter(api->ctx, (uint8_t*)name.c_str())) return i;

@@ -59,10 +59,10 @@ def main():
     # lidar(pm)
     state_tracker(pm, ROS_DESCRIPTION_PATH)
     ros2_bridge(pm)
-    #drive(pm, False)
-    #arm(pm, False)
+    drive(pm, False)
+    arm(pm, False)
 
-    mujoco(pm, NATIVE_DESCRIPTION_PATH)
+    #mujoco(pm, NATIVE_DESCRIPTION_PATH)
     
 
     try:

@@ -1,3 +1,4 @@
+#include "pond/pond.h"
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
@@ -15,7 +16,6 @@ private:
     pond::Receiver twist_receiver, update_receiver;
     std::vector<JointState> joint_states;
 
-    std::vector<std::string> joint_names;
     std::vector<double> wheel_radii;
     double slip_multiplier;
     double timeout;
@@ -29,47 +29,41 @@ POND_MODULE_CPP_DECLARE(DiffDriveController, "diff_drive_controller", "Control a
 pond_result DiffDriveController::onStartupTF(const std::vector<void*>& args)
 {
     std::string base_link = parameter("base_link").asString().get("base_link");
-    auto joint_names_o = parameter("wheel_joint_names").asStringArray().getStrict(1, 0);
-    auto slip_multiplier_o = parameter("slip_multiplier").asDouble().getStrict();
-    if (!joint_names_o || !slip_multiplier_o) return POND_ERROR;
-
-    auto motor_names_o = parameter("motor_names").asStringArray().getStrict(joint_names_o->size(), joint_names_o->size());
-    auto wheel_radii_o = parameter("wheel_radii").asDoubleArray().getStrict(joint_names_o->size(), joint_names_o->size());
-    if (!wheel_radii_o || !motor_names_o) return POND_ERROR;
-
+    slip_multiplier = parameter("slip_multiplier").asDouble().get(1.0);
     timeout = parameter("timeout").asDouble().get(0.5);
 
-    joint_names = std::move(*joint_names_o); wheel_radii = std::move(*wheel_radii_o); slip_multiplier = *slip_multiplier_o;
-    wheel_y_offsets.reserve(joint_names.size());
-    joint_states.reserve(joint_names.size());
-
-    for (auto& name : joint_names)
+    auto space = parameterSpace("wheels");
+    if (uint32_t motor_count = space.listLength("joint"); motor_count != 0)
     {
-        joint_states.push_back({.joint_name = name});
+        joint_states.resize(motor_count);
+        wheel_y_offsets.resize(motor_count);
+        wheel_radii.resize(motor_count);
+    }
+    else POND_LOG_RETURN_ERROR("Did not find motor declaration");
+
+    pond::ChannelsInfo channels_info;
+    for (uint32_t i = 0; i < joint_states.size(); i++)
+    {
+        joint_states[i].joint_name = space.parameterAtIndex(i, "joint").asString().get("");
+        
+        auto radius = space.parameterAtIndex(i, "radius").asDouble().getStrict();
+        auto motor_name = space.parameterAtIndex(i, "motor_name").asString().getStrict();
+        if (!radius || !motor_name) return POND_ERROR;
 
         GetJointInfoRequest joint_request;
-        if(!tfGetJointInfo(name, joint_request)) return POND_ERROR;
-
-        if (joint_request.is_static)
-        {
-            POND_LOG("Joint '%s' is not dynamic", name.c_str());
-            return POND_ERROR;
-        }
+        if(!tfGetJointInfo(joint_states[i].joint_name, joint_request)) return POND_ERROR;
 
         GetFrameTransformRequest frame_request;
         if (!tfGetTransform(joint_request.parent_link_name, base_link, 0, frame_request)) return POND_ERROR;
 
-        Sophus::SE3d total = frame_request.tf * joint_request.tf;
-
-        wheel_y_offsets.push_back(total.translation().y());
+        wheel_y_offsets[i] = (frame_request.tf * joint_request.tf).translation().y();
+        wheel_radii[i] = *radius;
+        channels_info.channel<MotorInterface>(*motor_name + "/update");
     }
-
-    pond::ChannelsInfo channels_info;
-    for (uint32_t i = 0; i < joint_names.size(); i++) channels_info.channel<MotorInterface>(motor_names_o->at(i) + "/update");
 
     update_receiver = createReceiver<MotorInterface>(channels_info, [this](MotorInterface** ifs) {
 
-        for (uint32_t i = 0; i < joint_names.size(); i++)
+        for (uint32_t i = 0; i < joint_states.size(); i++)
         {
             joint_states[i].angle = (ifs[i]->feedback.pos ? *ifs[i]->feedback.pos : 0);
             joint_states[i].time = ifs[i]->feedback.time;
@@ -88,12 +82,12 @@ pond_result DiffDriveController::onStartupTF(const std::vector<void*>& args)
         {
             if (!timed_out) POND_LOG("Timeout: last cmd stamp age (%f) > timeout (%f)", time-command.stamp.time, timeout);
             timed_out = true;
-            for (int i = 0; i < joint_names.size(); i++) ifs[i]->command.vel = 0;
+            for (int i = 0; i < joint_states.size(); i++) ifs[i]->command.vel = 0;
         }
         else
         {
             timed_out = false;
-            for (int i = 0; i < joint_names.size(); i++)
+            for (int i = 0; i < joint_states.size(); i++)
                 ifs[i]->command.vel = (cmd.lin[0] - cmd.ang[2] * slip_multiplier * wheel_y_offsets[i]) / wheel_radii[i];
         }
     });

@@ -330,7 +330,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         {
             const auto& joint = joints_map.find(state.joint_name);
             if (joint == joints_map.end()) continue;
-            if (joint->second->mimic.is) continue;
+            if (joint->second->mimic.is || joint->second->is_static) continue;
 
             set_joint(joint->second, state.angle, state.time, state.hw_time, &tfs);
         }
