@@ -67,7 +67,7 @@ Eigen::Vector3d std_vec_to_eigen(const std::vector<double>& vec) {return {vec[0]
 pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
 {
     std::vector<int32_t> color_dims = parameter("color.dims").asIntArray().get({1280, 720}, 2, 2);
-    std::vector<int32_t> stereo_dims = parameter("stereo.dims").asIntArray().get({640, 480}, 2, 2);
+    std::vector<int32_t> stereo_dims = parameter("stereo.dims").asIntArray().get({640, 400}, 2, 2);
     uint32_t fps = parameter("fps").asInt().get(30);
 
     imu_info.ang_vel.bias = std_vec_to_eigen(parameter("imu.ang_vel.bias").asDoubleArray().get({0, 0, 0}, 3, 3));
@@ -83,17 +83,19 @@ pond_result DepthaiCamera::onStartup(const std::vector<void*>& args)
     color_info.fps = fps; stereo_left_info.fps = fps; stereo_right_info.fps = fps;
     color_info.format = ImgFrame::Format::RGB8; stereo_right_info.format = ImgFrame::Format::Mono8; stereo_left_info.format = ImgFrame::Format::Mono8;
 
-    color_info.stamp.frame_id = parameter("color.frame_id").asString().get("color_optical_frame");
-    stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get("stereo_left_optical_frame");
-    stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get("stereo_right_optical_frame");
+    std::string camera_name = parameter("camera_name").asString().get("camera");
+
+    color_info.stamp.frame_id = parameter("color.frame_id").asString().get(camera_name+"_color_optical_frame");
+    stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get(camera_name+"_stereo_left_optical_frame");
+    stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get(camera_name+"_stereo_right_optical_frame");
     imu_data.stamp.frame_id = parameter("imu.frame_id").asString().get("imu");
     imu_info.stamp.frame_id = imu_data.stamp.frame_id;
 
     image_distributor = createDistributorTyped<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
-            "color/image", "color/info", 
-            "stereo_left/image", "stereo_left/info", 
-            "stereo_right/image", "stereo_right/info",
+            camera_name+"/color/image", camera_name+"/color/info", 
+            camera_name+"/stereo_left/image", camera_name+"/stereo_left/info", 
+            camera_name+"/stereo_right/image", camera_name+"/stereo_right/info",
         }
     );
 

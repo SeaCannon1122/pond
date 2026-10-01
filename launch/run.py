@@ -11,7 +11,6 @@ from parts.drive import *
 from parts.orb_slam3 import *
 from parts.ros2_bridge import *
 from parts.sensors import *
-from parts.state_tracker import *
 from parts.mujoco import *
 
 is_running = True
@@ -50,6 +49,9 @@ def main():
     ip = "192.168.137.26"
     ip = ip
 
+    pm.set_thread_frame_time("robot_state_thread", 1.0)
+    pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : ROS_DESCRIPTION_PATH})
+
     #dummy_cam(pm, "camera_front", 1280, 720, 30, True, ip)
     #camera_front(pm, 1280, 720, 30, True, ip)
     #dummy_cam(pm, "camera_back", 1280, 720, 30, True, ip)
@@ -57,13 +59,12 @@ def main():
     #dummy_cam(pm, "camera_gripper", 1280, 720, 30, True, ip)
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
-    state_tracker(pm, ROS_DESCRIPTION_PATH)
     ros2_bridge(pm)
-    drive(pm, False)
-    arm(pm, False)
-
-    #mujoco(pm, NATIVE_DESCRIPTION_PATH)
     
+    mujoco(pm, NATIVE_DESCRIPTION_PATH)
+    
+    drive(pm, False, False)
+    arm(pm, False, False)
 
     try:
         while is_running:

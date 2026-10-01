@@ -2,11 +2,8 @@ from pond import Manager
 
 def lidar(pm: Manager):
     pm.load_module(
-        name="lidar",
-        bundle_name="rplidar",
-        module_name="lidar",
-        thread_name="lidar_thread",
-        parameters={
+        "lidar", "rplidar/lidar", "lidar_thread",
+        {
             "channel_type" : "serial",
             "serial_port" : "/dev/quac/lidar",
             "serial_baudrate" : 115200,

@@ -10,7 +10,7 @@ namespace pond
     class ModuleBase : public ParameterSpace
     {
     public:
-        void init(pond_api *_api) {_pond_api = *_api; ParameterSpace::api = &_pond_api; ParameterSpace::prefix = "";}
+        void init(pond_api *_api) {_pond_api = *_api; ParameterSpace::api = &_pond_api; ParameterSpace::_param_prefix = "";}
 
         virtual pond_result onStartup(const std::vector<void*>& args) {return POND_SUCCESS;}
         virtual void onShutdown() {}

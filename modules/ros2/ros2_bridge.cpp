@@ -84,9 +84,8 @@ POND_BUNDLE_DECLARE(
 
 pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 {
-    int bridge_count = 0;
-    while (parameter("bridges[" + std::to_string(bridge_count) + "].direction").asString().getStrict({}, false)) bridge_count++;
-    
+    auto space = parameterSpace("bridges");
+    uint32_t bridge_count = space.listLength("direction");
     if (bridge_count == 0) {POND_LOG("Error: Did not find any bridge definitions"); return POND_ERROR;}
 
     rclcpp::init(
@@ -98,28 +97,23 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
 
     for (int i = 0; i < bridge_count; i++)
     {
-        std::string prefix = "bridges[" + std::to_string(i) + "].";
+        auto direction_o = space.parameterAtIndex(i, "direction").asString().getStrict({"POND_TO_ROS", "ROS_TO_POND"});
+        auto pond_channel_o = space.parameterAtIndex(i, "pond.channel").asString().getStrict();
+        auto pond_type_o = space.parameterAtIndex(i, "pond.type").asString().getStrict();
+        auto ros_type_o = space.parameterAtIndex(i, "ros.type").asString().getStrict();
+        if (!direction_o || !pond_channel_o || !pond_type_o || !ros_type_o) continue;
 
-        auto direction_o = parameter(prefix+"direction").asString().getStrict({"POND_TO_ROS", "ROS_TO_POND"});
-        auto pond_channel_o = parameter(prefix+"pond.channel").asString().getStrict();
-        auto pond_type_o = parameter(prefix+"pond.type").asString().getStrict();
-        auto ros_topic_o = parameter(prefix+"ros.topic").asString().getStrict();
-        auto ros_type_o = parameter(prefix+"ros.type").asString().getStrict();
-        if (!direction_o || !pond_channel_o || !pond_type_o || !ros_topic_o || !ros_type_o) continue;
+        std::string direction = *direction_o, pond_channel = *pond_channel_o, pond_type = *pond_type_o, ros_type = *ros_type_o;
+        std::string ros_topic = space.parameterAtIndex(i, "ros.topic").asString().get(pond_channel);
 
-        std::string direction = *direction_o, pond_channel = *pond_channel_o, pond_type = *pond_type_o, ros_topic = *ros_topic_o, ros_type = *ros_type_o;
+        rclcpp::QoS qos(space.parameterAtIndex(i, "ros.qos.depth").asInt().get(10));
 
-        rclcpp::QoS qos(parameter(prefix+"ros.qos.depth").asInt().get(10));
-
-        if (parameter(prefix+"ros.qos.reliable").asBool().get(true)) qos.reliable();
-        else qos.best_effort();
-
-        if (parameter(prefix+"ros.qos.volatile").asBool().get(true)) qos.durability_volatile();
-        else qos.transient_local();
+        if (space.parameterAtIndex(i, "ros.qos.reliable").asBool().get(true)) qos.reliable(); else qos.best_effort();
+        if (space.parameterAtIndex(i, "ros.qos.volatile").asBool().get(true)) qos.durability_volatile(); else qos.transient_local();
 
         if (direction == "POND_TO_ROS")
         {
-            bool is_vector = parameter(prefix+"pond.is_vector").asBool().get(false);
+            bool is_vector = space.parameterAtIndex(i, "pond.is_vector").asBool().get(false);
             
             bool bridged = [&]() -> bool {
                 if (pond_type == "ImuData")

@@ -237,9 +237,8 @@ PYBIND11_MODULE(_pond, m)
         [](
             PondManager& self,
             const std::string& name,
-            const std::string& bundle_name,
-            const std::string& module_name,
-            const std::string& thread_name,
+            const std::string& module,
+            const std::string& thread,
             const py::dict& parameters,
             const std::unordered_map<std::string, std::string>& channel_mappings,
             const std::string& channel_namespace
@@ -250,11 +249,14 @@ PYBIND11_MODULE(_pond, m)
 
             make_parameters(parameters, native_parameters, "");
 
+            size_t pos = module.find('/');
+            if (pos == std::string::npos) throw std::invalid_argument("Invalid module. Need <bundle_name>/<module_name>");
+
             return self.load_module(
                 name,
-                bundle_name,
-                module_name,
-                thread_name,
+                module.substr(0, pos),
+                module.substr(pos + 1),
+                thread,
                 native_parameters,
                 channel_mappings,
                 channel_namespace,
@@ -263,9 +265,8 @@ PYBIND11_MODULE(_pond, m)
         },
 
         py::arg("name"),
-        py::arg("bundle_name"),
-        py::arg("module_name"),
-        py::arg("thread_name") = "default_thread",
+        py::arg("module"),
+        py::arg("thread") = "default_thread",
         py::arg("parameters") = py::dict{},
         py::arg("channel_mappings") = py::dict{},
         py::arg("channel_namespace") = ""
@@ -285,7 +286,7 @@ PYBIND11_MODULE(_pond, m)
     .def(
         "set_thread_frame_time",
         &PondManager::set_thread_frame_time,
-        py::arg("thread_name"),
+        py::arg("thread"),
         py::arg("frame_time")
     );
     

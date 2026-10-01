@@ -1,71 +1,36 @@
 from pond import Manager
+from .cfg import cfg_drive as cfg
 
-def drive(pm: Manager, real: bool):
-    
-    pm.set_thread_frame_time("drive_thread", 0.1)
+def drive(pm: Manager, real: bool = True, fake: bool = False):
+        
+    pm.set_thread_frame_time(cfg.thread_name, 0.1)
 
+    # drive controller
     pm.load_module(
-        name="drive_controller",
-        bundle_name="controllers",
-        module_name="diff_drive_controller",
-        thread_name="drive_thread",
-        parameters={
-            "wheels" : [
-                { "joint" : "wheel_front_left_joint",   "radius" : 0.05, "motor_name" : "wheel_front_left_motor"    },
-                { "joint" : "wheel_front_right_joint",  "radius" : 0.05, "motor_name" : "wheel_front_right_motor"   },
-                { "joint" : "wheel_back_left_joint",    "radius" : 0.05, "motor_name" : "wheel_back_left_motor"     },
-                { "joint" : "wheel_back_right_joint",   "radius" : 0.05, "motor_name" : "wheel_back_right_motor"    },
-            ],
-            "slip_multiplier" : 1.6
-        },
+        "drive_controller", "controllers/diff_drive_controller", cfg.thread_name,
+
+        {"wheels" : cfg.wheels, "slip_multiplier" : cfg.slip_multiplier},
     )
 
+    # ddsm hardware
     if real:
         pm.load_module(
-            name="wheel_driver",
-            bundle_name="waveshare",
-            module_name="ddsm115_driver",
-            thread_name="drive_thread",
-            parameters={
-                "device" : "/dev/quac/wheels",
-                "act" : 3,
-
-                "motors" : [
-                    { "name" : "wheel_front_left_motor",    "id" : 1,   "invert" : False,   },
-                    { "name" : "wheel_front_right_motor",   "id" : 2,   "invert" : True,    },
-                    { "name" : "wheel_back_left_motor",     "id" : 3,   "invert" : False,   },
-                    { "name" : "wheel_back_right_motor",    "id" : 4,   "invert" : True,    },
-                ]
-            }
+            "wheel_driver", "waveshare/ddsm115_driver", cfg.thread_name,        
+            
+            {"device" : cfg.ddsm_device, "act" : cfg.ddsm_act, "motors" : cfg.ddsm_motors}
         )
-    else:
+
+    # mock hardware
+    if fake:
         pm.load_module(
-            name="dummy_wheels",
-            bundle_name="utility",
-            module_name="dummy_motor",
-            thread_name="drive_thread",
-            parameters={
-                "mode" : "velocity",
-                "motor_names": [
-                    "wheel_front_left_motor",
-                    "wheel_front_right_motor",
-                    "wheel_back_left_motor",
-                    "wheel_back_right_motor"
-                ]
-            },
+            "dummy_wheels", "utility/dummy_motor", cfg.thread_name,
+            
+            {"mode" : "velocity", "motor_names": cfg.motor_names},
         )
 
+    # controller manager
     pm.load_module(
-        name="drive_controller_manager",
-        bundle_name="utility",
-        module_name="motor_controller_manager",
-        thread_name="drive_thread",
-        parameters={
-            "motor_names": [
-                "wheel_front_left_motor",
-                "wheel_front_right_motor",
-                "wheel_back_left_motor",
-                "wheel_back_right_motor"
-            ]
-        },
+        "drive_controller_manager", "utility/motor_controller_manager", cfg.thread_name,
+
+        {"motor_names": cfg.motor_names},
     )

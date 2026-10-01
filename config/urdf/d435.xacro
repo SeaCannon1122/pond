@@ -35,8 +35,8 @@ aluminum peripherial evaluation case.
 
     <!-- The following values are approximate, and the camera node
      publishing TF values with actual calibrated camera extrinsic values -->
-    <xacro:property name="d435_cam_depth_to_infra1_offset" value="0.0"/>
-    <xacro:property name="d435_cam_depth_to_infra2_offset" value="-0.050"/>
+    <xacro:property name="d435_cam_depth_to_stereo_left_offset" value="0.0"/>
+    <xacro:property name="d435_cam_depth_to_stereo_right_offset" value="-0.050"/>
     <xacro:property name="d435_cam_depth_to_color_offset" value="0.015"/>
 
     <!-- The following values model the aluminum peripherial case for the
@@ -114,34 +114,34 @@ aluminum peripherial evaluation case.
       <link name="${name}_depth_optical_frame"/>
 
       <!-- camera left IR joints and links -->
-      <joint name="${name}_infra1_joint" type="fixed">
-        <origin xyz="0 ${d435_cam_depth_to_infra1_offset} 0" rpy="0 0 0" />
+      <joint name="${name}_stereo_left_joint" type="fixed">
+        <origin xyz="0 ${d435_cam_depth_to_stereo_left_offset} 0" rpy="0 0 0" />
         <parent link="${name}_link" />
-        <child link="${name}_infra1_frame" />
+        <child link="${name}_stereo_left_frame" />
       </joint>
-      <link name="${name}_infra1_frame"/>
+      <link name="${name}_stereo_left_frame"/>
 
-      <joint name="${name}_infra1_optical_joint" type="fixed">
+      <joint name="${name}_stereo_left_optical_joint" type="fixed">
         <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}" />
-        <parent link="${name}_infra1_frame" />
-        <child link="${name}_infra1_optical_frame" />
+        <parent link="${name}_stereo_left_frame" />
+        <child link="${name}_stereo_left_optical_frame" />
       </joint>
-      <link name="${name}_infra1_optical_frame"/>
+      <link name="${name}_stereo_left_optical_frame"/>
 
       <!-- camera right IR joints and links -->
-      <joint name="${name}_infra2_joint" type="fixed">
-        <origin xyz="0 ${d435_cam_depth_to_infra2_offset} 0" rpy="0 0 0" />
+      <joint name="${name}_stereo_right_joint" type="fixed">
+        <origin xyz="0 ${d435_cam_depth_to_stereo_right_offset} 0" rpy="0 0 0" />
         <parent link="${name}_link" />
-        <child link="${name}_infra2_frame" />
+        <child link="${name}_stereo_right_frame" />
       </joint>
-      <link name="${name}_infra2_frame"/>
+      <link name="${name}_stereo_right_frame"/>
 
-      <joint name="${name}_infra2_optical_joint" type="fixed">
+      <joint name="${name}_stereo_right_optical_joint" type="fixed">
         <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}" />
-        <parent link="${name}_infra2_frame" />
-        <child link="${name}_infra2_optical_frame" />
+        <parent link="${name}_stereo_right_frame" />
+        <child link="${name}_stereo_right_optical_frame" />
       </joint>
-      <link name="${name}_infra2_optical_frame"/>
+      <link name="${name}_stereo_right_optical_frame"/>
 
       <!-- camera color joints and links -->
       <joint name="${name}_color_joint" type="fixed">

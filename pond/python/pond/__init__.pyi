@@ -8,9 +8,8 @@ class Manager:
     def load_module(
         self,
         name: str,
-        bundle_name: str,
-        module_name: str,
-        thread_name: str = "default_thread",
+        module: str,
+        thread: str = "default_thread",
         parameters: dict[str, object] = {},
         channel_mappings: dict[str, str] = {},
         channel_namespace: str = ""
@@ -20,4 +19,4 @@ class Manager:
 
     def print_modules(self) -> str: ...
 
-    def set_thread_frame_time(self, thread_name: str, frame_time: float) -> None: ...
+    def set_thread_frame_time(self, thread: str, frame_time: float) -> None: ...

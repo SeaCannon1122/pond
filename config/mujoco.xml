@@ -1,7 +1,7 @@
 <mujoco>
 
     <asset>
-        <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="100" height="100"/>
+        <texture name="grid" type="2d" builtin="checker" rgb1=".9 .4 .4" rgb2=".6 .7 .8" width="100" height="100"/>
         <material name="grid" texture="grid" texrepeat="8 8" texuniform="true" reflectance="0.06"/>
     </asset>
     
@@ -22,28 +22,28 @@
 
     <actuator>
         <position
-            name="arm_segment_0_servo" joint="arm_segment_0_joint" 
+            name="arm_motor0" joint="arm_segment_0_joint" 
             kp="100"
             kv="0.1"
             ctrlrange="-3.826 0" ctrllimited="true"
         />
         
         <position
-            name="arm_segment_1_servo" joint="arm_segment_1_joint" 
+            name="arm_motor1" joint="arm_segment_1_joint" 
             kp="100"
             kv="0.1"
             ctrlrange="-0.785398163 1.570796327" ctrllimited="true"
         />
 
         <position
-            name="arm_segment_2_servo" joint="arm_segment_2_joint" 
+            name="arm_motor2" joint="arm_segment_2_joint" 
             kp="100"
             kv="0.1"
             ctrlrange="0 3.091592654" ctrllimited="true"
         />
 
         <position
-            name="gripper_servo" joint="gripper_joint" 
+            name="gripper_motor" joint="gripper_joint" 
             kp="100"
             kv="0.1"
             ctrlrange="0 1.7" ctrllimited="true"

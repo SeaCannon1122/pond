@@ -59,9 +59,7 @@ POND_BUNDLE_DECLARE(
 
 pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
 {
-    std::string mode;
-    auto mode_o = parameter("mode").asString().getStrict({"color", "color_depth", "color_stereo"});
-    if (!mode_o) return POND_ERROR; else mode = *mode_o;
+    std::string mode = parameter("mode").asString().get("color", {"color", "color_depth", "color_stereo"});
     mode_color = (mode == "color"); mode_color_depth = (mode == "color_depth"); mode_color_stereo = (mode == "color_stereo");
 
     std::vector<int32_t> color_dims = parameter("color.dims").asIntArray().get({1280, 720}, 2, 2);
@@ -69,10 +67,12 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
     std::vector<int32_t> stereo_dims = parameter("stereo.dims").asIntArray().get({640, 480}, 2, 2);
     uint32_t fps = parameter("fps").asInt().get(30);
 
-    color_info.stamp.frame_id = parameter("color.frame_id").asString().get("color_optical_frame");
-    depth_info.stamp.frame_id = parameter("depth.frame_id").asString().get("depth_optical_frame");
-    stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get("stereo_left_optical_frame");
-    stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get("stereo_right_optical_frame");
+    std::string camera_name = parameter("camera_name").asString().get("camera");
+
+    color_info.stamp.frame_id = parameter("color.frame_id").asString().get(camera_name+"_color_optical_frame");
+    depth_info.stamp.frame_id = parameter("depth.frame_id").asString().get(camera_name+"_depth_optical_frame");
+    stereo_left_info.stamp.frame_id = parameter("stereo.left_frame_id").asString().get(camera_name+"_stereo_left_optical_frame");
+    stereo_right_info.stamp.frame_id = parameter("stereo.right_frame_id").asString().get(camera_name+"_stereo_right_optical_frame");
 
     color_info.fps = fps; depth_info.fps = fps; aligned_depth_info.fps = fps; stereo_right_info.fps = fps; stereo_left_info.fps = fps;
     color_info.format = ImgFrame::Format::RGB8; depth_info.format = ImgFrame::Format::Depth16; aligned_depth_info.format = ImgFrame::Format::Depth16;
@@ -119,23 +119,23 @@ pond_result RealsenseCamera::onStartup(const std::vector<void*>& args)
     {
         if (align_depth) distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
             {
-                "color/image", "color/info", 
-                "depth/image", "depth/info", 
-                "depth_aligned/image", "depth_aligned/info", 
+                camera_name+"/color/image", camera_name+"/color/info", 
+                camera_name+"/depth/image", camera_name+"/depth/info", 
+                camera_name+"/depth_aligned/image", camera_name+"/depth_aligned/info", 
             }
         );
         else distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
             {
-                "color/image", "color/info", 
-                "depth/image", "depth/info", 
+                camera_name+"/color/image", camera_name+"/color/info", 
+                camera_name+"/depth/image", camera_name+"/depth/info", 
             }
         );
     }
     if (mode_color_stereo) distributor = createDistributor<ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo, ImgFrameSPtr, CameraInfo>(
         {
-            "color/image", "color/info", 
-            "stereo_left/image", "stereo_left/info", 
-            "stereo_right/image", "stereo_right/info"
+            camera_name+"/color/image", camera_name+"/color/info", 
+            camera_name+"/stereo_left/image", camera_name+"/stereo_left/info", 
+            camera_name+"/stereo_right/image", camera_name+"/stereo_right/info"
         }
     );
 

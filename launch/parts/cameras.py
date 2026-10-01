@@ -1,170 +1,86 @@
 from pond import Manager
 
+def stream_cam(pm: Manager, cam_name: str, width: int, height: int, format: str, ip: str, port: int):
+    pm.load_module(
+        cam_name+"_streamer", "gstreamer/rtp_server", cam_name+"_thread",
+        {
+            "width": width, "height": height,
+            "format": format,
+
+            "ip": ip,
+            "port": port, 
+            
+            "bitrate": 5000,
+            "key_int_max:": 60
+        },
+        channel_mappings={"in": cam_name+"/color/image",},
+    )
+
+# camera front oak d lite
 def camera_front(pm: Manager, color_width: int, color_height: int, fps: int, stream: bool = False, ip: str = ""):
 
     pm.load_module(
-        name="camera_front",
-        bundle_name="depthai",
-        module_name="camera",
-        thread_name="camera_front_thread",
-        parameters={
+        "camera_front", "depthai/camera", "camera_front_thread",
+        {
+            "camera_name" : "camera_front",
             "MxId" : "19443010218B077E00",
             "fps": fps,
-            "color": {
-                "dims": [color_width, color_height],
-                "frame_id" : "camera_front_color_optical_frame",
-            },
-            "stereo": {
-                "dims": [640, 400],
-                "left_frame_id" : "camera_front_infra1_optical_frame",
-                "right_frame_id" : "camera_front_infra2_optical_frame",
-            },
-            "imu": {
-                "frame_id" : "imu",
-                "rate" : 100,
-            }  
+
+            "color.dims": [color_width, color_height],
+            "imu.rate" : 100,
         },
-        channel_namespace="camera_front"
     )
 
     if stream:
-        pm.load_module(
-            name="camera_front_streamer",
-            bundle_name="gstreamer",
-            module_name="rtp_server",
-            thread_name="camera_front_thread",
-            parameters={
-                "width": color_width,
-                "height": color_height,
-                "port": 5000,
-                "ip": ip,
-                "format": "RGB8",
-                "bitrate": 5000,
-                "key_int_max:": 60
-            },
-            channel_mappings={"in": "camera_front/color/image",},
-        )
+        stream_cam(pm, "camera_front", color_width, color_height, "RGB8", ip, 5000)
 
+# camera back realsense d435
 def camera_back(pm: Manager, color_width: int, color_height: int, fps: int, mode: str, stream: bool = False, ip: str = ""):
     pm.load_module(
-        name="camera_back",
-        bundle_name="realsense",
-        module_name="camera",
-        thread_name="camera_back_thread",
-        parameters={
+        "camera_back", "realsense/camera", "camera_back_thread",
+        {
+            "camera_name" : "camera_back",
             "serial_number" : "827312072798", # gripper
             "fps": fps,
-            "color": {
-                "dims": [color_width, color_height],
-                "frame_id" : "camera_back_color_optical_frame",
-            },
-            "depth": {
-                "dims": [640, 480],
-                "frame_id" : "camera_back_depth_optical_frame",
-                "align_to_color": True,
-            },
-            "stereo": {
-                "dims": [640, 480],
-                "left_frame_id" : "camera_back_infra1_optical_frame",
-                "right_frame_id" : "camera_back_infra2_optical_frame",
-            },
-            "mode": mode
-        },
-        channel_namespace="camera_back"
-    )
-    if stream:
-        pm.load_module(
-            name="camera_back_streamer",
-            bundle_name="gstreamer",
-            module_name="rtp_server",
-            thread_name="camera_back_thread",
-            parameters={
-                "width": color_width,
-                "height": color_height,
-                "port": 5001,
-                "ip": ip,
-                "format": "RGB8",
-                "bitrate": 5000,
-                "key_int_max:": 60
-            },
-            channel_mappings={"in": "camera_back/color/image",},
-        )
+            "mode": mode,
 
+            "color.dims": [color_width, color_height],
+            "depth.align_to_color": True,
+        },
+    )
+
+    if stream:
+        stream_cam(pm, "camera_back", color_width, color_height, "RGB8", ip, 5001)
+
+# camera gripper realsense d435
 def camera_gripper(pm: Manager, color_width: int, color_height: int, fps: int, mode: str, stream: bool = False, ip: str = ""):
     pm.load_module(
-        name="camera_gripper",
-        bundle_name="realsense",
-        module_name="camera",
-        thread_name="camera_gripper_thread",
-        parameters={
+        "camera_gripper", "realsense/camera", "camera_gripper_thread",
+        {
+            "camera_name" : "camera_gripper",
             "serial_number" : "938422071694", # back
             "fps": fps,
-            "color": {
-                "dims": [color_width, color_height],
-                "frame_id" : "camera_gripper_color_optical_frame",
-            },
-            "depth": {
-                "dims": [640, 480],
-                "frame_id" : "camera_gripper_depth_optical_frame",
-                "align_to_color": True,
-            },
-            "stereo": {
-                "dims": [640, 480],
-                "left_frame_id" : "camera_gripper_infra1_optical_frame",
-                "right_frame_id" : "camera_gripper_infra2_optical_frame",
-            },
-            "mode": mode
+            "mode": mode,
+
+            "color.dims": [color_width, color_height],
+            "depth.align_to_color": True,
         },
-        channel_namespace="camera_gripper"
     )
 
     if stream:
-        pm.load_module(
-            name="camera_gripper_streamer",
-            bundle_name="gstreamer",
-            module_name="rtp_server",
-            thread_name="camera_gripper_thread",
-            parameters={
-                "width": color_width,
-                "height": color_height,
-                "port": 5002,
-                "ip": ip,
-                "format": "RGB8",
-                "bitrate": 5000,
-                "key_int_max:": 60
-            },
-            channel_mappings={"in": "camera_gripper/color/image",},
-        )
+        stream_cam(pm, "camera_gripper", color_width, color_height, "RGB8", ip, 5002)
 
+# dummy camera
 def dummy_cam(pm: Manager, camera_name: str, width: int, height: int, fps: int, stream: bool = False, ip: str = ""):
     pm.load_module(
-        name=camera_name,
-        bundle_name="utility",
-        module_name="dummy_camera",
-        thread_name=camera_name + "_thread",
-        parameters={
+        camera_name, "utility/dummy_camera", camera_name + "_thread",
+        {
             "width": width,
             "height": height,
             "fps": fps,
             "frame_id": camera_name + "_color_optical_frame"
         },
-        channel_namespace=camera_name
     )
 
     if stream:
-        pm.load_module(
-            name=camera_name+"_streamer",
-            bundle_name="gstreamer",
-            module_name="rtp_server",
-            thread_name=camera_name+"_thread",
-            parameters={
-                "width": width,
-                "height": height,
-                "port": 5002,
-                "ip": ip,
-                "format": "RGB8",
-                "bitrate": 5000,
-                "key_int_max:": 60
-            },
-            channel_mappings={"in": camera_name+"/color/image",},
-        )
+        stream_cam(pm, camera_name, width, height, "RGB8", ip, 5002)

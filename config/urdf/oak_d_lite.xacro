@@ -9,8 +9,8 @@
 
 		<xacro:property name="baseline" value="0.075" />
 
-		<xacro:property name="left_name" value="infra2" />
-		<xacro:property name="right_name" value="infra1" />
+		<xacro:property name="left_name" value="stereo_right" />
+		<xacro:property name="right_name" value="stereo_left" />
 
 		<link name="${camera_name}" />
 

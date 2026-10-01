@@ -2,7 +2,9 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}/build/debug/python"
     ],
-    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.typeCheckingMode": "standard",
+    "python.languageServer": "Pylance",
+
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/build/debug"
     ]

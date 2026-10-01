@@ -236,22 +236,22 @@ namespace pond
     {
     public: 
         ParameterSpace() {}
-        ParameterSpace(pond_api* _api, const std::string& _prefix) : prefix(_prefix), api(_api) {}
+        ParameterSpace(pond_api* _api, const std::string& _prefix) : _param_prefix(_prefix), api(_api) {}
 
         ParameterSpace parameterSpace(const std::string& _prefix)
         {
-            return ParameterSpace(api, prefix + _prefix);
+            return ParameterSpace(api, _param_prefix + _prefix);
         }
 
         _UntypedParameterBase parameter(const std::string& name)
         {
-            std::string full_name = (prefix.empty() ? name : prefix + "." + name);
+            std::string full_name = (_param_prefix.empty() ? name : _param_prefix + "." + name);
             return _UntypedParameterBase(full_name, api);
         }
 
         _UntypedParameterBase parameterAtIndex(uint32_t i, const std::string& name)
         {
-            std::string full_name = prefix + "[" + std::to_string(i) + "]." + name;
+            std::string full_name = _param_prefix + "[" + std::to_string(i) + "]." + name;
             return _UntypedParameterBase(full_name, api);
         }
 
@@ -259,13 +259,13 @@ namespace pond
         {
             for (uint32_t i = 0; true; i++)
             {
-                std::string name = prefix + "[" + std::to_string(i) + "]." + needed_parameter_name;
+                std::string name = _param_prefix + "[" + std::to_string(i) + "]." + needed_parameter_name;
                 if (!api->get_parameter(api->ctx, (uint8_t*)name.c_str())) return i;
             }
         }
 
     protected:
-        std::string prefix;
+        std::string _param_prefix;
         pond_api* api;
     };
 }
