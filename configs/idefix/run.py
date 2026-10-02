@@ -5,16 +5,11 @@ import os
 
 from pond import Manager
 
-from parts.arm import *
-from parts.cameras import *
-from parts.drive import *
-from parts.orb_slam3 import *
-from parts.ros2_bridge import *
-from parts.sensors import *
-from parts.mujoco import *
+from launch_modules.mujoco import *
+from launch_modules.ros2_bridge import *
 
 is_running = True
-config_prefix = os.getenv("POND_CONFIG_PATH", "")
+config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
 
 def signal_handler(signum, frame):
     global is_running
@@ -25,11 +20,11 @@ def signal_handler(signum, frame):
     print(" INTERRUPT", flush=True)
     is_running = False
 
-def compile_urdf(mesh_prefix: str, destination: str):
+def compile_urdf(destination: str):
     
     with open(destination, "w") as f:
         subprocess.run(
-            ["xacro", config_prefix + "urdf/robot.urdf.xacro", "mesh_folder:=" + mesh_prefix],
+            ["xacro", config_prefix + "urdf/Robodog.urdf.xacro"],
             stdout=f,
             check=True,
         )
@@ -38,19 +33,13 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    NATIVE_DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
-    ROS_DESCRIPTION_PATH = config_prefix + "build/robot_ros.urdf"
-
-    compile_urdf(config_prefix + "meshes/", NATIVE_DESCRIPTION_PATH)
-    compile_urdf("package://quac/meshes/", ROS_DESCRIPTION_PATH)    
+    DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
+    compile_urdf(DESCRIPTION_PATH)   
 
     pm = Manager(True, False)
 
-    ip = "192.168.137.26"
-    ip = ip
-
     pm.set_thread_frame_time("robot_state_thread", 1.0)
-    pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : ROS_DESCRIPTION_PATH})
+    pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : DESCRIPTION_PATH})
 
     #dummy_cam(pm, "camera_front", 1280, 720, 30, True, ip)
     #camera_front(pm, 1280, 720, 30, True, ip)
@@ -61,10 +50,7 @@ def main():
     # lidar(pm)
     ros2_bridge(pm)
     
-    mujoco(pm, NATIVE_DESCRIPTION_PATH)
-    
-    drive(pm, False, False)
-    arm(pm, False, False)
+    mujoco(pm, DESCRIPTION_PATH)
 
     try:
         while is_running:

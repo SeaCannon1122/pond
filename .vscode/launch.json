@@ -7,7 +7,7 @@
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": [ "launch/run.py"],
+            "args": [ "debug/stream.py"],
 
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
@@ -19,7 +19,7 @@
                 },
                 {
                     "name": "POND_BUNDLE_PATH",
-                    "value": "${workspaceFolder}/build/debug/modules/mujoco/:${workspaceFolder}/build/debug/modules/controllers/:${workspaceFolder}/build/debug/modules/depthai/:${workspaceFolder}/build/debug/modules/gstreamer/:${workspaceFolder}/build/debug/modules/orb_slam3/:${workspaceFolder}/build/debug/modules/realsense/:${workspaceFolder}/build/debug/modules/robot_state/:${workspaceFolder}/build/debug/modules/ros2/:${workspaceFolder}/build/debug/modules/rplidar/:${workspaceFolder}/build/debug/modules/rtabmap/:${workspaceFolder}/build/debug/modules/utility/:${workspaceFolder}/build/debug/modules/v4l2/:${workspaceFolder}/build/debug/modules/waveshare/:${workspaceFolder}/build/debug/modules/CMakeFiles/"
+                    "value": "${workspaceFolder}/build/debug/pond_bundles"
                 }
             ],
 

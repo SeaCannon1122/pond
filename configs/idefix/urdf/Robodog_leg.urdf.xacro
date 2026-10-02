@@ -1,0 +1,238 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="Robodog">
+
+  <!-- ========================= -->
+  <!-- LEG CONFIGURATION VARIABLES -->
+  <!-- ========================= -->
+  
+  <!-- Leg segment lengths (easy to modify) -->
+  <xacro:property name="upper_leg_length" value="0.1054"/>
+  <xacro:property name="lower_leg_length" value="0.165"/>
+  
+  <!-- Leg positioning relative to body -->
+  <xacro:property name="leg_front_x" value="0.12675"/>
+  <xacro:property name="leg_back_x" value="-0.12675"/>
+  <xacro:property name="leg_left_y" value="0.032"/>
+  <xacro:property name="leg_right_y" value="-0.032"/>
+  <xacro:property name="leg_base_z" value="0.0375"/>
+  
+  <!-- Servo dimensions and positioning -->
+  <xacro:property name="servo_width" value="0.0375"/>
+  <xacro:property name="servo_depth" value="0.0527"/>
+  <xacro:property name="servo_height" value="0.0317"/>
+  <xacro:property name="servo_y_offset_right" value="-0.01624"/>
+  <xacro:property name="servo_y_offset_left" value="0.01624"/>
+  
+  <!-- Upper leg dimensions -->
+  <xacro:property name="upper_leg_width" value="0.0297"/>
+  <xacro:property name="upper_leg_depth" value="0.037"/>
+  
+  <!-- Lower leg dimensions -->
+  <xacro:property name="lower_leg_width" value="0.021"/>
+  <xacro:property name="lower_leg_depth" value="0.009487"/>
+  
+  <!-- Paw dimensions -->
+  <xacro:property name="paw_radius" value="0.015"/>
+  
+  <!-- ============================== -->
+  <!-- CALCULATED OFFSETS (AUTOMATIC) -->
+  <!-- ============================== -->
+  
+  <!-- Overlap distance for better visual connection -->
+  <xacro:property name="overlap_distance" value="0.005"/>
+  
+  <!-- Visual leg lengths (longer than actual for overlap) -->
+  <xacro:property name="upper_leg_visual_length" value="${upper_leg_length + overlap_distance * 2}"/>
+  <xacro:property name="lower_leg_visual_length" value="${lower_leg_length + overlap_distance * 2}"/>
+  
+  <!-- Offset from servo to upper leg joint (servo depth/2 + upper leg depth/2 - overlap) -->
+  <xacro:property name="servo_to_upper_offset" value="${servo_depth/2 + upper_leg_depth/2 - overlap_distance/2}"/>
+  
+  <!-- Offset from upper leg to lower leg joint (upper leg depth/2 + lower leg depth/2 - overlap) -->
+  <xacro:property name="upper_to_lower_offset" value="${upper_leg_depth/2 + lower_leg_depth*2}"/>
+  
+  <!-- Distance from lower leg joint to paw (equals lower leg length) -->
+  <xacro:property name="lower_to_paw_offset" value="${lower_leg_length}"/>
+  
+  <!-- Joint limits -->
+  <xacro:property name="servo_joint_lower" value="-1.0"/>
+  <xacro:property name="servo_joint_upper" value="1.0"/>
+  <xacro:property name="leg_joint_lower" value="-1.5"/>
+  <xacro:property name="leg_joint_upper" value="1.5"/>
+  <xacro:property name="joint_effort" value="0.0"/>
+  <xacro:property name="joint_velocity" value="0.2"/>
+
+  <!-- Materials -->
+  <material name="red"><color rgba="1 0.0 0.0 1.0"/></material>
+  <material name="green"><color rgba="0.0 0.7 0.0 1.0"/></material>
+  <material name="blue"><color rgba="0.0 0.0 0.7 1.0"/></material>
+  <material name="black"><color rgba="0.0 0.0 0.0 1.0"/></material>
+  <material name="white"><color rgba="1.0 1.0 1.0 1.0"/></material>
+
+  <!-- Macros for links -->
+  <xacro:macro name="box_link" params="name size xyz rpy color">
+    <link name="${name}">
+      <visual>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+        <geometry>
+          <box size="${size}"/>
+        </geometry>
+        <material name="${color}"/>
+      </visual>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="sphere_link" params="name radius color xyz">
+    <link name="${name}">
+      <visual>
+        <origin xyz="${xyz}" rpy="0.0 0.0 0.0"/>
+        <geometry>
+          <sphere radius="${radius}"/>
+        </geometry>
+        <material name="${color}"/>
+      </visual>
+    </link>
+  </xacro:macro>
+
+  <!-- Macros for joints -->
+  <xacro:macro name="joint_fixed" params="name xyz rpy parent child">
+    <joint name="${name}" type="fixed">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="joint_revolute" params="name xyz rpy parent child axis lower upper effort velocity">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <axis xyz="${axis}"/>
+      <limit lower="${lower}" upper="${upper}" effort="${effort}" velocity="${velocity}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Macro for a complete leg using configurable variables -->
+  <xacro:macro name="robodog_leg" params="prefix reflect_y is_front servo_color upper_leg_color lower_leg_color paw_color">
+    <!-- Calculate positions based on variables -->
+    <xacro:if value="${reflect_y == -1}">
+      <xacro:property name="servo_y_offset" value="${servo_y_offset_right}"/>
+      <xacro:property name="leg_y_pos" value="${leg_right_y}"/>
+    </xacro:if>
+    <xacro:unless value="${reflect_y == -1}">
+      <xacro:property name="servo_y_offset" value="${servo_y_offset_left}"/>
+      <xacro:property name="leg_y_pos" value="${leg_left_y}"/>
+    </xacro:unless>
+    
+    <xacro:if value="${is_front}">
+      <xacro:property name="leg_x_pos" value="${leg_front_x}"/>
+    </xacro:if>
+    <xacro:unless value="${is_front}">
+      <xacro:property name="leg_x_pos" value="${leg_back_x}"/>
+    </xacro:unless>
+    
+    <!-- SIMPLE LOGIC: Each link positions its visual relative to its own joint origin -->
+    <xacro:property name="upper_leg_z_center" value="${-upper_leg_visual_length/2}"/>
+    <xacro:property name="lower_leg_z_center" value="${-lower_leg_visual_length/2}"/>
+    
+    <!-- Servo -->
+    <xacro:box_link name="${prefix}_Servo" 
+                    size="${servo_width} ${servo_depth} ${servo_height}" 
+                    xyz="0.0 ${servo_y_offset} 0.0" 
+                    rpy="0.0 0.0 0.0" 
+                    color="${servo_color}"/>
+    
+    <!-- Upper leg: joint is at servo edge, so position visual to touch -->
+    <xacro:box_link name="${prefix}_upper_leg" 
+                    size="${upper_leg_width} ${upper_leg_depth} ${upper_leg_visual_length}" 
+                    xyz="0.0 ${upper_leg_depth/2 * reflect_y} ${upper_leg_z_center}" 
+                    rpy="0.0 0.0 0.0" 
+                    color="${upper_leg_color}"/>
+    
+    <!-- Lower leg: joint is at upper leg edge, so position visual to touch -->
+    <xacro:box_link name="${prefix}_lower_leg" 
+                    size="${lower_leg_width} ${lower_leg_depth} ${lower_leg_visual_length}" 
+                    xyz="0.0 ${lower_leg_depth/2 * reflect_y} ${lower_leg_z_center}" 
+                    rpy="0.0 0.0 0.0" 
+                    color="${lower_leg_color}"/>
+    
+    <!-- Paw: centered with lower leg, positioned slightly below the joint -->
+    <xacro:property name="paw_offset_down" value="0.02"/>
+    <xacro:sphere_link name="${prefix}_paw" 
+                       radius="${paw_radius}" 
+                       color="${paw_color}"
+                       xyz="0.0 ${lower_leg_depth/2 * reflect_y} ${-paw_offset_down}"/>
+
+    <!-- Joints with calculated positions -->
+    <xacro:joint_revolute name="${prefix}" 
+                         xyz="${leg_x_pos} ${leg_y_pos} ${leg_base_z}" 
+                         rpy="0.0 0.0 0.0" 
+                         parent="base_link" 
+                         child="${prefix}_Servo" 
+                         axis="1.0 0.0 0.0" 
+                         lower="${servo_joint_lower}" 
+                         upper="${servo_joint_upper}" 
+                         effort="${joint_effort}" 
+                         velocity="${joint_velocity}"/>
+    
+    <xacro:joint_revolute name="${prefix}_leg" 
+                         xyz="0.0 ${servo_to_upper_offset * reflect_y} 0.0" 
+                         rpy="0.0 0.0 0.0" 
+                         parent="${prefix}_Servo" 
+                         child="${prefix}_upper_leg" 
+                         axis="0.0 1.0 0.0" 
+                         lower="${leg_joint_lower}" 
+                         upper="${leg_joint_upper}" 
+                         effort="${joint_effort}" 
+                         velocity="${joint_velocity}"/>
+    
+    <xacro:joint_revolute name="${prefix}_foot" 
+                         xyz="0.0 ${upper_to_lower_offset * reflect_y} ${-upper_leg_length}" 
+                         rpy="0.0 0.0 0.0" 
+                         parent="${prefix}_upper_leg" 
+                         child="${prefix}_lower_leg" 
+                         axis="0.0 1.0 0.0" 
+                         lower="${leg_joint_lower}" 
+                         upper="${leg_joint_upper}" 
+                         effort="${joint_effort}" 
+                         velocity="${joint_velocity}"/>
+    
+    <xacro:joint_fixed name="${prefix}_PAW" 
+                      xyz="0.0 0.0 ${-lower_leg_length + paw_offset_down}" 
+                      rpy="0.0 0.0 0.0" 
+                      parent="${prefix}_lower_leg" 
+                      child="${prefix}_paw"/>
+  </xacro:macro>
+
+  <!-- Body links -->
+  <xacro:box_link name="base_link"         size="0.216 0.114 0.075" xyz="0.0 0.0 0.0375" rpy="0.0 0.0 0.0" color="green"/>
+  <xacro:box_link name="connector_front"   size="0.045 0.02 0.075"  xyz="0.0 0.0 0.0"    rpy="0.0 0.0 0.0" color="green"/>
+  <xacro:box_link name="connector_back"    size="0.045 0.02 0.075"  xyz="0.0 0.0 0.0"    rpy="0.0 0.0 0.0" color="green"/>
+  <xacro:box_link name="head"              size="0.035 0.114 0.075" xyz="0.0 0.0 0.0"    rpy="0.0 0.0 0.0" color="green"/>
+  <xacro:box_link name="ass"               size="0.035 0.114 0.075" xyz="0.0 0.0 0.0"    rpy="0.0 0.0 0.0" color="green"/>
+
+  <!-- Body joints -->
+  <xacro:joint_fixed name="joint_body1" xyz="0.1305 0.0 0.0375" rpy="0.0 0.0 0.0" parent="base_link" child="connector_front"/>
+  <xacro:joint_fixed name="joint_body2" xyz="-0.1305 0.0 0.0375" rpy="0.0 0.0 0.0" parent="base_link" child="connector_back"/>
+  <xacro:joint_fixed name="neck" xyz="0.04 0.0 0.0" rpy="0.0 0.0 0.0" parent="connector_front" child="head"/>
+  <xacro:joint_fixed name="lower_back" xyz="-0.04 0.0 0.0" rpy="0.0 0.0 0.0" parent="connector_back" child="ass"/>
+
+  <!-- Legs using simplified macro with variables -->
+  <!-- Front Right -->
+  <xacro:robodog_leg prefix="FR" reflect_y="-1" is_front="true"
+                     servo_color="red" upper_leg_color="blue" lower_leg_color="black" paw_color="white"/>
+  
+  <!-- Back Right -->
+  <xacro:robodog_leg prefix="BR" reflect_y="-1" is_front="false"
+                     servo_color="red" upper_leg_color="blue" lower_leg_color="black" paw_color="white"/>
+  
+  <!-- Front Left -->
+  <xacro:robodog_leg prefix="FL" reflect_y="1" is_front="true"
+                     servo_color="red" upper_leg_color="blue" lower_leg_color="black" paw_color="white"/>
+  
+  <!-- Back Left -->
+  <xacro:robodog_leg prefix="BL" reflect_y="1" is_front="false"
+                     servo_color="red" upper_leg_color="blue" lower_leg_color="black" paw_color="white"/>
+
+</robot>

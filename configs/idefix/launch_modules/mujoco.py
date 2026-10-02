@@ -1,10 +1,10 @@
 from pond import Manager
 import os
-from .cfg import *
+import subprocess
 
 def mujoco(pm: Manager, urdf_path: str):
 
-    config_prefix = os.getenv("POND_CONFIG_PATH", "")
+    config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
 
     xml_path = config_prefix + "build/robot_mujoco.xml"
 
@@ -31,8 +31,7 @@ def mujoco(pm: Manager, urdf_path: str):
         {
             "robot_path" : xml_path,
             "actuator_groups" : [
-                {"names" : cfg_drive.motor_names, "types" : len(cfg_drive.motor_names)*["velocity"]},
-                {"names" : cfg_arm.motor_names,   "types" : len(cfg_arm.motor_names)  *["position"]},
+                #{"names" : drive.cfg.motor_names, "types" : len(drive.cfg.motor_names)*["velocity"]},
             ]
         },
     )

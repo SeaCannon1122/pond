@@ -26,6 +26,8 @@ function(pond_module_common_setup TARGET)
         CXX_STANDARD 17
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
+
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pond_bundles"
     )
 
     target_precompile_headers(${TARGET}
@@ -55,6 +57,7 @@ add_subdirectory(v4l2)
 add_subdirectory(depthai)
 add_subdirectory(realsense)
 add_subdirectory(gstreamer)
+add_subdirectory(video)
 add_subdirectory(rplidar)
 
 add_subdirectory(robot_state)

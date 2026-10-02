@@ -56,6 +56,8 @@ void V4L2Camera::onFrame()
     }
 
     ImgFrameSPtr color_msg = std::make_shared<CVImgFrame>(frame, ImgFrame::Format::BGR8);
+    color_msg->stamp.time = pond::get_time();
+    color_msg->stamp.hw_time = color_msg->stamp.time;
     distributor.distribute(&color_msg);
     
 }

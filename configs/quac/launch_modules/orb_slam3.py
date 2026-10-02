@@ -5,7 +5,7 @@ def orb_slam3(pm: Manager):
     pm.load_module(
         "orbslam", "orb_slam3/slam", "slam_thread",
         {
-            "vocabulary_path" : os.getenv("POND_CONFIG_PATH", "") + "ORBvoc.txt",
+            "vocabulary_path" : os.getenv("POND_QUAC_CONFIG_PATH", "") + "ORBvoc.txt",
             "mode" : "Stereo",
             "frame_id" : "camera",
             "parent_frame_id" : "base_link"

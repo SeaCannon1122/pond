@@ -1,4 +1,5 @@
 #include <pond_manager/manager.hpp>
+#include <string>
 #include <time.h>
 #include <unordered_set>
 
@@ -77,9 +78,14 @@ pond_parameter* PondManager::api_get_parameter(pond_internal::Module* module, ui
     }
 }
 
-bool PondManager::construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count)
+bool PondManager::construct_slots(pond_internal::Module* module, pond_internal::Slot* slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count)
 {
-    slots.resize(c_slot_count);
+    if (c_slot_count > MAX_SLOT_COUNT)
+    {
+        log("In module " + module->name + ": tried connection with slot count ("+std::to_string(c_slot_count)+") > MAX_SLOT_COUNT ("+std::to_string(MAX_SLOT_COUNT)+")");
+        return false;
+    }
+
     for (uint32_t i = 0; i < c_slot_count; i++)
     {
         slots[i].type = (c_slots[i].type != NULL ? std::string((char*)c_slots[i].type) : "");
@@ -112,14 +118,13 @@ bool PondManager::construct_slots(pond_internal::Module* module, std::vector<pon
 bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections)
 {
     pond_internal::ReceiverConnection connection;
-    connection.indices.resize(r->slots.size());
-    connection.handle_array.resize(r->slots.size());
+    connection.slot_count = r->slot_count;
 
-    for (int i = 0; i < r->slots.size(); i++)
+    for (int i = 0; i < r->slot_count; i++)
     {
         for (int j = 0; ; j++)
         {
-            if (j == d->slots.size()) return false;
+            if (j == d->slot_count) return false;
 
             if (d->slots[j].channel == r->slots[i].channel)
             {
@@ -140,9 +145,9 @@ bool PondManager::try_connect_receiver(std::shared_ptr<pond_internal::Distributo
     if (to_new_connections)
     {
         std::lock_guard<std::mutex> lock(d->new_connections_mutex);
-        d->new_connections.emplace(std::move(connection));
+        d->new_connections.emplace_back(std::move(connection));
     }
-    else d->connections.emplace(std::move(connection));
+    else d->connections.emplace_back(std::move(connection));
     
     return true;
 }
@@ -152,26 +157,27 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
     auto d = std::make_shared<pond_internal::Distributor>();
     if (!construct_slots(module, d->slots, slots, slot_count)) return -1;
     d->module_name = module->name;
+    d->slot_count = slot_count;
 
     std::unordered_set<std::string> all_channels;
-    for (auto& s : d->slots)
+    for (uint32_t i = 0; i < d->slot_count; i++)
     {
-        if (all_channels.find(s.channel) != all_channels.end())
+        if (all_channels.find(d->slots[i].channel) != all_channels.end())
         {
-            log("In module " + module->name + ": can't publish on the same channel (" + s.channel + ") multiple times in parallel");
+            log("In module " + module->name + ": can't publish on the same channel (" + d->slots[i].channel + ") multiple times in parallel");
             return -1;
         }
-        all_channels.insert(s.channel);
+        all_channels.insert(d->slots[i].channel);
     }
     
     if (connect_log)
     {
         std::string channel_array_string;
         channel_array_string.reserve(1000);
-        for (auto& s: d->slots)
+        for (uint32_t i = 0; i < d->slot_count; i++)
         {
             channel_array_string.append(", ");
-            channel_array_string.append(s.channel);
+            channel_array_string.append(d->slots[i].channel);
         }
         module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing on channels { %s }", &(channel_array_string.c_str()[2]));
     }
@@ -183,10 +189,10 @@ int32_t PondManager::api_create_distributor(pond_internal::Module* module, pond_
             {
                 std::string channel_array_string;
                 channel_array_string.reserve(1000);
-                for (auto& s: r->slots)
+                for (uint32_t i = 0; i < r->slot_count; i++)
                 {
                     channel_array_string.append(", ");
-                    channel_array_string.append(s.channel);
+                    channel_array_string.append(r->slots[i].channel);
                 }
                 module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to receiver on module '%s' on channels { %s }", r->module_name.c_str(), &(channel_array_string.c_str()[2]));
             }
@@ -228,34 +234,26 @@ void PondManager::api_distribute(pond_internal::Module* module, uint32_t distrib
 
     {
         std::lock_guard<std::mutex> lock(d->new_connections_mutex);
-        for (int i = 0; i < d->new_connections.get_length(); i++) if (d->new_connections.is_used(i))
-        {
-            d->connections.insert(d->new_connections[i]);
-            d->new_connections.release_slot(i);
-        }
+
+        for (auto& connection : d->new_connections) d->connections.emplace_back(std::move(connection));
+        d->new_connections.clear();
     }
 
-    for (auto& connection : d->connections)
+    for (uint32_t i = 0; i < d->connections.size();)
     {
-        for (int i = 0; i < connection.handle_array.size(); i++) connection.handle_array[i] = slot_data[connection.indices[i]];
-        
-        if (!connection.receiver->active.load()) continue;
+        auto& connection = d->connections[i];
         std::shared_lock<std::shared_mutex> lock(connection.receiver->mutex);
-        if (!connection.receiver->active.load()) continue;
+
+        for (int i = 0; i < connection.slot_count; i++) connection.handle_array[i] = slot_data[connection.indices[i]];
         
-        if (distribute_log)
+        if (!connection.receiver->active.load())
         {
-            std::string channel_array_string;
-            channel_array_string.reserve(1000);
-            for (auto& s: connection.receiver->slots)
-            {
-                channel_array_string.append(", ");
-                channel_array_string.append(s.channel);
-            }
-            module->native_api.log(module->native_api.ctx, (uint8_t*)"Distributing to module '%s' on channels { %s }", connection.receiver->module_name.c_str(), &(channel_array_string.c_str()[2]));
+            d->connections.erase(d->connections.begin() + i);
+            continue;
         }
 
-        connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array.data());
+        connection.receiver->callback(connection.receiver->api, connection.receiver->callback_pointer, connection.handle_array);
+        i++;
     }
 }
 
@@ -263,6 +261,7 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
 {
     auto r = std::make_shared<pond_internal::Receiver>();
     if (!construct_slots(module, r->slots, slots, slot_count)) return -1;
+    r->slot_count = slot_count;
     r->module_name = module->name;
     r->api = &module->native_api;
     r->active.store(true);
@@ -273,10 +272,10 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
     {
         std::string channel_array_string;
         channel_array_string.reserve(1000);
-        for (auto& s: r->slots)
+        for (uint32_t i = 0; i < r->slot_count; i++)
         {
             channel_array_string.append(", ");
-            channel_array_string.append(s.channel);
+            channel_array_string.append(r->slots[i].channel);
         }
         module->native_api.log(module->native_api.ctx, (uint8_t*)"Receiving on channels { %s }", &(channel_array_string.c_str()[2]));
     }
@@ -288,10 +287,10 @@ int32_t PondManager::api_create_receiver(pond_internal::Module* module, pond_dds
             {
                 std::string channel_array_string;
                 channel_array_string.reserve(1000);
-                for (auto& s: r->slots)
+                for (uint32_t i = 0; i < r->slot_count; i++)
                 {
                     channel_array_string.append(", ");
-                    channel_array_string.append(s.channel);
+                    channel_array_string.append(r->slots[i].channel);
                 }
                 module->native_api.log(module->native_api.ctx, (uint8_t*)"Connected to distributor on module '%s' on channels { %s }", d->module_name.c_str(), &(channel_array_string.c_str()[2]));
             }

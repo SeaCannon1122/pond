@@ -15,7 +15,11 @@
 
 #include "slot_array.hpp"
 
-#define MAX_THREA_FRAME_TIME 10.0
+#define MAX_THREAD_FRAME_TIME 10.0
+
+#ifndef MAX_SLOT_COUNT
+#define MAX_SLOT_COUNT 32
+#endif
 
 typedef struct PondManager PondManager;
 
@@ -31,7 +35,8 @@ struct Slot
 struct Receiver
 {
     std::string module_name;
-    std::vector<Slot> slots;
+    Slot slots[MAX_SLOT_COUNT];
+    uint32_t slot_count;
     uint32_t discovery_id;
     pond_api* api;
 
@@ -44,20 +49,22 @@ struct Receiver
 struct ReceiverConnection
 {
     std::shared_ptr<Receiver> receiver;
-    std::vector<uint32_t> indices;
-    std::vector<void*> handle_array;
+    uint32_t slot_count;
+    uint32_t indices[MAX_SLOT_COUNT];
+    void* handle_array[MAX_SLOT_COUNT];
 };
 
 struct Distributor
 {
     std::string module_name;
-    std::vector<Slot> slots;
+    Slot slots[MAX_SLOT_COUNT];
+    uint32_t slot_count;
     uint32_t discovery_id;
 
-    SlotArray<ReceiverConnection> connections;
+    std::vector<ReceiverConnection> connections;
 
     std::mutex new_connections_mutex;
-    SlotArray<ReceiverConnection> new_connections;
+    std::vector<ReceiverConnection> new_connections;
 };
 
 struct Module;
@@ -170,7 +177,7 @@ private:
         std::string& message
     );
 
-    bool construct_slots(pond_internal::Module* module, std::vector<pond_internal::Slot>& slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count);
+    bool construct_slots(pond_internal::Module* module, pond_internal::Slot* slots, pond_dds_slot_info* c_slots, uint32_t c_slot_count);
     bool try_connect_receiver(std::shared_ptr<pond_internal::Distributor>& d, std::shared_ptr<pond_internal::Receiver>& r, bool to_new_connections);
     void thread_function(pond_internal::Thread* thread);
     void cleanup_module(pond_internal::Module* module);

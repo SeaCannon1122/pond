@@ -91,6 +91,8 @@ PondManager::PondManager(bool connect_log, bool distribute_log)
 
 PondManager::~PondManager()
 {
+    log("Deconstructing ...");
+
     for (auto& t : threads) t->shutdown_thread.store(true);
     for (auto& t : threads) t->thread.join();
 
@@ -312,7 +314,7 @@ void PondManager::cleanup_module(pond_internal::Module* module)
 
 void PondManager::set_thread_frame_time(const std::string& thread_name, double frame_time)
 {
-    frame_time = std::clamp(frame_time, 0.0, MAX_THREA_FRAME_TIME);
+    frame_time = std::clamp(frame_time, 0.0, MAX_THREAD_FRAME_TIME);
 
     set_thread_frame_times[thread_name] = frame_time;
     for (auto& t : threads) if (t->name == thread_name) t->frame_time.store(frame_time);
@@ -395,7 +397,10 @@ void PondManager::thread_function(pond_internal::Thread* thread)
         }
 
         if (thread->modules.get_length() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        else for (auto& m : thread->modules) m->module_api.on_frame(&m->native_api);
+        else for (auto& m : thread->modules)
+        {
+            m->module_api.on_frame(&m->native_api);
+        }
     }
 
     log("[" + thread->name + "] exited");

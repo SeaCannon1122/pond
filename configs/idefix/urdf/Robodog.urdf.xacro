@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="Robodog">
+
+  <xacro:include filename="inertial_macros.xacro" />
+
+  <!-- Materials -->
+  <material name="red"><color rgba="1 0 0 1.0"/></material>
+  <material name="green"><color rgba="0 0.7 0 1.0"/></material>
+  <material name="blue"><color rgba="0 0 0.7 1.0"/></material>
+  <material name="black"><color rgba="0 0 0 1.0"/></material>
+  <material name="white"><color rgba="1.0 1.0 1.0 1.0"/></material>
+
+  <!-- Macros for links -->
+  <xacro:macro name="box_link" params="name size_x size_y size_z xyz rpy color mass">
+    <link name="${name}">
+      <xacro:inertial_box mass="${mass}" x="${size_x}" y="${size_y}" z="${size_z}">
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </xacro:inertial_box>
+      <collision>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+        <geometry>
+          <box size="${size_x} ${size_y} ${size_z}"/>
+        </geometry>
+        <material name="${color}"/>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="sphere_link" params="name radius color mass">
+    <link name="${name}">
+      <xacro:inertial_sphere mass="${mass}" radius="${radius}">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:inertial_sphere>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="${radius}"/>
+        </geometry>
+        <material name="${color}"/>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <!-- Macros for joints -->
+  <xacro:macro name="joint_fixed" params="name xyz rpy parent child">
+    <joint name="${name}" type="fixed">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="joint_revolute" params="name xyz rpy parent child axis lower upper effort velocity">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <axis xyz="${axis}"/>
+      <limit lower="${lower}" upper="${upper}" effort="${effort}" velocity="${velocity}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Links -->
+  <xacro:box_link name="base_link"         mass = "0.1" size_x="0.216" size_y="0.114" size_z="0.075" xyz="0 0 0.0375" rpy="0 0 0" color="green"/>
+  <xacro:box_link name="connector_front"   mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
+  <xacro:box_link name="connector_back"    mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
+  <xacro:box_link name="head"              mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
+  <xacro:box_link name="ass"               mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
+
+  <xacro:box_link name="FR_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" rpy="0 0 0" color="red"/>
+  <xacro:box_link name="BR_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" rpy="0 0 0" color="red"/>
+  <xacro:box_link name="FL_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  rpy="0 0 0" color="red"/>
+  <xacro:box_link name="BL_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  rpy="0 0 0" color="red"/>
+
+  <xacro:box_link name="FR_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" rpy="0 0 0" color="blue"/>
+  <xacro:box_link name="BR_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" rpy="0 0 0" color="blue"/>
+  <xacro:box_link name="FL_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" rpy="0 0 0" color="blue"/>
+  <xacro:box_link name="BL_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" rpy="0 0 0" color="blue"/>
+
+  <xacro:box_link name="FR_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" rpy="0 0 0" color="black"/>
+  <xacro:box_link name="BR_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" rpy="0 0 0" color="black"/>
+  <xacro:box_link name="FL_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" rpy="0 0 0" color="black"/>
+  <xacro:box_link name="BL_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" rpy="0 0 0" color="black"/>
+
+  <xacro:sphere_link name="FR_paw" mass = "0.1" radius="0.015" color="white"/>
+  <xacro:sphere_link name="BR_paw" mass = "0.1" radius="0.015" color="white"/>
+  <xacro:sphere_link name="FL_paw" mass = "0.1" radius="0.015" color="white"/>
+  <xacro:sphere_link name="BL_paw" mass = "0.1" radius="0.015" color="white"/>
+
+  <!-- Joints -->
+  <xacro:joint_fixed name="joint_body1" xyz="0.1305 0 0.0375" rpy="0 0 0" parent="base_link" child="connector_front"/>
+  <xacro:joint_fixed name="joint_body2" xyz="-0.1305 0 0.0375" rpy="0 0 0" parent="base_link" child="connector_back"/>
+  <xacro:joint_fixed name="neck" xyz="0.04 0 0" rpy="0 0 0" parent="connector_front" child="head"/>
+  <xacro:joint_fixed name="lower_back" xyz="-0.04 0 0" rpy="0 0 0" parent="connector_back" child="ass"/>
+
+  <xacro:joint_revolute name="FR" xyz="0.12675 -0.032 0.0375" rpy="0 0 0" parent="base_link" child="FR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BR" xyz="-0.12675 -0.032 0.0375" rpy="0 0 0" parent="base_link" child="BR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="FL" xyz="0.12675 0.032 0.0375" rpy="0 0 0" parent="base_link" child="FL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BL" xyz="-0.12675 0.032 0.0375" rpy="0 0 0" parent="base_link" child="BL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+
+  <xacro:joint_revolute name="FR_leg" xyz="0 -0.06109 0" rpy="0 0 0" parent="FR_Servo" child="FR_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BR_leg" xyz="0 -0.06109 0" rpy="0 0 0" parent="BR_Servo" child="BR_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="FL_leg" xyz="0 0.06109 0" rpy="0 0 0" parent="FL_Servo" child="FL_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BL_leg" xyz="0 0.06109 0" rpy="0 0 0" parent="BL_Servo" child="BL_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+
+  <xacro:joint_revolute name="FR_foot" xyz="0 -0.0232435 -0.10518" rpy="0 0 0" parent="FR_upper_leg" child="FR_lower_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BR_foot" xyz="0 -0.0232435 -0.10518" rpy="0 0 0" parent="BR_upper_leg" child="BR_lower_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="FL_foot" xyz="0 0.0232435 -0.10518" rpy="0 0 0" parent="FL_upper_leg" child="FL_lower_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BL_foot" xyz="0 0.0232435 -0.10518" rpy="0 0 0" parent="BL_upper_leg" child="BL_lower_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
+
+  <xacro:joint_fixed name="FR_PAW" xyz="0 0 -0.108" rpy="0 0 0" parent="FR_lower_leg" child="FR_paw"/>
+  <xacro:joint_fixed name="BR_PAW" xyz="0 0 -0.108" rpy="0 0 0" parent="BR_lower_leg" child="BR_paw"/>
+  <xacro:joint_fixed name="FL_PAW" xyz="0 0 -0.108" rpy="0 0 0" parent="FL_lower_leg" child="FL_paw"/>
+  <xacro:joint_fixed name="BL_PAW" xyz="0 0 -0.108" rpy="0 0 0" parent="BL_lower_leg" child="BL_paw"/>
+
+</robot>
