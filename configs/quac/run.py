@@ -66,6 +66,8 @@ def main():
     drive.drive(pm, False, False)
     arm.arm(pm, False, False)
 
+    orb_slam3(pm)
+
     try:
         while is_running:
             time.sleep(0.2)

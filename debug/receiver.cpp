@@ -47,7 +47,16 @@ public:
         
         // CRITICAL LOW-LATENCY DECODER FLAGS
         codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
+        codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;
         codec_ctx->thread_count = 1; // Single thread to eliminate frame-queue lag
+
+        // Tell FFmpeg to try and conceal errors rather than dropping the frame entirely
+        // FF_EC_GUESS_MV: Guess motion vectors for missing blocks
+        // FF_EC_DEBLOCK: Apply deblocking filter to hide severe tearing edges
+        codec_ctx->error_concealment = FF_EC_GUESS_MVS | FF_EC_DEBLOCK;
+
+        // Lower error detection strictness so it doesn't give up on corrupted packets
+        codec_ctx->err_recognition = AV_EF_CAREFUL;
 
         avcodec_open2(codec_ctx, codec, nullptr);
 

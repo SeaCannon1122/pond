@@ -26,7 +26,8 @@ def main():
         {
             "width" : 640,
             "height" : 480,
-            "fps" : 30
+            "fps" : 30,
+            "device" : "/dev/video0"
         },
         channel_mappings={"out": "color/image",},
     )
@@ -39,7 +40,8 @@ def main():
             "fps" : 30,
             "port" : 5000,
             "ip" : "127.0.0.1",
-            "format" : "BGR8"
+            "format" : "RGB8",
+            "send_packets_times" : 1
         },
         channel_mappings={"in": "color/image",},
     )
@@ -48,13 +50,13 @@ def main():
     #     "streamer", "gstreamer/rtp_server", "thread",
     #     {
     #         "width": 640, "height": 480,
-    #         "format": "BGR8",
+    #         "format": "RGB8",
 
     #         "ip": "127.0.0.1",
     #         "port": 5000, 
             
-    #         "bitrate": 5000,
-    #         "key_int_max:": 60
+    #         "bitrate": 3000,
+    #         "key_int_max:": 30
     #     },
     #     channel_mappings={"in": "color/image",},
     # )

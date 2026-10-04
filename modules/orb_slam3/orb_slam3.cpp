@@ -2,8 +2,13 @@
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/cv_img_frame.hpp>
 #include <pond_data_types/imu_types.hpp>
+#include <sophus/se3.hpp>
 
 #include "System.h"
+#include "pond/pond.h"
+#include "pond_data_types/robot_state_types.hpp"
+
+#define SETTINGS_PATH "~/.cache/orbslam_config.yaml"
 
 class OrbSlam3 : public pond::ModuleBaseTF
 {
@@ -15,36 +20,48 @@ private:
 
     bool get_cam_info(CameraInfo& cam_info, const std::string& channel);
     bool get_imu_info(ImuInfo& info);
-    bool create_config();
+    bool create_config(CameraInfo& cam_info);
 
     std::shared_ptr<ORB_SLAM3::System> slam;
-    bool slam_setup = false;
-    std::string vocabulary_path;
+    std::string vocabulary_path, base_link_frame_id;
 
-    int32_t n_features, n_levels, ini_th_fast, min_th_fast;
-    double scale_factor, far_threshold;
-    bool imu_insert_kfs_when_lost;
+    int32_t n_features, n_levels, ini_th_fast, min_th_fast; double scale_factor, far_threshold; bool imu_insert_kfs_when_lost;
 
     std::mutex frame_mutex, imu_mutex;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points;
+    ImgFrameSPtr first_frame, second_frame;
     std::atomic<bool> new_frame;
 
     bool use_imu, stereo_mode, rgbd_mode, mono_mode;
 
     pond::Receiver image_receiver, imu_receiver;
 
-    ImgFrameSPtr first_frame, second_frame;
     pond::DistributorTyped<FrameTransform> transform_distributor;
-    FrameTransform transform;
+    FrameTransform transform; Sophus::SE3d cam_tf_start;
     pond::DistributorTyped<ImgFrameSPtr> keypoint_frame_distributor;
 };
 
 POND_MODULE_CPP_DECLARE(OrbSlam3, "slam", "Supports mono, stereo and rgbd vslam")
 
-POND_BUNDLE_DECLARE(
-    "ORB_SLAM3 pond bundle",
-    POND_MODULE(OrbSlam3),
-)
+POND_BUNDLE_DECLARE("ORB_SLAM3 pond bundle",POND_MODULE(OrbSlam3))
+
+bool OrbSlam3::get_cam_info(CameraInfo& info, const std::string& channel)
+{
+    pond::Receiver info_receiver = createReceiver<CameraInfo>({channel}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
+    info_receiver.destroy();
+    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive camera info on channel '%s'", channel.c_str());
+    return true;
+}
+
+bool OrbSlam3::get_imu_info(ImuInfo& info)
+{
+    pond::Receiver info_receiver = createReceiver<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
+    info_receiver.destroy();
+    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive imu info on channel 'imu/info'");
+    return true;
+}
 
 pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
 {
@@ -55,17 +72,25 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     min_th_fast = parameter("ORBextractor.minThFAST").asInt().get(7);
     far_threshold = parameter("far_threshold").asDouble().get(4.0);
     imu_insert_kfs_when_lost = parameter("IMU.InsertKFsWhenLost").asBool().get(false);
+    use_imu = parameter("use_imu").asBool().get(false);
+    base_link_frame_id = parameter("base_link_frame_id").asString().get("base_link");
+
+    transform.stamp.frame_id = "world";
+    transform.child_frame_id = base_link_frame_id;
 
     auto vocabulary_path_o = parameter("vocabulary_path").asString().getStrict();
     auto slam_mode = parameter("mode").asString().getStrict({"Stereo", "RGBD", "Mono"});
     if (!vocabulary_path_o || !slam_mode) return POND_ERROR;
     
     vocabulary_path = *vocabulary_path_o;
-
     stereo_mode =  (slam_mode == "Stereo"); rgbd_mode = (slam_mode == "RGBD"); mono_mode = (slam_mode == "Mono");
     
-    transform.stamp.frame_id = parameter("base_frame_id").asString().get("world");
-    transform.child_frame_id = parameter("camera_frame_id").asString().get("camera");
+    CameraInfo cam_info;
+    if (!create_config(cam_info)) return POND_ERROR;
+
+    GetFrameTransformRequest tf_request;
+    if (!tfGetTransform(cam_info.stamp.frame_id, base_link_frame_id, 0, tf_request)) return POND_ERROR;
+    cam_tf_start = tf_request.tf;
 
     transform_distributor = createDistributorTyped<FrameTransform>({"slam_transform"});
     keypoint_frame_distributor = createDistributorTyped<ImgFrameSPtr>({stereo_mode ? "mono_left_with_keypoints/image" : (rgbd_mode ? "color_with_keypoints/image" : "mono_with_keypoints/image")});
@@ -97,17 +122,26 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
         ));
     });
 
+    ORB_SLAM3::System::eSensor mode;
+    if (stereo_mode) mode = (use_imu ? ORB_SLAM3::System::IMU_STEREO : ORB_SLAM3::System::STEREO);
+    if (rgbd_mode) mode = (use_imu ? ORB_SLAM3::System::IMU_RGBD : ORB_SLAM3::System::RGBD);
+    if (mono_mode) mode = (use_imu ? ORB_SLAM3::System::IMU_MONOCULAR : ORB_SLAM3::System::MONOCULAR);
+
+    slam = std::make_shared<ORB_SLAM3::System>(
+        vocabulary_path,
+        SETTINGS_PATH,
+        mode,
+        false
+    );
+
     return POND_SUCCESS;
 }
 
 void OrbSlam3::onShutdownTF()
 {
-    if (slam_setup)
-    {
-        slam->Shutdown();
-        slam.reset();
-    }
-    
+    slam->Shutdown();
+    slam.reset();
+   
     image_receiver.destroy();
     imu_receiver.destroy();
 
@@ -115,27 +149,7 @@ void OrbSlam3::onShutdownTF()
     keypoint_frame_distributor.destroy();
 }
 
-#define SETTINGS_PATH "~/.cache/orbslam_config.yaml"
-
-bool OrbSlam3::get_cam_info(CameraInfo& info, const std::string& channel)
-{
-    pond::Receiver info_receiver = createReceiver<CameraInfo>({channel}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
-    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
-    info_receiver.destroy();
-    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive camera info on channel '%s'", channel.c_str());
-    return true;
-}
-
-bool OrbSlam3::get_imu_info(ImuInfo& info)
-{
-    pond::Receiver info_receiver = createReceiver<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
-    for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
-    info_receiver.destroy();
-    if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive imu info on channel 'imu/info'");
-    return true;
-}
-
-bool OrbSlam3::create_config()
+bool OrbSlam3::create_config(CameraInfo& cam_info)
 {
     GetFrameTransformRequest cam_request;
 
@@ -149,7 +163,6 @@ bool OrbSlam3::create_config()
             POND_LOG_RETURN_FALSE("Did not get camera optical frame transform");
     }
     
-    CameraInfo cam_info;
     std::string info_channel;
     if (stereo_mode) info_channel = "stereo_left/info";
     if (rgbd_mode) info_channel = "color/info"; 
@@ -157,87 +170,87 @@ bool OrbSlam3::create_config()
     if (!get_cam_info(cam_info, info_channel)) return false;
 
     std::ofstream file(SETTINGS_PATH);
+    file << std::setprecision(16);
     file << "%YAML:1.0\n\n";
     file << "File.version: \"1.0\"\n\n";
     file << "Camera.type: \"Rectified\"\n\n";
 
-    file << "Camera1.fx: " + std::to_string(cam_info.k(0, 0)) + "\n";
-    file << "Camera1.fy: " + std::to_string(cam_info.k(1, 1)) + "\n";
-    file << "Camera1.cx: " + std::to_string(cam_info.k(0, 2)) + "\n";
-    file << "Camera1.cy: " + std::to_string(cam_info.k(1, 2)) + "\n\n";
+    file << "Camera1.fx: " << cam_info.k(0, 0) << "\n";
+    file << "Camera1.fy: " << cam_info.k(1, 1) << "\n";
+    file << "Camera1.cx: " << cam_info.k(0, 2) << "\n";
+    file << "Camera1.cy: " << cam_info.k(1, 2) << "\n\n";
 
     if (stereo_mode)
     {
-        file << "Camera2.fx: " + std::to_string(cam_info.k(0, 0)) + "\n";
-        file << "Camera2.fy: " + std::to_string(cam_info.k(1, 1)) + "\n";
-        file << "Camera2.cx: " + std::to_string(cam_info.k(0, 2)) + "\n";
-        file << "Camera2.cy: " + std::to_string(cam_info.k(1, 2)) + "\n\n";   
+        file << "Camera2.fx: " << cam_info.k(0, 0) << "\n";
+        file << "Camera2.fy: " << cam_info.k(1, 1) << "\n";
+        file << "Camera2.cx: " << cam_info.k(0, 2) << "\n";
+        file << "Camera2.cy: " << cam_info.k(1, 2) << "\n\n";   
     }
 
     // Stereo baseline * focal length
-    if (stereo_mode) file << "Camera.bf: " + std::to_string(cam_info.k(0, 0) * cam_request.tf.translation().x()) + "\n\n";
+    if (stereo_mode) file << "Camera.bf: " << (cam_info.k(0, 0) * cam_request.tf.translation().x()) << "\n\n";
 
-    file << "Camera.width: " + std::to_string(cam_info.width) + "\n";
-    file << "Camera.height: " + std::to_string(cam_info.height) + "\n";
-    file << "Camera.fps: " + std::to_string(cam_info.fps) + "\n\n";
+    file << "Camera.width: " << cam_info.width << "\n";
+    file << "Camera.height: " << cam_info.height << "\n";
+    file << "Camera.fps: " << cam_info.fps << "\n\n";
     
     if (rgbd_mode)
     {
         file << "RGBD.DepthMapFactor: 1.0\n";
-        file << "Camera.RGB: " + std::to_string(cam_info.format == ImgFrame::Format::RGB8 ? 1 : 0) + "\n";
+        file << "Camera.RGB: " << (cam_info.format == ImgFrame::Format::RGB8 ? 1 : 0) << "\n";
     }
 
     double base_line = (stereo_mode ? cam_request.tf.translation().x() : 0.1);
-    file << "Stereo.ThDepth: " + std::to_string(far_threshold / base_line) + "\n";
-    file << "Stereo.b: " + std::to_string(base_line) + "\n\n";
+    file << "Stereo.ThDepth: " << (far_threshold / base_line)  << "\n";
+    file << "Stereo.b: " << base_line << "\n\n";
 
-    // if (use_imu)
-    // {
-    //     ImuInfo imu_info;
-    //     if (!get_imu_info(imu_info)) return false;
-    //     GetFrameTransformRequest tf_request;
-    //     if (!tfGetTransform(imu_info.stamp.frame_id, cam_info.stamp.frame_id, 0, tf_request, true)) return false;
+    if (use_imu)
+    {
+        ImuInfo imu_info;
+        if (!get_imu_info(imu_info)) return false;
+        GetFrameTransformRequest tf_request;
+        if (!tfGetTransform(imu_info.stamp.frame_id, cam_info.stamp.frame_id, 0, tf_request, true)) return false;
 
-    //     file << "IMU.T_b_c1: !!opencv-matrix\n";
-    //     file << "  rows: 4\n";
-    //     file << "  cols: 4\n";
-    //     file << "  dt: f\n";
-    //     file << "  data: [0.999903, -0.0138036, -0.00208099, -0.0202141,\n";
-    //     file << "  0.0137985, 0.999902, -0.00243498, 0.00505961,\n";
-    //     file << "  0.0021144, 0.00240603, 0.999995, 0.0114047,\n";
-    //     file << "  0.0, 0.0, 0.0, 1.0]\n";
+        Eigen::Matrix4d mat = tf_request.tf.matrix();
+        
+        file << "IMU.T_b_c1: !!opencv-matrix\n";
+        file << "  rows: 4\n";
+        file << "  cols: 4\n";
+        file << "  dt: f\n";
 
-    //     file << "IMU.InsertKFsWhenLost: " + std::to_string(imu_insert_kfs_when_lost ? 1 : 0) + "\n";
+        for (uint32_t i = 0; i < 4; i++)
+        {
+            for (uint32_t j = 0; j < 4; j++) {
+                file << mat(i, j);
 
-    //     # IMU noise (Use those from VINS-mono)
-    //     file << "IMU.NoiseGyro: 1e-2 # 3 # 2.44e-4 #1e-3 # rad/s^0.5";
-    //     file << "IMU.NoiseAcc: 1e-1 #2 # 1.47e-3 #1e-2 # m/s^1.5";
-    //     file << "IMU.GyroWalk: 1e-6 # rad/s^1.5";
-    //     file << "IMU.AccWalk: 1e-4 # m/s^2.5";
-    //     file << "IMU.Frequency: " + std::to_string((double)imu_info.rate) + "\n";
-    // }
+                if (i == 3 && j == 3) file << "]\n"; else file << ", ";
+            }
+            file << "\n  ";
+        }
 
-    file << "ORBextractor.nFeatures: " + std::to_string(n_features) + "\n";
-    file << "ORBextractor.scaleFactor: " + std::to_string(scale_factor) + "\n";
-    file << "ORBextractor.nLevels: " + std::to_string(n_levels) + "\n";
-    file << "ORBextractor.iniThFAST: " + std::to_string(ini_th_fast) + "\n";
-    file << "ORBextractor.minThFAST: " + std::to_string(min_th_fast) + "\n";
+        file << "IMU.InsertKFsWhenLost: " << (imu_insert_kfs_when_lost ? 1 : 0) << "\n";
+
+        file << "IMU.NoiseGyro: " << imu_info.ang_vel.noise << "\n";
+        file << "IMU.NoiseAcc: " << imu_info.lin_acc.noise << "\n";
+        file << "IMU.GyroWalk: " << imu_info.ang_vel.random_walk << "\n";
+        file << "IMU.AccWalk: " << imu_info.lin_acc.random_walk << "\n";
+        file << "IMU.Frequency: " << (double)imu_info.rate << "\n";
+    }
+
+    file << "ORBextractor.nFeatures: " << n_features << "\n";
+    file << "ORBextractor.scaleFactor: " << scale_factor << "\n";
+    file << "ORBextractor.nLevels: " << n_levels << "\n";
+    file << "ORBextractor.iniThFAST: " << ini_th_fast << "\n";
+    file << "ORBextractor.minThFAST: " << min_th_fast << "\n";
+
+    file.close();
 
     return true;
 }
 
 void OrbSlam3::onFrame()
 {
-    if (!slam_setup)
-    {
-        slam = std::make_shared<ORB_SLAM3::System>(
-            vocabulary_path,
-            SETTINGS_PATH,
-            ORB_SLAM3::System::STEREO,
-            false
-        );
-    }
-
     ImgFrameSPtr first_frame_c, second_frame_c;
     std::vector<ORB_SLAM3::IMU::Point> imu_data_points_c;
 
@@ -301,9 +314,12 @@ void OrbSlam3::onFrame()
         no_keypoint_mat = mono;
     }
 
-    if(!Tcw.matrix().isZero())
+    GetFrameTransformRequest tf_request;
+    if(!Tcw.matrix().isZero()) if (tfGetTransform(first_frame_c->stamp.frame_id, base_link_frame_id, first_frame_c->stamp.time, tf_request))
     {
-        transform.tf = Tcw.cast<double>().inverse();
+        transform.tf = tf_request.tf * cam_tf_start.inverse() * Tcw.cast<double>();
+        transform.stamp.time = first_frame_c->stamp.time;
+        transform.stamp.hw_time = first_frame_c->stamp.hw_time;
         transform_distributor.distribute(&transform);
     }
 

@@ -77,7 +77,7 @@ pond_result RTPServer::onStartup(const std::vector<void*>& args)
         "appsrc name=appsrc is-live=true block=false format=time do-timestamp=true "
         "caps=video/x-raw,format=" + gst_format + ",width=" + std::to_string(width) +
         ",height=" + std::to_string(height) + " "
-        "! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
+        //"! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
         "! videoconvert "
         "! x264enc tune=zerolatency speed-preset=ultrafast key-int-max=" +
           std::to_string(parameter("key_int_max").asInt().get(30)) +

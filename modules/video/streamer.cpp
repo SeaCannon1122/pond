@@ -25,6 +25,7 @@ private:
 
     int width, height, fps;
     int sockfd, port;
+    int send_packets_times;
     std::string ip;
     ImgFrame::Format image_format;
     bool is_yuv_native = false; // Flag to track if we can bypass conversion
@@ -51,6 +52,8 @@ pond_result H264UDPStreamer::onStartup(const std::vector<void*>& args)
     auto _port = parameter("port").asInt().getStrict();
     auto _ip = parameter("ip").asString().getStrict();
     auto _fps = parameter("fps").asInt().getStrict();
+
+    send_packets_times = parameter("send_packets_times").asInt().get(1);
 
     auto _format_string = parameter("format").asString().getStrict({"RGB8", "BGR8", "Depth8", "Depth16", "Mono8", "Mono16"});
     if (!_format_string || !_width || !_height || !_port || !_ip || !_fps) return POND_ERROR;
@@ -83,6 +86,8 @@ pond_result H264UDPStreamer::onStartup(const std::vector<void*>& args)
     // CRITICAL LOW-LATENCY & NO-BUFFER FLAGS
     av_opt_set(codec_ctx->priv_data, "preset", "ultrafast", 0);
     av_opt_set(codec_ctx->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(codec_ctx->priv_data, "profile", "baseline", 0);
+    av_opt_set(codec_ctx->priv_data, "slice-max-size", "1000", 0);
     codec_ctx->gop_size = 1;          // Every frame is an I-frame (Keyframe)
     codec_ctx->max_b_frames = 0;      // Zero B-frames
     codec_ctx->thread_count = 1;      // Single thread to eliminate decoding queue delay
@@ -146,7 +151,9 @@ pond_result H264UDPStreamer::onStartup(const std::vector<void*>& args)
             // Receive encoded H.264 packets and push straight over UDP
             while (avcodec_receive_packet(codec_ctx, pkt) == 0)
             {
-                sendto(sockfd, pkt->data, pkt->size, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                for (uint32_t i = 0; i < send_packets_times; i++)
+                    sendto(sockfd, pkt->data, pkt->size, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
                 av_packet_unref(pkt);
             }
         }

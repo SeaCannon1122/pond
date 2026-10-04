@@ -7,8 +7,6 @@ def orb_slam3(pm: Manager):
         {
             "vocabulary_path" : os.getenv("POND_QUAC_CONFIG_PATH", "") + "ORBvoc.txt",
             "mode" : "Stereo",
-            "frame_id" : "camera",
-            "parent_frame_id" : "base_link"
         },
         {
             "stereo_left/image" : "camera_back/stereo_left/image",
