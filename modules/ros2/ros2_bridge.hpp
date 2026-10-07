@@ -1,16 +1,18 @@
 #pragma once
 
-#include "geometry_msgs/msg/pose2_d.hpp"
-#include "std_msgs/msg/float64.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
 #include <Eigen/src/Geometry/Quaternion.h>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <tf2_msgs/msg/tf_message.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -64,6 +66,16 @@ static void FrameTransform__to__geometry_msgs_msg_Pose(const FrameTransform& pon
     ros.orientation.y = q.y();
     ros.orientation.z = q.z();
     ros.orientation.w = q.w();
+}
+
+static void std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray(const std::vector<FrameTransform>& pond, geometry_msgs::msg::PoseArray& ros)
+{
+    if (pond.size() == 0) return;
+    ros.header.stamp = to_ros_time(pond[0].stamp.time);
+    ros.header.frame_id = pond[0].stamp.frame_id; 
+
+    ros.poses.resize(pond.size());
+    for (int i = 0; i < pond.size(); i++) FrameTransform__to__geometry_msgs_msg_Pose(pond[i], ros.poses[i]);
 }
 
 static void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransform& pond, geometry_msgs::msg::PoseStamped& ros)
@@ -284,12 +296,32 @@ static void sensor_msgs_msg_CameraInfo__to__CameraInfo(CameraInfo& pond, const s
     else pond.r = Sophus::SO3d(r);
 }
 
+static void std_msgs_msg_Bool__to__bool(bool& pond, const std_msgs::msg::Bool& ros)
+{
+    pond = ros.data;
+}
+
+static void bool__to__std_msgs_msg_Bool(const bool& pond, std_msgs::msg::Bool& ros)
+{
+    ros.data = pond;
+}
+
 static void std_msgs_msg_Float64__to__double(double& pond, const std_msgs::msg::Float64& ros)
 {
     pond = ros.data;
 }
 
 static void double__to__std_msgs_msg_Float64(const double& pond, std_msgs::msg::Float64& ros)
+{
+    ros.data = pond;
+}
+
+static void std_msgs_msg_Float64MultiArray__to__std_vector_double(std::vector<double>& pond, const std_msgs::msg::Float64MultiArray& ros)
+{
+    pond = ros.data;
+}
+
+static void std_vector_double__to__std_msgs_msg_Float64MultiArray(const std::vector<double>& pond, std_msgs::msg::Float64MultiArray& ros)
 {
     ros.data = pond;
 }

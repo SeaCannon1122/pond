@@ -7,6 +7,7 @@ from pond import Manager
 
 from launch_modules.mujoco import *
 from launch_modules.ros2_bridge import *
+from launch_modules.walk import *
 
 is_running = True
 config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
@@ -34,7 +35,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
-    compile_urdf(DESCRIPTION_PATH)   
+    #compile_urdf(DESCRIPTION_PATH)   
 
     pm = Manager(True, False)
 
@@ -49,8 +50,8 @@ def main():
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
     ros2_bridge(pm)
-    
-    mujoco(pm, DESCRIPTION_PATH)
+    walk(pm, False, True)
+    #mujoco(pm, DESCRIPTION_PATH)
 
     try:
         while is_running:

@@ -1,6 +1,6 @@
 from pond import Manager
 import os
-import subprocess
+from . import walk
 
 def mujoco(pm: Manager, urdf_path: str):
 
@@ -31,7 +31,7 @@ def mujoco(pm: Manager, urdf_path: str):
         {
             "robot_path" : xml_path,
             "actuator_groups" : [
-                #{"names" : drive.cfg.motor_names, "types" : len(drive.cfg.motor_names)*["velocity"]},
+                {"names" : walk.cfg.motor_names, "types" : len(walk.cfg.motor_names)*["position"]},
             ]
         },
     )

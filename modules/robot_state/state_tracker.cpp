@@ -97,7 +97,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     if (!file.is_open())
     {
-        POND_LOG("ERROR: Could not open file '%s'", *description_path_o->c_str());
+        POND_LOG("ERROR: Could not open file '%s'", description_path_o->c_str());
         return POND_ERROR;
     }
 
@@ -106,7 +106,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     if (file.bad())
     {
-        POND_LOG("ERROR: Could not read file '%s' as string", *description_path_o->c_str());
+        POND_LOG("ERROR: Could not read file '%s' as string", description_path_o->c_str());
         return POND_ERROR;
     }
 

@@ -1,5 +1,7 @@
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "pond_data_types/command_types.hpp"
+#include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "ros2_bridge.hpp"
 
 template<typename pond_data_type, typename ros_msg>
@@ -144,6 +146,9 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                     if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_pond_to_ros<std::vector<FrameTransform>, tf2_msgs::msg::TFMessage>(
                         pond_channel, ros_topic, std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage, qos, is_vector
                     ));
+                    else if (ros_type == "geometry_msgs::msg::PoseArray") bridges.emplace_back(create_pond_to_ros<std::vector<FrameTransform>, geometry_msgs::msg::PoseArray>(
+                        pond_channel, ros_topic, std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray, qos, is_vector
+                    ));
                     else return false;
                 }
                 else if (pond_type == "std::string")
@@ -178,6 +183,20 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 {
                     if (ros_type == "std_msgs::msg::Float64") bridges.emplace_back(create_pond_to_ros<double, std_msgs::msg::Float64>(
                         pond_channel, ros_topic, double__to__std_msgs_msg_Float64, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::vector<double>")
+                {
+                    if (ros_type == "std_msgs::msg::Float64MultiArray") bridges.emplace_back(create_pond_to_ros<std::vector<double>, std_msgs::msg::Float64MultiArray>(
+                        pond_channel, ros_topic, std_vector_double__to__std_msgs_msg_Float64MultiArray, qos, is_vector
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "bool")
+                {
+                    if (ros_type == "std_msgs::msg::Bool") bridges.emplace_back(create_pond_to_ros<bool, std_msgs::msg::Bool>(
+                        pond_channel, ros_topic, bool__to__std_msgs_msg_Bool, qos, is_vector
                     ));
                     else return false;
                 }
@@ -258,6 +277,20 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 {
                     if (ros_type == "std_msgs::msg::Float64") bridges.emplace_back(create_ros_to_pond<double, std_msgs::msg::Float64>(
                         pond_channel, ros_topic, std_msgs_msg_Float64__to__double, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "std::vector<double>")
+                {
+                    if (ros_type == "std_msgs::msg::Float64MultiArray") bridges.emplace_back(create_ros_to_pond<std::vector<double>, std_msgs::msg::Float64MultiArray>(
+                        pond_channel, ros_topic, std_msgs_msg_Float64MultiArray__to__std_vector_double, qos
+                    ));
+                    else return false;
+                }
+                else if (pond_type == "bool")
+                {
+                    if (ros_type == "std_msgs::msg::Bool") bridges.emplace_back(create_ros_to_pond<bool, std_msgs::msg::Bool>(
+                        pond_channel, ros_topic, std_msgs_msg_Bool__to__bool, qos
                     ));
                     else return false;
                 }

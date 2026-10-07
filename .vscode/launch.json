@@ -7,7 +7,7 @@
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": [ "debug/stream.py"],
+            "args": [ "configs/idefix/run.py"],
 
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
@@ -20,7 +20,15 @@
                 {
                     "name": "POND_BUNDLE_PATH",
                     "value": "${workspaceFolder}/build/debug/pond_bundles"
-                }
+                },
+                {
+                    "name": "POND_IDEFIX_CONFIG_PATH",
+                    "value": "${workspaceFolder}/configs/idefix/"
+                },
+                {
+                    "name": "POND_QUAC_CONFIG_PATH",
+                    "value": "${workspaceFolder}/configs/quac/"
+                },
             ],
 
             "MIMode": "gdb",

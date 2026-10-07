@@ -4,7 +4,10 @@
 
 #include <pond_data_types/command_types.hpp>
 #include <pond_data_types/motor_types.hpp>
+#include <vector>
+#include "pond/hpp/dds.hpp"
 #include "pond_data_types/robot_state_types.hpp"
+#include "pond_data_types/transform_types.hpp"
 #include "trajectory.hpp"
 
 class Gait
@@ -69,6 +72,10 @@ private:
     double limb_length_shin_;
 
     pond::Receiver twist_receiver, update_receiver, locomotion_receiver;
+    pond::DistributorTyped<std::vector<double>> gait_distributor; 
+    pond::DistributorTyped<std::vector<FrameTransform>> foot_position_distributor; 
+    std::vector<FrameTransform> foot_positions_msg;
+
     std::mutex twist_mutex;
     TwistCommand twist_cmd, twist;
     double timeout;
@@ -149,7 +156,12 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
     stand_height_                   = parameter("stand_height")                 .asDouble().get(0.18);
     gait_duration_time_             = parameter("gait_duration_time")           .asDouble().get(1.5);
     
-    std::array<std::string, 12> prefixes = 
+    gait_distributor = createDistributorTyped<std::vector<double>>({"gaits"});
+    foot_position_distributor = createDistributorTyped<std::vector<FrameTransform>>({"foot_target_positions"});
+    foot_positions_msg.resize(4);
+    foot_positions_msg[0].stamp.frame_id = "base_link";
+
+    std::vector<std::string> joint_names = 
     {
         "FL", "FL_leg", "FL_foot",
         "FR", "FR_leg", "FR_foot",
@@ -162,8 +174,8 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
 
     for (uint32_t i = 0; i < 12; i++)
     {
-        joint_states[i].joint_name = prefixes[i] + "_joint";
-        channels_info.channel<MotorInterface>(prefixes[i] + "_motor");
+        joint_states[i].joint_name = joint_names[i];
+        channels_info.channel<MotorInterface>(joint_names[i] + "_motor/update");
     }
 
     update_receiver = createReceiver<MotorInterface>(channels_info, std::bind(&QuadrupedController::update_controller, this, std::placeholders::_1));
@@ -186,10 +198,14 @@ void QuadrupedController::onShutdownTF()
     update_receiver.destroy();
     twist_receiver.destroy();
     locomotion_receiver.destroy();
+    gait_distributor.destroy();
+    foot_position_distributor.destroy();
 }
 
 void QuadrupedController::update_controller(MotorInterface** ifs)
 {
+    double now = pond::get_time();
+
     for (uint32_t i = 0; i < joint_states.size(); i++)
     {
         if (ifs[i]->feedback.pos) joint_states[i].angle = *ifs[i]->feedback.pos;
@@ -205,12 +221,10 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
     TwistCommand twist_cmd_copy = twist_cmd;
     twist_mutex.unlock();
 
-    std::array<double, 4> phase_array;
+    std::vector<double> phase_array(4);
 
     if(twist_cmd_copy.lin[0] != 0 || twist_cmd_copy.lin[1] != 0 || twist_cmd_copy.ang[2] != 0)
     {
-        double now = pond::get_time();
-
         // Example: use fixed gait for now
         Gait advanced_gait = make_trot(1.5); // period = 1 second
         // AdvancedGait advanced_gait = AdvancedGait::make_trot(5.0);
@@ -220,11 +234,12 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
     }
     else phase_array = {0.25, 0.25, 0.25, 0.25};
     
+    gait_distributor.distribute(&phase_array);
 
     if (twist_cmd_copy.lin[0] != twist.lin[0] || twist_cmd_copy.lin[1] != twist.lin[1] || twist_cmd_copy.ang[2] != twist.ang[0])
     {
         // Generate base positions and foot velocity vectors
-        std::array<Eigen::Vector2d, 4> foot_velocities = calculateFootVelocities(twist);
+        std::array<Eigen::Vector2d, 4> foot_velocities = calculateFootVelocities(twist_cmd_copy);
 
         for (uint32_t i = 0; i < 4; i++) trajectories[i].init(0.001, 0.01, 0.0,  step_height_, 150.0, foot_velocities[i]);
 
@@ -240,6 +255,10 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         trajectories[i].get_state(phase_array[i], positions[i], velocities[i], accelerations[i]);
 
         positions[i] += base_positions[i];
+
+        foot_positions_msg[i].tf = Sophus::SE3d(Sophus::SO3d(), positions[i]);
+        foot_positions_msg[i].stamp.time = now;
+        foot_positions_msg[i].stamp.hw_time = now;
 
         double x = positions[i][0], y = positions[i][1], z = positions[i][2];
 
@@ -278,4 +297,6 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         ifs[3*i+1]->command.pos = shoulder_angle;
         ifs[3*i+2]->command.pos = knee_angle;
     }
+
+    foot_position_distributor.distribute(&foot_positions_msg);
 }

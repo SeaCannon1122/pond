@@ -33,13 +33,25 @@ def ros2_bridge(pm: Manager):
                 {   "direction" : "ROS_TO_POND",
 
                     "pond" : {"channel" : "cmd_vel",                    "type" : "TwistCommand"},
-                    "ros"  : {"topic"   : "cmd_vel",                    "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
+                    "ros"  : {"topic"   : "quac/cmd_vel_pilot",         "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
                 },
                 ####### joint_states ######
                 {   "direction" : "POND_TO_ROS",
 
                     "pond" : {"channel" : "set_robot_joints",           "type" : "std::vector<JointState>"},
                     "ros"  : {"topic"   : "joint_states",               "type" : "sensor_msgs::msg::JointState"}  
+                },
+                ########## gaits ##########
+                {   "direction" : "POND_TO_ROS",
+
+                    "pond" : {"channel" : "gaits",                      "type" : "std::vector<double>"},
+                    "ros"  : {"topic"   : "gaits",                      "type" : "std_msgs::msg::Float64MultiArray"}  
+                },
+                ########## gaits ##########
+                {   "direction" : "POND_TO_ROS",
+
+                    "pond" : {"channel" : "foot_target_positions",      "type" : "std::vector<FrameTransform>"},
+                    "ros"  : {"topic"   : "foot_target_positions",      "type" : "geometry_msgs::msg::PoseArray"}  
                 },
             ]
         },
