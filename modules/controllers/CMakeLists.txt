@@ -6,6 +6,7 @@ add_library(controllers-pond_bundle SHARED
   arm_controller.cpp
   arm_controller_old.cpp
   angle_gripper_controller.cpp
+  quadruped_controller/quadruped_controller.cpp
 )
 
 pond_module_common_setup(controllers-pond_bundle)

@@ -1,8 +1,5 @@
-#include "pond/pond.h"
-#include <optional>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
-#include <unistd.h>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>
@@ -27,12 +24,8 @@ public:
   virtual void onFrame() override;
 private:
   std::thread gui_thread;
+  mjvCamera cam; mjvOption opt; mjvPerturb pert;
 
-  mjvCamera cam;
-  mjvOption opt;
-  mjvPerturb pert;
-
-  // model and data
   mjModel* m = nullptr;
   mjData*  d = nullptr;
 
@@ -86,14 +79,7 @@ private:
     mjv_defaultOption(&opt);
     mjv_defaultPerturb(&pert);
 
-    // simulate object encapsulates the UI
-    sim = std::make_unique<mj::Simulate>(
-      std::make_unique<mj::GlfwAdapter>(),
-      &cam,
-      &opt,
-      &pert,
-      /* is_passive = */ false
-    );
+    sim = std::make_unique<mj::Simulate>(std::make_unique<mj::GlfwAdapter>(), &cam, &opt, &pert, false);
 
     sim_created.store(true);
     sim->RenderLoop();
@@ -101,11 +87,7 @@ private:
 };
 
 POND_MODULE_CPP_DECLARE(Mujoco, "mujoco", "mujoco pond binding")
-
-POND_BUNDLE_DECLARE(
-  "mojoco bundle",
-  POND_MODULE(Mujoco),
-)
+POND_BUNDLE_DECLARE("mojoco bundle", POND_MODULE(Mujoco))
 
 pond_result Mujoco::onStartup(const std::vector<void*>& args)
 {
@@ -115,8 +97,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
   plugin_dir = parameter("plugin_directory").asString().getStrict({}, false);
   if (auto robot_path_o = parameter("robot_path").asString().getStrict()) robot_path = *robot_path_o; else return POND_ERROR;
   
-  const int kErrorLength = 1024;
-  char loadError[kErrorLength] = "";
+  const int kErrorLength = 1024; char loadError[kErrorLength] = "";
 
   mjVFS vfs;
   mj_defaultVFS(&vfs);
@@ -130,8 +111,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
   }
   mj_deleteVFS(&vfs);
 
-  if (!spec) return POND_ERROR;
-  if (!m) return POND_ERROR;
+  if (!spec || !m) return POND_ERROR;
   if (!(d = mj_makeData(m))) { mj_deleteModel(m); POND_LOG_RETURN_ERROR("Failed to create model data"); }
 
   mj_forward(m, d);
@@ -335,7 +315,8 @@ void Mujoco::onFrame()
   }
 
   // paused
-  else {
+  else
+  {
     // run mj_forward, to update rendering and joint sliders
     mj_forward(m, d);
     if (sim->pause_update) { mju_copy(d->qacc_warmstart, d->qacc, m->nv); }
