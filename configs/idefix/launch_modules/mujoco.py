@@ -31,7 +31,7 @@ def mujoco(pm: Manager, urdf_path: str):
         {
             "robot_path" : xml_path,
             "actuator_groups" : [
-                {"names" : walk.cfg.motor_names, "types" : len(walk.cfg.motor_names)*["position"]},
+                {"names" : ["FL_motor", "FL_leg_motor", "FR_motor", "FR_leg_motor", "BL_motor", "BL_leg_motor", "BR_motor", "BR_leg_motor"], "types" : 8*["position"]},
             ]
         },
     )

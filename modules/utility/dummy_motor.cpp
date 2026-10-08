@@ -6,6 +6,8 @@
 
 struct motor
 {
+    std::string name;
+
     double cmd_pos = 0;
     double pos = 0;
     double vel = 0;
@@ -39,11 +41,12 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
     max_speed = std::abs(parameter("max_speed").asDouble().get(0.0));
 
     auto names = parameter("motor_names").asStringArray().get({"motor"});
-    motors.resize(names.size());
+    motors.reserve(names.size());
 
     pond::ChannelsInfo cmd_info, fb_info;
     for (auto& name : names)
     {
+        motors.push_back({.name = name});
         cmd_info.channel<MotorCommand>(name + "/command");
         fb_info.channel<MotorFeedback>(name + "/get_feedback");
     }
@@ -105,8 +108,16 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
 
         for (uint32_t i = 0; i < motors.size(); i++)
         {
-            if (commands[i]->pos) motors[i].cmd_pos = *commands[i]->pos;
-            if (commands[i]->vel) motors[i].vel = *commands[i]->vel;
+            if (commands[i]->pos)
+            {
+                if(std::isfinite(*commands[i]->pos)) motors[i].cmd_pos = *commands[i]->pos;
+                else POND_LOG("Cannot set motor '%s' to position %f", motors[i].name.c_str(), *commands[i]->pos);
+            }
+            if (commands[i]->vel)
+            {
+                if(std::isfinite(*commands[i]->vel)) motors[i].vel = *commands[i]->vel;
+                else POND_LOG("Cannot set motor '%s' to velocity %f", motors[i].name.c_str(), *commands[i]->vel);
+            }
         }
     });
 

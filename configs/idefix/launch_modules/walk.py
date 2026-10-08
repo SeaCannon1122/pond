@@ -32,7 +32,7 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "dummy_servos", "utility/dummy_motor", cfg.thread_name,
             
-            {"mode" : "position", "motor_names": cfg.motor_names},
+            {"mode" : "position", "max_speed" : 4.0, "motor_names": cfg.motor_names},
         )
 
     # controller manager

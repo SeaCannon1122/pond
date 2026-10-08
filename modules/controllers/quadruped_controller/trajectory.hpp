@@ -4,7 +4,7 @@ class DynamicTrajectory
 {    
 public: 
     double T_sw, T_st, T_0, T_1;
-    double y_0, y_1;
+    double delta_y;
 
     double v;
     Eigen::Matrix3d v_rot_mat;
@@ -13,12 +13,11 @@ public:
     double j;
     double stance_amplitude;
 
-    bool init(double A_, double T_0_, double y_0_, double y_1_, double j_, Eigen::Vector2d v_)
+    bool init(double A_, double T_0_, double T_1_, double delta_y_, double j_, Eigen::Vector2d v_)
     {
         T_sw = 0.5; T_st = 0.5;
-        T_0 = T_0_; T_1 = T_sw-T_0;
-        y_0 = y_0_;
-        y_1 = y_1_;
+        T_0 = T_0_; T_1 = T_1_;
+        delta_y = delta_y_;
 
         v = -v_.norm();
         v_rot_mat = Eigen::AngleAxisd(atan2(v_.y(), v_.x()), Eigen::Vector3d::UnitZ()).toRotationMatrix();
@@ -31,7 +30,7 @@ public:
 
         stance_function.f_x.make_polynomial({-step_length / 2.0, v});
         stance_function.f_y.make_polynomial({0});
-        stance_function.f_z.make_cosine(-y_0, -stance_amplitude, M_PI/2.0, -v*M_PI/step_length);
+        stance_function.f_z.make_cosine(stance_amplitude, -stance_amplitude, M_PI/2.0, -v*M_PI/step_length);
 
         // Swing I
 
@@ -60,7 +59,7 @@ public:
             eq_point<2>(0.0,        stance_function.f_z.eval_d<2>(T_st)),
             eq_point<3>(0.0,        stance_function.f_z.eval_d<3>(T_st)),
 
-            eq_point<0>(T_sw / 2.0, y_1),
+            eq_point<0>(T_sw / 2.0, delta_y + stance_amplitude),
             eq_point<1>(T_sw / 2.0, 0.0),
             eq_point<2>(T_sw / 2.0, 0.0),
             eq_point<3>(T_sw / 2.0, j)
@@ -94,7 +93,7 @@ public:
             eq_point<2>(T_sw,        stance_function.f_z.eval_d<2>(0.0)),
             eq_point<3>(T_sw,        stance_function.f_z.eval_d<3>(0.0)),
 
-            eq_point<0>(T_sw / 2.0, y_1),
+            eq_point<0>(T_sw / 2.0, delta_y + stance_amplitude),
             eq_point<1>(T_sw / 2.0, 0.0),
             eq_point<2>(T_sw / 2.0, 0.0),
             eq_point<3>(T_sw / 2.0, j)

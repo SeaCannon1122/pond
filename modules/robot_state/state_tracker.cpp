@@ -332,7 +332,9 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
             if (joint == joints_map.end()) continue;
             if (joint->second->mimic.is || joint->second->is_static) continue;
 
-            set_joint(joint->second, state.angle, state.time, state.hw_time, &tfs);
+            if (std::isfinite(state.angle)) set_joint(joint->second, state.angle, state.time, state.hw_time, &tfs);
+
+            else POND_LOG("Cannot set joint '%s' to %f", state.joint_name.c_str(), state.angle);
         }
 
         std::lock_guard<std::mutex> lock(tf_distributor_mutex);

@@ -112,7 +112,7 @@ public:
 struct trajectory_function_3d
 {
     template<uint32_t order>
-    Eigen::Vector3d eval_d(double t) { return {f_x.eval_d<order>(t), f_x.eval_d<order>(t), f_x.eval_d<order>(t)};}
+    Eigen::Vector3d eval_d(double t) { return {f_x.eval_d<order>(t), f_y.eval_d<order>(t), f_z.eval_d<order>(t)};}
 
     trajectory_function f_x;
     trajectory_function f_y;

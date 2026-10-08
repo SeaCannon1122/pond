@@ -1,3 +1,4 @@
+#include <cmath>
 #include <functional>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
@@ -59,7 +60,7 @@ public:
 private:
 
     std::array<Eigen::Vector3d, 4> generateBasePosition(bool extra) const;
-    std::array<Eigen::Vector2d, 4> calculateFootVelocities(TwistCommand& twist) const;
+    std::array<Eigen::Vector2d, 4> calculateFootVelocities(const TwistCommand& twist) const;
 
     double step_height_;
     double max_step_length_;
@@ -109,7 +110,7 @@ std::array<Eigen::Vector3d, 4> QuadrupedController::generateBasePosition(bool ex
   return foot_targets;
 }
 
-std::array<Eigen::Vector2d, 4> QuadrupedController::calculateFootVelocities(TwistCommand& twist) const
+std::array<Eigen::Vector2d, 4> QuadrupedController::calculateFootVelocities(const TwistCommand& twist) const
 {
   std::array<Eigen::Vector2d, 4> velocities;
   std::array<Eigen::Vector3d, 4> foot_positions = generateBasePosition(false);
@@ -151,7 +152,7 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
     limb_length_thigh_              = parameter("limb_length_thigh")            .asDouble().get(0.105);
     limb_length_shin_               = parameter("limb_length_shin")             .asDouble().get(0.115);
 
-    step_height_                    = parameter("step_height")                  .asDouble().get(0.035);
+    step_height_                    = parameter("step_height")                  .asDouble().get(0.08);
     max_step_length_                = parameter("max_step_length")              .asDouble().get(0.10);
     stand_height_                   = parameter("stand_height")                 .asDouble().get(0.18);
     gait_duration_time_             = parameter("gait_duration_time")           .asDouble().get(1.5);
@@ -160,6 +161,10 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
     foot_position_distributor = createDistributorTyped<std::vector<FrameTransform>>({"foot_target_positions"});
     foot_positions_msg.resize(4);
     foot_positions_msg[0].stamp.frame_id = "base_link";
+
+    std::array<Eigen::Vector2d, 4> foot_velocities = calculateFootVelocities(TwistCommand{.lin = {0.01, 0.0, 0.0}});
+
+    for (uint32_t i = 0; i < 4; i++) trajectories[i].init(0.02, 0.1, 0.75, step_height_, 800.0, foot_velocities[i]);
 
     std::vector<std::string> joint_names = 
     {
@@ -202,6 +207,22 @@ void QuadrupedController::onShutdownTF()
     foot_position_distributor.destroy();
 }
 
+bool twist_is_usable(TwistCommand& cmd)
+{
+    return (std::abs(cmd.lin[0]) > 0.001 | std::abs(cmd.lin[1]) > 0.001 | std::abs(cmd.ang[2]) > 0.001);
+}
+
+inline bool law_of_cosines(double l1, double l2, double b, double* theta)
+{
+    double acos_theta = (l1*l1 + l2*l2 - b*b)/(2*l1*l2);
+    if (acos_theta > 1.0 || acos_theta < -1.0) return false;
+
+    *theta = acos(acos_theta);
+
+    return true;
+}
+
+
 void QuadrupedController::update_controller(MotorInterface** ifs)
 {
     double now = pond::get_time();
@@ -223,7 +244,9 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
 
     std::vector<double> phase_array(4);
 
-    if(twist_cmd_copy.lin[0] != 0 || twist_cmd_copy.lin[1] != 0 || twist_cmd_copy.ang[2] != 0)
+    bool twist_usable = twist_is_usable(twist_cmd_copy);
+
+    if (twist_usable)
     {
         // Example: use fixed gait for now
         Gait advanced_gait = make_trot(1.5); // period = 1 second
@@ -239,9 +262,9 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
     if (twist_cmd_copy.lin[0] != twist.lin[0] || twist_cmd_copy.lin[1] != twist.lin[1] || twist_cmd_copy.ang[2] != twist.ang[0])
     {
         // Generate base positions and foot velocity vectors
-        std::array<Eigen::Vector2d, 4> foot_velocities = calculateFootVelocities(twist_cmd_copy);
+        std::array<Eigen::Vector2d, 4> foot_velocities = calculateFootVelocities(twist_usable ? twist_cmd_copy : TwistCommand{.lin = {0.01, 0.0, 0.0}});
 
-        for (uint32_t i = 0; i < 4; i++) trajectories[i].init(0.001, 0.01, 0.0,  step_height_, 150.0, foot_velocities[i]);
+        for (uint32_t i = 0; i < 4; i++) trajectories[i].init(0.02, 0.1, 0.75, step_height_, 800.0, foot_velocities[i]);
 
         twist = twist_cmd_copy;
     }
@@ -265,28 +288,21 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         if (i % 2 != 0) y = -y;
         if (z > 0) x*= -1;
 
+        double knee_angle, shoulder_angle, hip_angle;
+
         double shoulder_to_foot_sq = z * z + y * y - limb_length_hip_to_shoulder_ * limb_length_hip_to_shoulder_;
         if (shoulder_to_foot_sq < 0) continue;
         double shoulder_to_foot = std::sqrt(shoulder_to_foot_sq);
 
-        double gamma1 = std::atan2(y, std::abs(z));
-        double gamma2 = std::atan2(shoulder_to_foot, limb_length_hip_to_shoulder_);
+        hip_angle = std::atan2(y, std::abs(z)) + std::atan2(shoulder_to_foot, limb_length_hip_to_shoulder_);
 
-        double distance_sq = x * x + shoulder_to_foot * shoulder_to_foot;
-        if (distance_sq < 0) continue;
-        double distance = std::sqrt(distance_sq);
+        double distance = std::sqrt(x * x + shoulder_to_foot * shoulder_to_foot);
 
-        double delta_beta = std::atan2(x, shoulder_to_foot);
+        if (!law_of_cosines(limb_length_thigh_, limb_length_shin_, distance, &knee_angle)) continue;
+        if (!law_of_cosines(limb_length_thigh_, distance, limb_length_shin_, &shoulder_angle)) continue;
 
-        double acos_arg1 = (limb_length_thigh_ * limb_length_thigh_ + limb_length_shin_ * limb_length_shin_ - distance * distance) / (2 * limb_length_thigh_ * limb_length_shin_);
-        double acos_arg2 = (limb_length_thigh_ * limb_length_thigh_ - limb_length_shin_ * limb_length_shin_ + distance * distance) / (2 * limb_length_thigh_ * distance);
-
-        if (acos_arg1 < -1 || acos_arg1 > 1 || acos_arg2 < -1 || acos_arg2 > 1) continue;
-
-        double knee_angle = std::acos(acos_arg1);
-        double shoulder_angle = std::acos(acos_arg2) - delta_beta;
+        shoulder_angle -= std::atan2(x, shoulder_to_foot);
         if(z>0) shoulder_angle += M_PI;
-        double hip_angle = gamma1 + gamma2;
 
         // Adjust angle from triangle perspective to robot perspective
         hip_angle -= M_PI_2;
