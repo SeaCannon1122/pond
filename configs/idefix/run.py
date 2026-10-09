@@ -50,8 +50,8 @@ def main():
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
     ros2_bridge(pm)
-    walk(pm, False, True)
-    #mujoco(pm, DESCRIPTION_PATH)
+    walk(pm, False, False)
+    mujoco(pm, DESCRIPTION_PATH)
 
     try:
         while is_running:

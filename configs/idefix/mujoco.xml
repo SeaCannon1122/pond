@@ -26,15 +26,15 @@
         <position name="FL_motor" joint="FL" kp="100" kv="0.1" ctrlrange="-1 1" ctrllimited="true"/>
         <position name="BL_motor" joint="BL" kp="100" kv="0.1" ctrlrange="-1 1" ctrllimited="true"/>
 
-        <position name="FR_leg_motor" joint="FR_leg" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="BR_leg_motor" joint="BR_leg" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="FL_leg_motor" joint="FL_leg" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="BL_leg_motor" joint="BL_leg" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="FR_leg_motor" joint="FR_leg" kp="50" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="BR_leg_motor" joint="BR_leg" kp="50" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="FL_leg_motor" joint="FL_leg" kp="50" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="BL_leg_motor" joint="BL_leg" kp="50" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
 
-        <!-- <position name="FR_foot_motor" joint="FR_foot" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="BR_foot_motor" joint="BR_foot" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="FL_foot_motor" joint="FL_foot" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
-        <position name="BL_foot_motor" joint="BL_foot" kp="100" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/> -->
+        <position name="FR_foot_motor" joint="FR_foot" kp="10" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="BR_foot_motor" joint="BR_foot" kp="10" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="FL_foot_motor" joint="FL_foot" kp="10" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
+        <position name="BL_foot_motor" joint="BL_foot" kp="10" kv="0.1" ctrlrange="-1.5 1.5" ctrllimited="true"/>
 
     </actuator>
 </mujoco>

@@ -269,7 +269,7 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         twist = twist_cmd_copy;
     }
 
-    std::array<Eigen::Vector3d, 4> base_positions = generateBasePosition(true);
+    std::array<Eigen::Vector3d, 4> base_positions = generateBasePosition(false);
 
     std::array<Eigen::Vector3d, 4> positions, velocities, accelerations;
 
@@ -283,7 +283,9 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         foot_positions_msg[i].stamp.time = now;
         foot_positions_msg[i].stamp.hw_time = now;
 
-        double x = positions[i][0], y = positions[i][1], z = positions[i][2];
+        double x = positions[i][0] - (i < 2 ? robot_length_ / 2 : -robot_length_ / 2);
+        double y = positions[i][1] - (i % 2 == 0 ? robot_width_ / 2 : -robot_width_ / 2);
+        double z = positions[i][2];
 
         if (i % 2 != 0) y = -y;
         if (z > 0) x*= -1;
@@ -308,6 +310,8 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         hip_angle -= M_PI_2;
         if (z>0) hip_angle *= -1;
         knee_angle -= M_PI;
+
+        if (i%2) hip_angle *= -1;
 
         ifs[3*i+0]->command.pos = hip_angle;
         ifs[3*i+1]->command.pos = shoulder_angle;
