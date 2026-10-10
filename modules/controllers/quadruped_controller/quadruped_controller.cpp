@@ -141,7 +141,7 @@ std::array<Eigen::Vector3d, 4> QuadrupedController::generateBasePosition(bool ex
 std::array<Eigen::Vector2d, 4> QuadrupedController::calculateFootVelocities(const TwistCommand& twist) const
 {
   std::array<Eigen::Vector2d, 4> velocities;
-  std::array<Eigen::Vector3d, 4> foot_positions = generateBasePosition(false);
+  std::array<Eigen::Vector3d, 4> foot_positions = generateBasePosition(true);
 
   for(size_t i = 0; i < 4; i++) velocities[i] =
   {
@@ -223,7 +223,7 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
         twist = twist_cmd_copy;
     }
 
-    std::array<Eigen::Vector3d, 4> base_positions = generateBasePosition(false);
+    std::array<Eigen::Vector3d, 4> base_positions = generateBasePosition(true);
 
     std::array<Eigen::Vector3d, 4> positions, velocities, accelerations;
 

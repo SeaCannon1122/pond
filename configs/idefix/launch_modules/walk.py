@@ -19,7 +19,7 @@ class cfg:
         "joint_names" : joint_names,
         "motor_names" : motor_names,
 
-        "timeout" : 10000000000000000.0,
+        "timeout" : 0.5,
 
         "robot_width" : 0.07,
         "robot_length" : 0.26,
@@ -28,17 +28,29 @@ class cfg:
         "limb_length_thigh" : 0.105,
         "limb_length_shin" : 0.115,
 
-        "T_0" : 0.25 * phase_duration,
-        "T_1" : 0.75 * phase_duration,
-        "T_st" : phase_duration,
-        "T_sw" : phase_duration,
-        "step_height" : 0.08,
-        "stance_amplitude" : 0.02,
+        # "T_0" : 0.25 * phase_duration,
+        # "T_1" : 0.75 * phase_duration,
+        # "T_st" : phase_duration,
+        # "T_sw" : phase_duration,
+        # "step_height" : 0.08,
+        # "stance_amplitude" : 0.02,
+
+        # "max_step_length" : 1.0,
+        # "stand_height" : 0.18,
+        # "max_step_speed" : 10.0,
+        # "jerk" : 51.2 / (phase_duration * phase_duration * phase_duration),
+
+        "T_0" : 0.1,
+        "T_1" : 0.4,
+        "T_st" : 0.5,
+        "T_sw" : 0.5,
+        "step_height" : 0.035,
+        "stance_amplitude" : 0.001,
 
         "max_step_length" : 1.0,
-        "stand_height" : 0.18,
+        "stand_height" : 0.181,
         "max_step_speed" : 10.0,
-        "jerk" : 51.2 / (phase_duration * phase_duration * phase_duration)
+        "jerk" : 150.0
     }
 
 
