@@ -1,4 +1,9 @@
-project (modules)
+cmake_minimum_required(VERSION 3.5)
+
+project(bundles)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(Eigen3 REQUIRED)
 find_package(Sophus REQUIRED)
@@ -51,23 +56,30 @@ function(pond_module_common_setup TARGET)
 
 endfunction()
 
-add_subdirectory(utility)
+set(ALL_BUNDLES
+    utility
+    v4l2
+    depthai
+    realsense
+    gstreamer
+    video
+    rplidar
+    robot_state
+    orb_slam3
+    rtabmap
+    waveshare
+    controllers
+    mujoco
+    ros2
+    detection
+)
 
-add_subdirectory(v4l2)
-add_subdirectory(depthai)
-add_subdirectory(realsense)
-add_subdirectory(gstreamer)
-add_subdirectory(video)
-add_subdirectory(rplidar)
+option(BUILD_ALL_BUNDLES "Build all bundles" OFF)
 
-add_subdirectory(robot_state)
-
-add_subdirectory(orb_slam3)
-add_subdirectory(rtabmap)
-
-add_subdirectory(waveshare)
-add_subdirectory(controllers)
-add_subdirectory(mujoco)
-
-add_subdirectory(ros2)
-add_subdirectory(detection)
+foreach(bundle ${ALL_BUNDLES})
+    option(BUILD_BUNDLE_${bundle} "Build bundle in subdirectory ${bundle}" OFF)
+    
+    if(BUILD_BUNDLE_${bundle} OR BUILD_ALL)
+        add_subdirectory(${bundle})
+    endif()
+endforeach()

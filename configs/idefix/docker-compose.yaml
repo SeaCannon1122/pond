@@ -1,0 +1,32 @@
+services:
+  idefix:
+    build:
+      context: ../..
+      dockerfile: configs/idefix/dockerfile
+    image: idefix_pond:latest
+    container_name: idefix
+    
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - .:/pond/configs/idefix:ro
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      DISPLAY: ${DISPLAY:-null}
+      QT_X11_NO_MITSHM: 1
+
+      POND_IDEFIX_CONFIG_PATH : /pond/configs/idefix/
+
+      POND_BUNDLE_PATH: /pond/modules/build/pond_bundles
+      PYTHONPATH : /pond/pond/build/python:${PYTHONPATH}
+          
+    stdin_open: true
+    tty: true
+    stop_signal: SIGINT
+    network_mode: "host"
+
+    working_dir: /pond/configs/idefix
+    command: bash -c "source /opt/ros/jazzy/setup.bash && python3 run.py"

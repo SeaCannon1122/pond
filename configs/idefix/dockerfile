@@ -1,0 +1,79 @@
+FROM ros:jazzy
+SHELL ["/bin/bash", "-c"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update -y && apt upgrade -y
+RUN apt install -y build-essential cmake git pkg-config
+
+RUN apt install -y libeigen3-dev libopencv-dev
+
+# Sophus
+
+WORKDIR /lib_sources
+RUN git clone https://github.com/strasdat/Sophus.git
+WORKDIR /lib_sources/Sophus/build
+RUN cmake -DBUILD_SOPHUS_TESTS=OFF -DBUILD_EXAMPLES=OFF .. && make install
+
+# urdfdom
+
+WORKDIR /lib_sources
+RUN git clone https://github.com/ros/urdfdom_headers.git
+WORKDIR /lib_sources/urdfdom_headers/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/lib_sources/urdfdom_headers/install .. && make install
+
+WORKDIR /lib_sources
+RUN git clone https://github.com/ros/urdfdom.git
+WORKDIR /lib_sources/urdfdom/build
+RUN export CMAKE_PREFIX_PATH="/lib_sources/urdfdom_headers/install:$CMAKE_PREFIX_PATH" && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/lib_sources/urdfdom/install .. && make install
+
+# mujoco
+
+RUN apt install -y libglu1-mesa-dev libglfw3-dev libx11-dev libx11-xcb-dev libxext-dev libxrandr-dev \
+    libxinerama-dev libxcursor-dev libxi-dev libxxf86vm-dev libxfixes-dev libxrender-dev libxkbcommon-dev \
+    libxkbcommon-x11-dev libwayland-dev wayland-protocols libegl1-mesa-dev libgles2-mesa-dev libglvnd-dev libosmesa6-dev
+    
+WORKDIR /lib_sources
+RUN git clone https://github.com/google-deepmind/mujoco.git
+WORKDIR /lib_sources/mujoco/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DMUJOCO_SIMULATE_USE_SYSTEM_GLFW=ON .. && make install
+
+
+RUN apt install -y python3-pip
+RUN pip3 install "pybind11[global]" --break-system-packages
+
+RUN apt install -y ros-jazzy-rmw-cyclonedds-cpp
+
+WORKDIR /pond/pond
+
+COPY pond/ /pond/pond
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build --config Release
+
+COPY modules/CMakeLists.txt /pond/modules/CMakeLists.txt
+
+WORKDIR /pond/modules
+
+COPY modules/robot_state /pond/modules/robot_state
+RUN . /opt/ros/jazzy/setup.bash && export CMAKE_PREFIX_PATH="/lib_sources/urdfdom_headers/install:/lib_sources/urdfdom/install:$CMAKE_PREFIX_PATH" && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_robot_state=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build
+
+COPY modules/mujoco /pond/modules/mujoco
+RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_mujoco=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build
+
+COPY modules/ros2 /pond/modules/ros2
+RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_ros2=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build
+
+COPY modules/utility /pond/modules/utility
+RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_utility=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build
+
+COPY modules/controllers /pond/modules/controllers
+RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_controllers=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+RUN cmake --build build
+
+
