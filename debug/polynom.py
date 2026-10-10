@@ -3,9 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 
 # --- Initialparameter ---
-v = -2.0/30.0
-init_T_sw, init_T_st = 0.5, 0.5
-init_L, init_A = init_T_st*v, 0.02
+init_T_sw, init_T_st = 0.4, 0.4
+init_L, init_A = -0.2, 0.02
 init_y_0, init_y_1 = 0.08, 0.00
 init_T0, init_T1 = 0.1, 0.75  # T1 leicht unter 2*Tsw
 init_j = 800.0
@@ -56,14 +55,19 @@ def calculate_coeffs_x_I(v, T_0, x_0, T_st, T_sw):
         - 8 * T_sw**5 * v
     ) / d2
 
-    print(f"swing 1 x coeffs: {coeffs}")
+    print(f"swing I x {coeffs}")
+
     return coeffs
 
 
 def calculate_coeffs_y_I(v, y_0, A, L, y_1, T_sw,j):
     pi = np.pi
     coeffs = [0] * 8
-
+    # coeffs[0], coeffs[1] = -y_0, A * np.pi * v / L
+    # coeffs[3] = 160*(y_0 - y_1)/(T_sw**3) - (40*np.pi*A*v)/(L*T_sw**2) - j/6
+    # coeffs[4] = 720*(y_1 - y_0)/(T_sw**4) + (160*np.pi*A*v)/(L*T_sw**3) + j/T_sw
+    # coeffs[5] = 1152*(y_0 - y_1)/(T_sw**5) - (240*np.pi*A*v)/(L*T_sw**4) - (2*j)/(T_sw**2)
+    # coeffs[6] = 640*(y_1 - y_0)/(T_sw**6) + (128*np.pi*A*v)/(L*T_sw**5) + (4*j)/(3*T_sw**3)
     coeffs[0] = -y_0
     coeffs[1] = A * pi * v / L
     coeffs[2] = 0
@@ -108,7 +112,9 @@ def calculate_coeffs_y_I(v, y_0, A, L, y_1, T_sw,j):
         )
         / (L**3 * T_sw**7)
     )
-    print(f"swing 1 y coeffs: {coeffs}")
+
+    print(f"swing I y {coeffs}")
+
     return coeffs
 
 
@@ -250,7 +256,8 @@ def calculate_coeffs_x_II(v, T_1, x_0, T_st, T_sw):
         - 13 * T_sw**10
     )
 
-    print(f"swing 2 x coeffs: {coeffs}")
+    print(f"swing II x {coeffs}")
+
     return coeffs
 def calculate_coeffs_y_II(v, y_0, A, L, y_1, T_sw,j):
     coeffs = [0]*8
@@ -262,7 +269,9 @@ def calculate_coeffs_y_II(v, y_0, A, L, y_1, T_sw,j):
     coeffs[5] = (-7248*A*L**2*T_sw*np.pi*v + 28*A*T_sw**3*np.pi**3*v**3 + 34*L**3*T_sw**3*j + 29568*L**3*y_0 + 29568*L**3*y_1)/(L**3*T_sw**5)
     coeffs[6] = (9984*A*L**2*T_sw*np.pi*v - 40*A*T_sw**3*np.pi**3*v**3 - 44*L**3*T_sw**3*j - 40320*L**3*y_0 - 40320*L**3*y_1)/(3*L**3*T_sw**6)
     coeffs[7] = (-1920*A*L**2*T_sw*np.pi*v + 8*A*T_sw**3*np.pi**3*v**3 + 8*L**3*T_sw**3*j + 7680*L**3*y_0 + 7680*L**3*y_1)/(3*L**3*T_sw**7)
-    print(f"swing 2 y coeffs: {coeffs}")
+    
+    print(f"swing II y {coeffs}")
+    
     return coeffs
 
 # --- Plot Setup ---

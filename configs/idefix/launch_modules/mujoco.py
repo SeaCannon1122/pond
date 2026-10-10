@@ -2,30 +2,14 @@ from pond import Manager
 import os
 from . import walk
 
-def mujoco(pm: Manager, urdf_path: str):
+def mujoco(pm: Manager):
 
     config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
 
-    xml_path = config_prefix + "build/robot_mujoco.xml"
-
-    # subprocess.run(
-    #     ["compile", urdf_path, xml_path],
-    #     input="y\n",
-    #     text=True,
-    #     check=True,
-    # )
-
-    # with open(xml_path, "r+", encoding="utf-8") as f:
-    #     xml = f.read()
-        
-    #     xml = xml.replace("<worldbody>", "<worldbody>\n  <body name=\"chassis\" pos=\"0 0 0.3\">\n    <freejoint/>", 1)
-    #     xml = xml.replace("</worldbody>", "  </body>\n    </worldbody>", 1)
-    #     xml = xml.replace("</mujoco>", "<include file=\"" + config_prefix + "mujoco.xml\"/>" + "\n</mujoco>", 1)
-
-    #     f.seek(0)
-    #     f.write(xml)
-    #     f.truncate()
+    xml_path = config_prefix + "mujoco_robot.xml"
     
+    pm.set_thread_frame_time("simulation_thread", 0.01)
+
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
         {

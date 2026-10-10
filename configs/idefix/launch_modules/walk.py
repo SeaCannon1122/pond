@@ -4,23 +4,52 @@ class cfg:
     
     thread_name = "walk_thread"
 
-    motor_names = [
-        "FL_motor", "FL_leg_motor", "FL_foot_motor",
-        "FR_motor", "FR_leg_motor", "FR_foot_motor",
-        "BL_motor", "BL_leg_motor", "BL_foot_motor",
-        "BR_motor", "BR_leg_motor", "BR_foot_motor"
+    joint_names = [
+        "FL", "FL_leg", "FL_foot",
+        "FR", "FR_leg", "FR_foot",
+        "BL", "BL_leg", "BL_foot",
+        "BR", "BR_leg", "BR_foot"
     ]
 
-    # quadruped controller
+    motor_names = [joint + "_motor" for joint in joint_names]
+
+    phase_duration = 0.4
+
+    controller_params = {
+        "joint_names" : joint_names,
+        "motor_names" : motor_names,
+
+        "timeout" : 10000000000000000.0,
+
+        "robot_width" : 0.07,
+        "robot_length" : 0.26,
+        
+        "limb_length_hip_to_shoulder" : 0.065,
+        "limb_length_thigh" : 0.105,
+        "limb_length_shin" : 0.115,
+
+        "T_0" : 0.25 * phase_duration,
+        "T_1" : 0.75 * phase_duration,
+        "T_st" : phase_duration,
+        "T_sw" : phase_duration,
+        "step_height" : 0.08,
+        "stance_amplitude" : 0.02,
+
+        "max_step_length" : 1.0,
+        "stand_height" : 0.18,
+        "max_step_speed" : 10.0,
+        "jerk" : 51.2 / (phase_duration * phase_duration * phase_duration)
+    }
 
 
 def walk(pm: Manager, real: bool = True, fake: bool = False):
         
-    pm.set_thread_frame_time(cfg.thread_name, 0.02)
+    pm.set_thread_frame_time(cfg.thread_name, 0.01)
 
     # walk controller
     pm.load_module(
         "walk_controller", "controllers/quadruped_controller", cfg.thread_name,
+        cfg.controller_params
     )
 
     # hardware
@@ -32,12 +61,12 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "dummy_servos", "utility/dummy_motor", cfg.thread_name,
             
-            {"mode" : "position", "max_speed" : 4.0, "motor_names": cfg.motor_names},
+            {"mode" : "position", "max_speed" : 10.0, "motor_names": cfg.motor_names},
         )
 
     # controller manager
     pm.load_module(
         "quadruped_controller_manager", "utility/motor_controller_manager", cfg.thread_name,
 
-        {"motor_names": cfg.motor_names},
+        {"frame_time_log" : False, "motor_names": cfg.motor_names},
     )

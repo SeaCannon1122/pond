@@ -61,7 +61,7 @@
   </xacro:macro>
 
   <!-- Links -->
-  <xacro:box_link name="base_link"         mass = "0.1" size_x="0.216" size_y="0.114" size_z="0.075" xyz="0 0 0.0375" rpy="0 0 0" color="green"/>
+  <xacro:box_link name="base_link"         mass = "0.1" size_x="0.216" size_y="0.114" size_z="0.075" xyz="0 0 0" rpy="0 0 0" color="green"/>
   <xacro:box_link name="connector_front"   mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
   <xacro:box_link name="connector_back"    mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
   <xacro:box_link name="head"              mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
@@ -88,15 +88,15 @@
   <xacro:sphere_link name="BL_paw" mass = "0.1" radius="0.015" color="white"/>
 
   <!-- Joints -->
-  <xacro:joint_fixed name="joint_body1" xyz="0.1305 0 0.0375" rpy="0 0 0" parent="base_link" child="connector_front"/>
-  <xacro:joint_fixed name="joint_body2" xyz="-0.1305 0 0.0375" rpy="0 0 0" parent="base_link" child="connector_back"/>
+  <xacro:joint_fixed name="joint_body1" xyz="0.1305 0 0" rpy="0 0 0" parent="base_link" child="connector_front"/>
+  <xacro:joint_fixed name="joint_body2" xyz="-0.1305 0 0" rpy="0 0 0" parent="base_link" child="connector_back"/>
   <xacro:joint_fixed name="neck" xyz="0.04 0 0" rpy="0 0 0" parent="connector_front" child="head"/>
   <xacro:joint_fixed name="lower_back" xyz="-0.04 0 0" rpy="0 0 0" parent="connector_back" child="ass"/>
 
-  <xacro:joint_revolute name="FR" xyz="0.12675 -0.032 0.0375" rpy="0 0 0" parent="base_link" child="FR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
-  <xacro:joint_revolute name="BR" xyz="-0.12675 -0.032 0.0375" rpy="0 0 0" parent="base_link" child="BR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
-  <xacro:joint_revolute name="FL" xyz="0.12675 0.032 0.0375" rpy="0 0 0" parent="base_link" child="FL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
-  <xacro:joint_revolute name="BL" xyz="-0.12675 0.032 0.0375" rpy="0 0 0" parent="base_link" child="BL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="FR" xyz="0.12675 -0.032 0" rpy="0 0 0" parent="base_link" child="FR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BR" xyz="-0.12675 -0.032 0" rpy="0 0 0" parent="base_link" child="BR_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="FL" xyz="0.12675 0.032 0" rpy="0 0 0" parent="base_link" child="FL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
+  <xacro:joint_revolute name="BL" xyz="-0.12675 0.032 0" rpy="0 0 0" parent="base_link" child="BL_Servo" axis="1.0 0 0" lower="-1.0" upper="1.0" effort="0" velocity="0.2"/>
 
   <xacro:joint_revolute name="FR_leg" xyz="0 -0.06109 0" rpy="0 0 0" parent="FR_Servo" child="FR_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>
   <xacro:joint_revolute name="BR_leg" xyz="0 -0.06109 0" rpy="0 0 0" parent="BR_Servo" child="BR_upper_leg" axis="0 1.0 0" lower="-1.5" upper="1.5" effort="0" velocity="0.2"/>

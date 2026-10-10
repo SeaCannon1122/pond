@@ -13,9 +13,9 @@ public:
     double j;
     double stance_amplitude;
 
-    bool init(double A_, double T_0_, double T_1_, double delta_y_, double j_, Eigen::Vector2d v_)
+    bool init(double T_st_, double T_sw_, double A_, double T_0_, double T_1_, double delta_y_, double j_, Eigen::Vector2d v_)
     {
-        T_sw = 0.5; T_st = 0.5;
+        T_sw = T_sw_; T_st = T_st_;
         T_0 = T_0_; T_1 = T_1_;
         delta_y = delta_y_;
 
@@ -106,7 +106,7 @@ public:
     void get_state(double t, Eigen::Vector3d &pos, Eigen::Vector3d &vel, Eigen::Vector3d &acc)
     {
         // Normalize time to a single gait cycle [0.0, 1.0]
-        t = std::fmod(t, 1.0);
+        t = std::fmod(t, T_st + T_sw);
 
         // Select the appropriate gait phase based on the duty cycle
         if (t <= T_st)

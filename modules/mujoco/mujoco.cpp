@@ -159,6 +159,8 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       }
     } 
 
+    last_update_time = pond::get_time();
+
     feedback_receiver[gi] = createReceiver<MotorFeedback>(fb_info, [this, gi](MotorFeedback** feedbacks) {
 
       std::lock_guard<std::mutex> lock(interface_mutex);

@@ -1,4 +1,3 @@
-import signal
 import time
 import subprocess
 import os
@@ -9,17 +8,7 @@ from launch_modules.mujoco import *
 from launch_modules.ros2_bridge import *
 from launch_modules.walk import *
 
-is_running = True
 config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
-
-def signal_handler(signum, frame):
-    global is_running
-
-    if signum not in (signal.SIGINT, signal.SIGTERM):
-        return
-
-    print(" INTERRUPT", flush=True)
-    is_running = False
 
 def compile_urdf(destination: str):
     
@@ -31,8 +20,6 @@ def compile_urdf(destination: str):
         )
 
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
 
     DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
     #compile_urdf(DESCRIPTION_PATH)   
@@ -49,13 +36,20 @@ def main():
     #dummy_cam(pm, "camera_gripper", 1280, 720, 30, True, ip)
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
+
     ros2_bridge(pm)
-    walk(pm, False, False)
-    mujoco(pm, DESCRIPTION_PATH)
+
+    mujoco_sim = True
+    #mujoco_sim = False
+    
+    walk(pm, False, not mujoco_sim)
+
+    if mujoco_sim:
+        mujoco(pm)
 
     try:
-        while is_running:
-            time.sleep(0.2)
+        while True:
+            time.sleep(0.1)
 
     finally:
         pass

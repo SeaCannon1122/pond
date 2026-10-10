@@ -33,7 +33,7 @@ def ros2_bridge(pm: Manager):
                 {   "direction" : "ROS_TO_POND",
 
                     "pond" : {"channel" : "cmd_vel",                    "type" : "TwistCommand"},
-                    "ros"  : {"topic"   : "quac/cmd_vel_pilot",         "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
+                    "ros"  : {"topic"   : "cmd_vel_stamped",            "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
                 },
                 ####### joint_states ######
                 {   "direction" : "POND_TO_ROS",

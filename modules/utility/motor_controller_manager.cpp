@@ -13,6 +13,8 @@ private:
     std::vector<MotorInterface*> interface_ptrs;
     std::vector<MotorCommand*> command_ptrs;
     std::vector<MotorFeedback*> feedback_ptrs;
+
+    bool frame_time_log;
 };
 
 POND_MODULE_CPP_DECLARE(MotorControllerManager, "motor_controller_manager", "connecting motors and controllers")
@@ -23,6 +25,8 @@ pond_result MotorControllerManager::onStartup(const std::vector<void*>& args)
 
     auto motor_names = parameter("motor_names").asStringArray().getStrict(1, 0);
     if (!motor_names) return POND_ERROR;
+
+    frame_time_log = parameter("frame_time_log").asBool().get(false);
 
     interfaces.resize(motor_names->size());
     interface_ptrs.resize(motor_names->size());
@@ -60,6 +64,8 @@ void MotorControllerManager::onShutdown()
 
 void MotorControllerManager::onFrame()
 {
+    double start = pond::get_time();
+
     // reset interfaces;
     std::fill(interfaces.begin(), interfaces.end(), MotorInterface());
 
@@ -72,4 +78,8 @@ void MotorControllerManager::onFrame()
 
     // send motor commands
     command_distributor.distribute(command_ptrs);
+
+    double end = pond::get_time();
+
+    if (frame_time_log) POND_LOG("Frame took %f ms", (end-start)*1000.0);
 }

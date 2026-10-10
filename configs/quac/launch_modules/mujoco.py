@@ -27,6 +27,8 @@ def mujoco(pm: Manager, urdf_path: str):
     #     f.write(xml)
     #     f.truncate()
     
+    pm.set_thread_frame_time("simulation_thread", 0.01)
+
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
         {

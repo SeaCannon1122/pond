@@ -1,0 +1,89 @@
+<mujoco model="Robodog">
+  <compiler angle="radian"/>
+
+  <default>
+    <!-- Sets default damping and frictionloss for all joints -->
+    <joint damping="0.5" frictionloss="0.3"/>
+  </default>
+
+  <worldbody>
+    <body name="chassis" pos="0 0 0.3">
+      <freejoint/>
+
+      <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="1.0" diaginertia="0.0048 0.00403333 0.00403333"/>
+
+      <geom size="0.108 0.057 0.0375" pos="0 0 0" type="box"/>
+      <geom size="0.0225 0.01 0.0375" pos="0.1305 0 0" type="box"/>
+      <geom size="0.0175 0.057 0.0375" pos="0.1705 0 0" type="box"/>
+      <geom size="0.0225 0.01 0.0375" pos="-0.1305 0 0" type="box"/>
+      <geom size="0.0175 0.057 0.0375" pos="-0.1705 0 0" type="box"/>
+      <body name="FR_Servo" pos="0.12675 -0.032 0">
+        <inertial pos="0 -0.01624 0" quat="0.5 0.5 -0.5 0.5" mass="0.1" diaginertia="3.48628e-05 3.15182e-05 2.00928e-05"/>
+        <joint name="FR" range="-1 1" axis="1 0 0"/>
+        <geom size="0.01875 0.02635 0.01585" pos="0 -0.01624 0" type="box"/>
+        <body name="FR_upper_leg" pos="0 -0.06109 0">
+          <inertial pos="0 0 -0.05259" mass="0.1" diaginertia="0.000142451 0.000138394 1.87591e-05"/>
+          <joint name="FR_leg" range="-1.5 1.5" axis="0 1 0"/>
+          <geom size="0.01485 0.0185 0.0627" pos="0 0 -0.05259" type="box"/>
+          <body name="FR_lower_leg" pos="0 -0.0232435 -0.10518">
+            <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
+            <joint name="FR_foot" range="-1.5 1.5" axis="0 1 0"/>
+            <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
+            <geom size="0.015" pos="0 0 -0.108"/>
+          </body>
+        </body>
+      </body>
+      <body name="BR_Servo" pos="-0.12675 -0.032 0">
+        <inertial pos="0 -0.01624 0" quat="0.5 0.5 -0.5 0.5" mass="0.1" diaginertia="3.48628e-05 3.15182e-05 2.00928e-05"/>
+        <joint name="BR" range="-1 1" axis="1 0 0"/>
+        <geom size="0.01875 0.02635 0.01585" pos="0 -0.01624 0" type="box"/>
+        <body name="BR_upper_leg" pos="0 -0.06109 0">
+          <inertial pos="0 0 -0.05259" mass="0.1" diaginertia="0.000142451 0.000138394 1.87591e-05"/>
+          <joint name="BR_leg" range="-1.5 1.5" axis="0 1 0"/>
+          <geom size="0.01485 0.0185 0.0627" pos="0 0 -0.05259" type="box"/>
+          <body name="BR_lower_leg" pos="0 -0.0232435 -0.10518">
+            <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
+            <joint name="BR_foot" range="-1.5 1.5" axis="0 1 0"/>
+            <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
+            <geom size="0.015" pos="0 0 -0.108"/>
+          </body>
+        </body>
+      </body>
+      <body name="FL_Servo" pos="0.12675 0.032 0">
+        <inertial pos="0 0.01624 0" quat="0.5 0.5 -0.5 0.5" mass="0.1" diaginertia="3.48628e-05 3.15182e-05 2.00928e-05"/>
+        <joint name="FL" range="-1 1" axis="1 0 0"/>
+        <geom size="0.01875 0.02635 0.01585" pos="0 0.01624 0" type="box"/>
+        <body name="FL_upper_leg" pos="0 0.06109 0">
+          <inertial pos="0 0 -0.05259" mass="0.1" diaginertia="0.000142451 0.000138394 1.87591e-05"/>
+          <joint name="FL_leg" range="-1.5 1.5" axis="0 1 0"/>
+          <geom size="0.01485 0.0185 0.0627" pos="0 0 -0.05259" type="box"/>
+          <body name="FL_lower_leg" pos="0 0.0232435 -0.10518">
+            <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
+            <joint name="FL_foot" range="-1.5 1.5" axis="0 1 0"/>
+            <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
+            <geom size="0.015" pos="0 0 -0.108"/>
+          </body>
+        </body>
+      </body>
+      <body name="BL_Servo" pos="-0.12675 0.032 0">
+        <inertial pos="0 0.01624 0" quat="0.5 0.5 -0.5 0.5" mass="0.1" diaginertia="3.48628e-05 3.15182e-05 2.00928e-05"/>
+        <joint name="BL" range="-1 1" axis="1 0 0"/>
+        <geom size="0.01875 0.02635 0.01585" pos="0 0.01624 0" type="box"/>
+        <body name="BL_upper_leg" pos="0 0.06109 0">
+          <inertial pos="0 0 -0.05259" mass="0.1" diaginertia="0.000142451 0.000138394 1.87591e-05"/>
+          <joint name="BL_leg" range="-1.5 1.5" axis="0 1 0"/>
+          <geom size="0.01485 0.0185 0.0627" pos="0 0 -0.05259" type="box"/>
+          <body name="BL_lower_leg" pos="0 0.0232435 -0.10518">
+            <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
+            <joint name="BL_foot" range="-1.5 1.5" axis="0 1 0"/>
+            <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
+            <geom size="0.015" pos="0 0 -0.108"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <include file="mujoco_actuators.xml"/>
+
+</mujoco>
