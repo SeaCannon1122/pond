@@ -8,6 +8,7 @@
 #include <pond_data_types/motor_types.hpp>
 
 #include "pond/pond.h"
+#include "pond_data_types/transform_types.hpp"
 #include "trajectory.hpp"
 
 class QuadrupedController : public pond::ModuleBaseTF
@@ -35,13 +36,14 @@ private:
     double stance_amplitude_;
     double T_st_, T_sw_, T_0_, T_1_;
 
-    pond::Receiver twist_receiver, update_receiver, locomotion_receiver;
+    pond::Receiver twist_receiver, body_pose_receiver, update_receiver, locomotion_receiver;
     pond::DistributorTyped<std::vector<double>> gait_distributor; 
     pond::DistributorTyped<std::vector<FrameTransform>> foot_position_distributor; 
     std::vector<FrameTransform> foot_positions_msg;
 
-    std::mutex twist_mutex;
+    std::mutex input_mutex;
     TwistCommand twist_cmd, twist;
+    FrameTransform body_pose;
     double timeout;
 
     std::array<DynamicTrajectory, 4> trajectories;
@@ -104,8 +106,16 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
         
         if (new_twist->stamp.time + timeout < pond::get_time()) return;
 
-        std::lock_guard<std::mutex> lock(twist_mutex);
+        std::lock_guard<std::mutex> lock(input_mutex);
         twist_cmd = *new_twist;
+    });
+
+    body_pose_receiver = createReceiver<FrameTransform>({"body_pose"}, [this](FrameTransform* new_pose){
+        
+        if (new_pose->stamp.time + timeout < pond::get_time()) return;
+
+        std::lock_guard<std::mutex> lock(input_mutex);
+        body_pose = *new_pose;
     });
 
     return POND_SUCCESS;
@@ -115,6 +125,7 @@ void QuadrupedController::onShutdownTF()
 {
     update_receiver.destroy();
     twist_receiver.destroy();
+    body_pose_receiver.destroy();
     locomotion_receiver.destroy();
     gait_distributor.destroy();
     foot_position_distributor.destroy();
@@ -167,11 +178,6 @@ std::array<Eigen::Vector2d, 4> QuadrupedController::calculateFootVelocities(cons
   return velocities;
 }
 
-bool twist_is_usable(TwistCommand& cmd)
-{
-    return (std::abs(cmd.lin[0]) > 0.001 | std::abs(cmd.lin[1]) > 0.001 | std::abs(cmd.ang[2]) > 0.001);
-}
-
 inline bool law_of_cosines(double l1, double l2, double b, double* theta)
 {
     double acos_theta = (l1*l1 + l2*l2 - b*b)/(2*l1*l2);
@@ -197,18 +203,18 @@ void QuadrupedController::update_controller(MotorInterface** ifs)
 
     if(!locomotion_activated.load()) return;
 
-    twist_mutex.lock();
+    input_mutex.lock();
     TwistCommand twist_cmd_copy = twist_cmd;
-    twist_mutex.unlock();
+    FrameTransform body_pose_copy = body_pose;
+    input_mutex.unlock();
 
     std::array<double, 4> relative_phase_offsets = {0.0, 0.5, 0.5, 0.0};
     std::vector<double> phase_array(4);
     double gait_period = T_st_ + T_sw_;
 
-    bool twist_usable = twist_is_usable(twist_cmd_copy);
+    bool twist_usable = (std::abs(twist_cmd_copy.lin[0]) > 0.001 | std::abs(twist_cmd_copy.lin[1]) > 0.001 | std::abs(twist_cmd_copy.ang[2]) > 0.001) && twist_cmd_copy.stamp.time + timeout > time_now;
 
-    if (twist_usable) for (size_t i = 0; i < 4; i++)
-        phase_array[i] = std::fmod(time_now + relative_phase_offsets[i] * gait_period, gait_period);
+    if (twist_usable) for (size_t i = 0; i < 4; i++) phase_array[i] = std::fmod(time_now + relative_phase_offsets[i] * gait_period, gait_period);
     else phase_array = {T_st_ / 2.0, T_st_ / 2.0, T_st_ / 2.0, T_st_ / 2.0};
     
     gait_distributor.distribute(&phase_array);

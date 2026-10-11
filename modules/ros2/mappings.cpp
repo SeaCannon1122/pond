@@ -1,0 +1,323 @@
+#pragma once
+
+#include "mappings.hpp"
+
+inline rclcpp::Time to_ros_time(double time) { return rclcpp::Time(static_cast<int64_t>(time * (double)1e9), RCL_SYSTEM_TIME); }
+
+void std_string__to__std_msgs_msg_String(const std::string& pond, std_msgs::msg::String& ros)
+{
+    ros.data = pond;
+}
+
+void std_msgs_msg_String__to__std_string(std::string& pond, const std_msgs::msg::String& ros)
+{
+    pond = ros.data;
+}
+
+void ImuData__to__sensor_msgs_msg_Imu(const ImuData& pond, sensor_msgs::msg::Imu& ros)
+{
+    ros.header.frame_id = pond.stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond.stamp.time);
+
+    ros.angular_velocity.x = pond.ang_vel[0];
+    ros.angular_velocity.y = pond.ang_vel[1];
+    ros.angular_velocity.z = pond.ang_vel[2];
+
+    ros.linear_acceleration.x = pond.lin_acc[0];
+    ros.linear_acceleration.y = pond.lin_acc[1];
+    ros.linear_acceleration.z = pond.lin_acc[2];
+}
+
+void FrameTransform__to__geometry_msgs_msg_Pose(const FrameTransform& pond, geometry_msgs::msg::Pose& ros)
+{
+    Eigen::Vector3d t = pond.tf.translation();
+    Eigen::Quaterniond q = pond.tf.unit_quaternion();
+    
+    ros.position.x = t.x();
+    ros.position.y = t.y();
+    ros.position.z = t.z();
+
+    ros.orientation.x = q.x();
+    ros.orientation.y = q.y();
+    ros.orientation.z = q.z();
+    ros.orientation.w = q.w();
+}
+
+void geometry_msgs_msg_PoseStamped__to__FrameTransform(FrameTransform& pond, const geometry_msgs::msg::PoseStamped& ros)
+{
+    pond.stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond.stamp.hw_time = pond.stamp.time;
+    pond.child_frame_id = ros.header.frame_id;
+
+    pond.tf = Sophus::SE3d(
+        Eigen::Quaterniond(
+            ros.pose.orientation.w,
+            ros.pose.orientation.x,
+            ros.pose.orientation.y,
+            ros.pose.orientation.z
+        ),
+        Eigen::Vector3d (
+            ros.pose.position.x,
+            ros.pose.position.y,
+            ros.pose.position.z
+        )
+    );
+}
+
+void std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray(const std::vector<FrameTransform>& pond, geometry_msgs::msg::PoseArray& ros)
+{
+    if (pond.size() == 0) return;
+    ros.header.stamp = to_ros_time(pond[0].stamp.time);
+    ros.header.frame_id = pond[0].stamp.frame_id; 
+
+    ros.poses.resize(pond.size());
+    for (int i = 0; i < pond.size(); i++) FrameTransform__to__geometry_msgs_msg_Pose(pond[i], ros.poses[i]);
+}
+
+void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransform& pond, geometry_msgs::msg::PoseStamped& ros)
+{
+    FrameTransform__to__geometry_msgs_msg_Pose(pond, ros.pose);
+    ros.header.frame_id = pond.stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond.stamp.time);
+}
+
+void FrameTransform__to__geometry_msgs_msg_TransformStamped(const FrameTransform& pond, geometry_msgs::msg::TransformStamped& ros)
+{
+    Eigen::Vector3d t = pond.tf.translation();
+    Eigen::Quaterniond q = pond.tf.unit_quaternion();
+
+    ros.transform.translation.x = t.x();
+    ros.transform.translation.y = t.y();
+    ros.transform.translation.z = t.z();
+
+    ros.transform.rotation.x = q.x();
+    ros.transform.rotation.y = q.y();
+    ros.transform.rotation.z = q.z();
+    ros.transform.rotation.w = q.w();
+
+    ros.header.frame_id = pond.stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond.stamp.time);
+    ros.child_frame_id = pond.child_frame_id;
+}
+
+void FrameTransform__to__tf2_msgs_msg_TFMessage(const FrameTransform& pond, tf2_msgs::msg::TFMessage& ros)
+{
+    ros.transforms.resize(1);
+    FrameTransform__to__geometry_msgs_msg_TransformStamped(pond, ros.transforms[0]);
+}
+
+void std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage(const std::vector<FrameTransform>& pond, tf2_msgs::msg::TFMessage& ros)
+{
+    ros.transforms.resize(pond.size());
+    for (int i = 0; i < pond.size(); i++) FrameTransform__to__geometry_msgs_msg_TransformStamped(pond[i], ros.transforms[i]);
+}
+
+void geometry_msgs_msg_TransformStamped__to__FrameTransform(FrameTransform& pond, const geometry_msgs::msg::TransformStamped& ros)
+{
+    pond.stamp.frame_id = ros.header.frame_id;
+    pond.stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond.stamp.hw_time = pond.stamp.time;
+    pond.child_frame_id = ros.child_frame_id;
+
+    pond.tf = Sophus::SE3d(
+        Eigen::Quaterniond(
+            ros.transform.rotation.w,
+            ros.transform.rotation.x,
+            ros.transform.rotation.y,
+            ros.transform.rotation.z
+        ),
+        Eigen::Vector3d (
+            ros.transform.translation.x,
+            ros.transform.translation.y,
+            ros.transform.translation.z
+        )
+    );
+}
+
+void tf2_msgs_msg_TFMessage__to__FrameTransform(FrameTransform& pond, const tf2_msgs::msg::TFMessage& ros)
+{
+    if (ros.transforms.size() > 0) geometry_msgs_msg_TransformStamped__to__FrameTransform(pond, ros.transforms[0]);
+}
+
+void tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform(std::vector<FrameTransform>& pond, const tf2_msgs::msg::TFMessage& ros)
+{
+    pond.resize(ros.transforms.size());
+    for (int i = 0; i < ros.transforms.size(); i++) geometry_msgs_msg_TransformStamped__to__FrameTransform(pond[i], ros.transforms[i]);
+}
+
+void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg::Pose2D& ros)
+{
+    pond.stamp.frame_id = "";
+    pond.stamp.time = pond::get_time();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.x = ros.x;
+    pond.y = ros.y;
+    pond.theta = ros.theta;
+}
+
+void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros)
+{
+    pond.stamp.frame_id = "base_link";
+    pond.stamp.time = pond::get_time();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.lin[0] = ros.linear.x;
+    pond.lin[1] = ros.linear.y;
+    pond.lin[2] = ros.linear.z;
+
+    pond.ang[0] = ros.angular.x;
+    pond.ang[1] = ros.angular.y;
+    pond.ang[2] = ros.angular.z;
+}
+
+void geometry_msgs_msg_TwistStamped__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::TwistStamped& ros)
+{
+    pond.stamp.frame_id = ros.header.frame_id;
+    pond.stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.lin[0] = ros.twist.linear.x;
+    pond.lin[1] = ros.twist.linear.y;
+    pond.lin[2] = ros.twist.linear.z;
+
+    pond.ang[0] = ros.twist.angular.x;
+    pond.ang[1] = ros.twist.angular.y;
+    pond.ang[2] = ros.twist.angular.z;
+}
+
+void sensor_msgs_msg_LaserScan__to__LaserScanSPtr(LaserScanSPtr& pond, const sensor_msgs::msg::LaserScan& ros)
+{
+    pond = std::make_shared<LaserScan>();
+
+    pond->stamp.frame_id = ros.header.frame_id;
+    pond->stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond->stamp.hw_time = pond->stamp.time;
+
+    pond->angle_min = ros.angle_min;
+    pond->angle_max = ros.angle_max;
+    pond->angle_increment = ros.angle_increment;
+    pond->time_increment = ros.time_increment;
+    pond->scan_time = ros.scan_time;
+    pond->range_min = ros.range_min;
+    pond->range_max = ros.range_max;
+    pond->ranges = ros.ranges;
+    pond->intensities = ros.intensities;
+}
+
+void LaserScanSPtr__to__sensor_msgs_msg_LaserScan(const LaserScanSPtr& pond, sensor_msgs::msg::LaserScan& ros)
+{
+    ros.header.frame_id = pond->stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond->stamp.time);
+
+    ros.angle_min = pond->angle_min;
+    ros.angle_max = pond->angle_max;
+    ros.angle_increment = pond->angle_increment;
+    ros.time_increment = pond->time_increment;
+    ros.scan_time = pond->scan_time;
+    ros.range_min = pond->range_min;
+    ros.range_max = pond->range_max;
+    ros.ranges = pond->ranges;
+    ros.intensities = pond->intensities;
+}
+
+void sensor_msgs_msg_JointState__to__std_vector_JointState(std::vector<JointState>& pond, const sensor_msgs::msg::JointState& ros)
+{
+    pond.resize(ros.name.size());
+    for (uint32_t i = 0; i < ros.name.size(); i++)
+    {
+        pond[i].joint_name = ros.name[i];
+        pond[i].angle = ros.position[i];
+        pond[i].time = rclcpp::Time(ros.header.stamp).seconds();
+        pond[i].hw_time = pond[i].time;
+    }
+}
+
+void std_vector_JointState__to__sensor_msgs_msg_JointState(const std::vector<JointState>& pond, sensor_msgs::msg::JointState& ros)
+{
+    if (pond.size() == 0)
+    {
+        ros.header.stamp = to_ros_time(0);
+        return;
+    }
+
+    double time = 0;
+    
+    ros.name.resize(pond.size());
+    ros.position.resize(pond.size());
+    ros.velocity.resize(pond.size());
+    ros.effort.resize(pond.size());
+
+    for (uint32_t i = 0; i < pond.size(); i++)
+    {
+        time += pond[i].time / (double)pond.size();
+
+        ros.name[i] = pond[i].joint_name;
+        ros.position[i] = pond[i].angle;
+        ros.velocity[i] = 0;
+        ros.effort[i] = 0;
+    }
+
+    ros.header.stamp = to_ros_time(time);
+}
+
+void CameraInfo__to__sensor_msgs_msg_CameraInfo(const CameraInfo& pond, sensor_msgs::msg::CameraInfo& ros)
+{
+    ros.header.frame_id = pond.stamp.frame_id;
+    ros.header.stamp = to_ros_time(pond.stamp.time);
+
+    ros.width = pond.width;
+    ros.height = pond.height;
+    ros.distortion_model = pond.distortion_model;
+    ros.d = pond.d;
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.k.data()) = pond.k;
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.r.data()) = pond.r.matrix();
+    ros.p.fill(0);
+}
+
+void sensor_msgs_msg_CameraInfo__to__CameraInfo(CameraInfo& pond, const sensor_msgs::msg::CameraInfo& ros)
+{
+    pond.stamp.frame_id = ros.header.frame_id;
+    pond.stamp.time = rclcpp::Time(ros.header.stamp).seconds();
+    pond.stamp.hw_time = pond.stamp.time;
+
+    pond.width = ros.width;
+    pond.height = ros.height;
+    pond.distortion_model = ros.distortion_model;
+    pond.d = ros.d;
+    pond.k = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.k.data());
+
+    Eigen::Matrix3d r = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(ros.r.data());
+    if (r.isZero()) pond.r = Sophus::SO3d();
+    else pond.r = Sophus::SO3d(r);
+}
+
+void std_msgs_msg_Bool__to__bool(bool& pond, const std_msgs::msg::Bool& ros)
+{
+    pond = ros.data;
+}
+
+void bool__to__std_msgs_msg_Bool(const bool& pond, std_msgs::msg::Bool& ros)
+{
+    ros.data = pond;
+}
+
+void std_msgs_msg_Float64__to__double(double& pond, const std_msgs::msg::Float64& ros)
+{
+    pond = ros.data;
+}
+
+void double__to__std_msgs_msg_Float64(const double& pond, std_msgs::msg::Float64& ros)
+{
+    ros.data = pond;
+}
+
+void std_msgs_msg_Float64MultiArray__to__std_vector_double(std::vector<double>& pond, const std_msgs::msg::Float64MultiArray& ros)
+{
+    pond = ros.data;
+}
+
+void std_vector_double__to__std_msgs_msg_Float64MultiArray(const std::vector<double>& pond, std_msgs::msg::Float64MultiArray& ros)
+{
+    ros.data = pond;
+}

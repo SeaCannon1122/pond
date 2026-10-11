@@ -11,6 +11,7 @@ find_package(tf2_msgs REQUIRED)
 
 add_library(ros2-pond_bundle SHARED
   ros2_bridge.cpp
+  mappings.cpp
 )
 
 target_include_directories(ros2-pond_bundle PRIVATE

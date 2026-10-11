@@ -1,81 +1,5 @@
-#include "geometry_msgs/msg/pose2_d.hpp"
-#include "pond_data_types/command_types.hpp"
-#include "std_msgs/msg/bool.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp"
 #include "ros2_bridge.hpp"
-
-template<typename pond_data_type, typename ros_msg>
-struct pond_to_ros
-{
-    ~pond_to_ros() { receiver.destroy();}
-
-    std::shared_ptr<rclcpp::Publisher<ros_msg>> publisher;
-    pond::Receiver receiver;
-    bool is_vector;
-};
-
-template<typename pond_data_type, typename ros_msg>
-struct ros_to_pond
-{
-    ~ros_to_pond() { distributor.destroy(); }
-
-    std::shared_ptr<rclcpp::Subscription<ros_msg>> subscriber;
-    pond::DistributorTyped<pond_data_type> distributor;
-};
-
-class Ros2Bridge : public pond::ModuleBase
-{
-public:
-    virtual pond_result onStartup(const std::vector<void*>& args) override;
-    virtual void onShutdown() override;
-    virtual void onFrame() override;
-private:
-
-    template<typename pond_data_type, typename ros_msg>
-    std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> create_pond_to_ros(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(const pond_data_type&, ros_msg&), rclcpp::QoS& qos, bool vector)
-    {
-        std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> obj = std::make_shared<pond_to_ros<pond_data_type, ros_msg>>();
-
-        obj->publisher = node->create_publisher<ros_msg>(ros_topic, qos);
-        if (vector) obj->receiver = createReceiver<std::vector<pond_data_type>>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
-        {
-            ros_msg msg;
-            for (const auto& d : *data)
-            {
-                convert_function(d, msg);
-                pub_ptr->publish(msg);
-            }
-        });
-        else obj->receiver = createReceiver<pond_data_type>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type* data)
-        {
-            ros_msg msg;
-            convert_function(*data, msg);
-            pub_ptr->publish(msg);
-        });
-
-        obj->is_vector = vector;
-        return obj;
-    }
-
-    template<typename pond_data_type, typename ros_msg>
-    std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> create_ros_to_pond(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(pond_data_type&, const ros_msg&), rclcpp::QoS& qos)
-    {
-        std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> obj = std::make_shared<ros_to_pond<pond_data_type, ros_msg>>();
-
-        obj->distributor = createDistributorTyped<pond_data_type>({pond_channel});
-        obj->subscriber = node->create_subscription<ros_msg>(ros_topic, qos, [dis_ptr = &obj->distributor, convert_function](const std::shared_ptr<ros_msg> msg)
-        {
-            pond_data_type data;
-            convert_function(data, *msg);
-            dis_ptr->distribute(&data);
-        });
-
-        return obj;
-    }
-
-    std::shared_ptr<rclcpp::Node> node;
-    std::vector<std::shared_ptr<void>> bridges;
-};
+#include "mappings.hpp"
 
 POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types to ros2")
 
@@ -117,92 +41,27 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
         {
             bool is_vector = space.parameterAtIndex(i, "pond.is_vector").asBool().get(false);
             
+            #define IF_POND_TO_ROS(_pond_type, _ros_type, function) if (pond_type == #_pond_type && ros_type == #_ros_type) \
+                { bridges.emplace_back( create_pond_to_ros<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos, is_vector)); return true;}
+
             bool bridged = [&]() -> bool {
-                if (pond_type == "ImuData")
-                {
-                    if (ros_type == "sensor_msgs::msg::Imu") bridges.emplace_back( create_pond_to_ros<ImuData, sensor_msgs::msg::Imu>(
-                        pond_channel, ros_topic, ImuData__to__sensor_msgs_msg_Imu, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "FrameTransform")
-                {
-                    if (ros_type == "geometry_msgs::msg::Pose") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::Pose>(
-                        pond_channel, ros_topic, FrameTransform__to__geometry_msgs_msg_Pose, qos, is_vector
-                    ));
-                    else if (ros_type == "geometry_msgs::msg::PoseStamped") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::PoseStamped>(
-                        pond_channel, ros_topic, FrameTransform__to__geometry_msgs_msg_PoseStamped, qos, is_vector
-                    ));
-                    else if (ros_type == "geometry_msgs::msg::TransformStamped") bridges.emplace_back(create_pond_to_ros<FrameTransform, geometry_msgs::msg::TransformStamped>(
-                        pond_channel, ros_topic, FrameTransform__to__geometry_msgs_msg_TransformStamped, qos, is_vector
-                    ));
-                    else if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_pond_to_ros<FrameTransform, tf2_msgs::msg::TFMessage>(
-                        pond_channel, ros_topic, FrameTransform__to__tf2_msgs_msg_TFMessage, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<FrameTransform>")
-                {
-                    if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_pond_to_ros<std::vector<FrameTransform>, tf2_msgs::msg::TFMessage>(
-                        pond_channel, ros_topic, std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage, qos, is_vector
-                    ));
-                    else if (ros_type == "geometry_msgs::msg::PoseArray") bridges.emplace_back(create_pond_to_ros<std::vector<FrameTransform>, geometry_msgs::msg::PoseArray>(
-                        pond_channel, ros_topic, std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::string")
-                {
-                    if (ros_type == "std_msgs::msg::String") bridges.emplace_back(create_pond_to_ros<std::string, std_msgs::msg::String>(
-                        pond_channel, ros_topic, std_string__to__std_msgs_msg_String, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "LaserScanSPtr")
-                {
-                    if (ros_type == "sensor_msgs::msg::LaserScan") bridges.emplace_back(create_pond_to_ros<LaserScanSPtr, sensor_msgs::msg::LaserScan>(
-                        pond_channel, ros_topic, LaserScanSPtr__to__sensor_msgs_msg_LaserScan, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<JointState>")
-                {
-                    if (ros_type == "sensor_msgs::msg::JointState") bridges.emplace_back(create_pond_to_ros<std::vector<JointState>, sensor_msgs::msg::JointState>(
-                        pond_channel, ros_topic, std_vector_JointState__to__sensor_msgs_msg_JointState, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "CameraInfo")
-                {
-                    if (ros_type == "sensor_msgs::msg::CameraInfo") bridges.emplace_back(create_pond_to_ros<CameraInfo, sensor_msgs::msg::CameraInfo>(
-                        pond_channel, ros_topic, CameraInfo__to__sensor_msgs_msg_CameraInfo, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "double")
-                {
-                    if (ros_type == "std_msgs::msg::Float64") bridges.emplace_back(create_pond_to_ros<double, std_msgs::msg::Float64>(
-                        pond_channel, ros_topic, double__to__std_msgs_msg_Float64, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<double>")
-                {
-                    if (ros_type == "std_msgs::msg::Float64MultiArray") bridges.emplace_back(create_pond_to_ros<std::vector<double>, std_msgs::msg::Float64MultiArray>(
-                        pond_channel, ros_topic, std_vector_double__to__std_msgs_msg_Float64MultiArray, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "bool")
-                {
-                    if (ros_type == "std_msgs::msg::Bool") bridges.emplace_back(create_pond_to_ros<bool, std_msgs::msg::Bool>(
-                        pond_channel, ros_topic, bool__to__std_msgs_msg_Bool, qos, is_vector
-                    ));
-                    else return false;
-                }
-                else return false;
-    
-                return true;
+
+                IF_POND_TO_ROS(ImuData,                     sensor_msgs::msg::Imu,                  ImuData__to__sensor_msgs_msg_Imu)
+                IF_POND_TO_ROS(FrameTransform,              geometry_msgs::msg::Pose,               FrameTransform__to__geometry_msgs_msg_Pose)
+                IF_POND_TO_ROS(FrameTransform,              geometry_msgs::msg::PoseStamped,        FrameTransform__to__geometry_msgs_msg_PoseStamped)
+                IF_POND_TO_ROS(FrameTransform,              geometry_msgs::msg::TransformStamped,   FrameTransform__to__geometry_msgs_msg_TransformStamped)
+                IF_POND_TO_ROS(FrameTransform,              tf2_msgs::msg::TFMessage,               FrameTransform__to__tf2_msgs_msg_TFMessage)
+                IF_POND_TO_ROS(std::vector<FrameTransform>, tf2_msgs::msg::TFMessage,               std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage)
+                IF_POND_TO_ROS(std::vector<FrameTransform>, geometry_msgs::msg::PoseArray,          std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray)
+                IF_POND_TO_ROS(std::string,                 std_msgs::msg::String,                  std_string__to__std_msgs_msg_String)
+                IF_POND_TO_ROS(LaserScanSPtr,               sensor_msgs::msg::LaserScan,            LaserScanSPtr__to__sensor_msgs_msg_LaserScan)
+                IF_POND_TO_ROS(std::vector<JointState>,     sensor_msgs::msg::JointState,           std_vector_JointState__to__sensor_msgs_msg_JointState)
+                IF_POND_TO_ROS(CameraInfo,                  sensor_msgs::msg::CameraInfo,           CameraInfo__to__sensor_msgs_msg_CameraInfo)
+                IF_POND_TO_ROS(double,                      std_msgs::msg::Float64,                 double__to__std_msgs_msg_Float64)
+                IF_POND_TO_ROS(std::vector<double>,         std_msgs::msg::Float64MultiArray,       std_vector_double__to__std_msgs_msg_Float64MultiArray)
+                IF_POND_TO_ROS(bool,                        std_msgs::msg::Bool,                    bool__to__std_msgs_msg_Bool)
+                
+                return false;
             }();
 
             if (bridged) POND_LOG("Bridging POND_TO_ROS:    '%s' '%s%s'  -->>  '%s' '%s'", pond_channel.c_str(), pond_type.c_str(), is_vector ? ".vector" : "", ros_topic.c_str(), ros_type.c_str());
@@ -210,93 +69,28 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
         }
         else
         {
-            bool bridged = [&]() -> bool {
-                if (pond_type == "TwistCommand")
-                {
-                    if (ros_type == "geometry_msgs::msg::Twist") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::Twist>(
-                        pond_channel, ros_topic, geometry_msgs_msg_Twist__to__TwistCommand, qos
-                    ));
-                    else if (ros_type == "geometry_msgs::msg::TwistStamped") bridges.emplace_back(create_ros_to_pond<TwistCommand, geometry_msgs::msg::TwistStamped>(
-                        pond_channel, ros_topic, geometry_msgs_msg_TwistStamped__to__TwistCommand, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "Pose2D")
-                {
-                    if (ros_type == "geometry_msgs::msg::Pose2D") bridges.emplace_back(create_ros_to_pond<Pose2D, geometry_msgs::msg::Pose2D>(
-                        pond_channel, ros_topic, geometry_msgs_msg_Pose2D__to__Pose2D, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "FrameTransform")
-                {
-                    if (ros_type == "geometry_msgs::msg::TransformStamped") bridges.emplace_back(create_ros_to_pond<FrameTransform, geometry_msgs::msg::TransformStamped>(
-                        pond_channel, ros_topic, geometry_msgs_msg_TransformStamped__to__FrameTransform, qos
-                    ));
-                    else if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_ros_to_pond<FrameTransform, tf2_msgs::msg::TFMessage>(
-                        pond_channel, ros_topic, tf2_msgs_msg_TFMessage__to__FrameTransform, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<FrameTransform>")
-                {
-                    if (ros_type == "tf2_msgs::msg::TFMessage") bridges.emplace_back(create_ros_to_pond<std::vector<FrameTransform>, tf2_msgs::msg::TFMessage>(
-                        pond_channel, ros_topic, tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::string")
-                {
-                    if (ros_type == "std_msgs::msg::String") bridges.emplace_back(create_ros_to_pond<std::string, std_msgs::msg::String>(
-                        pond_channel, ros_topic, std_msgs_msg_String__to__std_string, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "LaserScanSPtr")
-                {
-                    if (ros_type == "sensor_msgs::msg::LaserScan") bridges.emplace_back(create_ros_to_pond<LaserScanSPtr, sensor_msgs::msg::LaserScan>(
-                        pond_channel, ros_topic, sensor_msgs_msg_LaserScan__to__LaserScanSPtr, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<JointState>")
-                {
-                    if (ros_type == "sensor_msgs::msg::JointState") bridges.emplace_back(create_ros_to_pond<std::vector<JointState>, sensor_msgs::msg::JointState>(
-                        pond_channel, ros_topic, sensor_msgs_msg_JointState__to__std_vector_JointState, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "CameraInfo")
-                {
-                    if (ros_type == "sensor_msgs::msg::CameraInfo") bridges.emplace_back(create_ros_to_pond<CameraInfo, sensor_msgs::msg::CameraInfo>(
-                        pond_channel, ros_topic, sensor_msgs_msg_CameraInfo__to__CameraInfo, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "double")
-                {
-                    if (ros_type == "std_msgs::msg::Float64") bridges.emplace_back(create_ros_to_pond<double, std_msgs::msg::Float64>(
-                        pond_channel, ros_topic, std_msgs_msg_Float64__to__double, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "std::vector<double>")
-                {
-                    if (ros_type == "std_msgs::msg::Float64MultiArray") bridges.emplace_back(create_ros_to_pond<std::vector<double>, std_msgs::msg::Float64MultiArray>(
-                        pond_channel, ros_topic, std_msgs_msg_Float64MultiArray__to__std_vector_double, qos
-                    ));
-                    else return false;
-                }
-                else if (pond_type == "bool")
-                {
-                    if (ros_type == "std_msgs::msg::Bool") bridges.emplace_back(create_ros_to_pond<bool, std_msgs::msg::Bool>(
-                        pond_channel, ros_topic, std_msgs_msg_Bool__to__bool, qos
-                    ));
-                    else return false;
-                }
-                else return false;
+            #define IF_ROS_TO_POND(_ros_type, _pond_type, function) if (pond_type == #_pond_type && ros_type == #_ros_type) \
+                { bridges.emplace_back( create_ros_to_pond<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos)); return true; }
 
-                return true;
+
+            bool bridged = [&]() -> bool {
+
+                IF_ROS_TO_POND(geometry_msgs::msg::Twist,               TwistCommand,                   geometry_msgs_msg_Twist__to__TwistCommand)
+                IF_ROS_TO_POND(geometry_msgs::msg::TwistStamped,        TwistCommand,                   geometry_msgs_msg_TwistStamped__to__TwistCommand) 
+                IF_ROS_TO_POND(geometry_msgs::msg::Pose2D,              Pose2D,                         geometry_msgs_msg_Pose2D__to__Pose2D)
+                IF_ROS_TO_POND(geometry_msgs::msg::TransformStamped,    FrameTransform,                 geometry_msgs_msg_TransformStamped__to__FrameTransform)
+                IF_ROS_TO_POND(geometry_msgs::msg::PoseStamped,         FrameTransform,                 geometry_msgs_msg_PoseStamped__to__FrameTransform)
+                IF_ROS_TO_POND(tf2_msgs::msg::TFMessage,                FrameTransform,                 tf2_msgs_msg_TFMessage__to__FrameTransform)
+                IF_ROS_TO_POND(tf2_msgs::msg::TFMessage,                std::vector<FrameTransform>,    tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform)
+                IF_ROS_TO_POND(std_msgs::msg::String,                   std::string,                    std_msgs_msg_String__to__std_string)
+                IF_ROS_TO_POND(sensor_msgs::msg::LaserScan,             LaserScanSPtr,                  sensor_msgs_msg_LaserScan__to__LaserScanSPtr)
+                IF_ROS_TO_POND(sensor_msgs::msg::JointState,            std::vector<JointState>,        sensor_msgs_msg_JointState__to__std_vector_JointState)
+                IF_ROS_TO_POND(sensor_msgs::msg::CameraInfo,            CameraInfo,                     sensor_msgs_msg_CameraInfo__to__CameraInfo)
+                IF_ROS_TO_POND(std_msgs::msg::Float64,                  double,                         std_msgs_msg_Float64__to__double)
+                IF_ROS_TO_POND(std_msgs::msg::Float64MultiArray,        std::vector<double>,            std_msgs_msg_Float64MultiArray__to__std_vector_double)
+                IF_ROS_TO_POND(std_msgs::msg::Bool,                     bool,                           std_msgs_msg_Bool__to__bool)
+                
+                return false;
             }();
 
             if (bridged)  POND_LOG("Bridging ROS_TO_POND:    '%s' '%s'  -->>  '%s' '%s'", ros_topic.c_str(), ros_type.c_str(), pond_channel.c_str(), pond_type.c_str());

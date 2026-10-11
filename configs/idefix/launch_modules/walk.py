@@ -13,7 +13,7 @@ class cfg:
 
     motor_names = [joint + "_motor" for joint in joint_names]
 
-    phase_duration = 0.4
+    phase_duration = 0.2
 
     controller_params = {
         "joint_names" : joint_names,
@@ -28,29 +28,18 @@ class cfg:
         "limb_length_thigh" : 0.105,
         "limb_length_shin" : 0.115,
 
-        # "T_0" : 0.25 * phase_duration,
-        # "T_1" : 0.75 * phase_duration,
-        # "T_st" : phase_duration,
-        # "T_sw" : phase_duration,
-        # "step_height" : 0.08,
-        # "stance_amplitude" : 0.02,
+        "T_0" : 0.25 * phase_duration,
+        "T_1" : 0.75 * phase_duration,
+        "T_st" : phase_duration,
+        "T_sw" : phase_duration,
 
-        # "max_step_length" : 1.0,
-        # "stand_height" : 0.18,
-        # "max_step_speed" : 10.0,
-        # "jerk" : 51.2 / (phase_duration * phase_duration * phase_duration),
-
-        "T_0" : 0.1,
-        "T_1" : 0.4,
-        "T_st" : 0.5,
-        "T_sw" : 0.5,
         "step_height" : 0.035,
         "stance_amplitude" : 0.001,
 
         "max_step_length" : 1.0,
         "stand_height" : 0.181,
         "max_step_speed" : 10.0,
-        "jerk" : 150.0
+        "jerk" : 18.75 / (phase_duration * phase_duration * phase_duration),
     }
 
 
