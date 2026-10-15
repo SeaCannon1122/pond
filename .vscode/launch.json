@@ -7,7 +7,7 @@
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": [ "configs/idefix/run.py"],
+            "args": [ "configs/quac/run.py"],
 
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,

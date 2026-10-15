@@ -14,7 +14,8 @@ public:
         height = frame.get_height();
         pixel_size = frame.get_bytes_per_pixel();
         format = format_;
-        if (format == ImgFrame::Format::Depth8 || format == ImgFrame::Format::Depth16) depth_scale = frame_.as<rs2::depth_frame>().get_units();
+        if (format == ImgFrame::Format::Depth8 || format == ImgFrame::Format::Depth16)
+            depth_scale = frame_.as<rs2::depth_frame>().get_units();
 
         stamp.hw_time = frame.get_frame_metadata(RS2_FRAME_METADATA_SENSOR_TIMESTAMP);
         stamp.time = frame.get_frame_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP);
@@ -34,7 +35,7 @@ public:
     virtual void onFrame() override;
 private:
 
-    bool enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name);
+    bool enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name, ImgFrameSPtr& msg);
 
     rs2::pipeline pipe;
     rs2::config cfg;
@@ -175,7 +176,7 @@ void set_camera_info(CameraInfo& info, const rs2::frame& frame)
     for (int i = 0; i < info.d.size(); i++) info.d[i] = intrinsics.coeffs[i];
 }
 
-bool RealsenseCamera::enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name)
+bool RealsenseCamera::enqueue_frame(const rs2::video_frame& frame, CameraInfo& info, const char* frame_name, ImgFrameSPtr& msg)
 {
     if (!frame)
     {
@@ -183,7 +184,7 @@ bool RealsenseCamera::enqueue_frame(const rs2::video_frame& frame, CameraInfo& i
         return false;
     }
 
-    ImgFrameSPtr msg = std::make_shared<RealSenseImgFrame>(frame, info.format, info.stamp.frame_id);
+    msg = std::make_shared<RealSenseImgFrame>(frame, info.format, info.stamp.frame_id);
 
     if (info.stamp.time == 0) set_camera_info(info, frame);
     info.stamp.time = msg->stamp.time;
@@ -200,13 +201,15 @@ void RealsenseCamera::onFrame()
 
     rs2::frameset frames = pipe.wait_for_frames();
 
-    if (!enqueue_frame(frames.get_color_frame(), color_info, "color")) return;
+    ImgFrameSPtr color, depth, depth_aligned, stereo_left, stereo_right;
 
-    if (mode_color_depth) if (!enqueue_frame(frames.get_depth_frame(), depth_info, "depth")) return;
-    if (mode_color_depth && align_depth) if (!enqueue_frame(align_depth_to_color.process(frames).get_depth_frame(), aligned_depth_info, "aligned depth")) return;
+    if (!enqueue_frame(frames.get_color_frame(), color_info, "color", color)) return;
 
-    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(1), stereo_left_info, "stereo left")) return;
-    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(2), stereo_right_info, "stereo right")) return;
+    if (mode_color_depth) if (!enqueue_frame(frames.get_depth_frame(), depth_info, "depth", depth)) return;
+    if (mode_color_depth && align_depth) if (!enqueue_frame(align_depth_to_color.process(frames).get_depth_frame(), aligned_depth_info, "aligned_depth", depth_aligned)) return;
+
+    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(1), stereo_left_info, "stereo_left", stereo_left)) return;
+    if (mode_color_stereo) if (!enqueue_frame(frames.get_infrared_frame(2), stereo_right_info, "stereo_right", stereo_right)) return;
 
     distributor.distribute_enqueued();
 }

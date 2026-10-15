@@ -46,27 +46,28 @@ def main():
 
     pm = Manager(True, False)
 
-    ip = "192.168.137.26"
+    ip = "192.168.1.136"
     ip = ip
 
     pm.set_thread_frame_time("robot_state_thread", 1.0)
     pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : ROS_DESCRIPTION_PATH})
 
     #dummy_cam(pm, "camera_front", 1280, 720, 30, True, ip)
-    #camera_front(pm, 1280, 720, 30, True, ip)
-    #dummy_cam(pm, "camera_back", 1280, 720, 30, True, ip)
-    #camera_back(pm, 1280, 720, 30, "color_stereo", True, ip)
-    #dummy_cam(pm, "camera_gripper", 1280, 720, 30, True, ip)
+    #camera_front(pm, 640, 480, 30, True, ip)
+    camera_back(pm, 640, 480, 30, "color_depth", True, True, ip)
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
-    ros2_bridge(pm)
     
-    mujoco(pm, NATIVE_DESCRIPTION_PATH)
+    #mujoco(pm, NATIVE_DESCRIPTION_PATH)
     
-    drive.drive(pm, False, False)
-    arm.arm(pm, False, False)
+    #drive.drive(pm, False, True)
+    #arm.arm(pm, False, False)
 
-    orb_slam3(pm)
+    # pm.load_module("get_tf_test", "get_tf_test/get_tf_test", "test_thread")
+        
+    #orb_slam3(pm, ip)
+
+    ros2_bridge(pm)
 
     try:
         while is_running:

@@ -249,7 +249,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
             std::shared_lock<std::shared_mutex> lock(link->tf_mutex);
 
             if (link->past_parent_transforms.empty()) return false;
-            if (time_point == 0 && link->parent_joint->is_static)
+            if (time_point == 0 || link->parent_joint->is_static)
             {
                 tf = std::get<1>(link->past_parent_transforms.back()) * tf;
                 return true;

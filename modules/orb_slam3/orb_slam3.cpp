@@ -1,3 +1,4 @@
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/cv_img_frame.hpp>
@@ -7,8 +8,6 @@
 #include "System.h"
 #include "pond/pond.h"
 #include "pond_data_types/robot_state_types.hpp"
-
-#define SETTINGS_PATH "~/.cache/orbslam_config.yaml"
 
 class OrbSlam3 : public pond::ModuleBaseTF
 {
@@ -23,7 +22,7 @@ private:
     bool create_config(CameraInfo& cam_info);
 
     std::shared_ptr<ORB_SLAM3::System> slam;
-    std::string vocabulary_path, base_link_frame_id;
+    std::string vocabulary_path, settings_write_location, base_link_frame_id;
 
     int32_t n_features, n_levels, ini_th_fast, min_th_fast; double scale_factor, far_threshold; bool imu_insert_kfs_when_lost;
 
@@ -79,10 +78,11 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     transform.child_frame_id = base_link_frame_id;
 
     auto vocabulary_path_o = parameter("vocabulary_path").asString().getStrict();
+    auto settings_write_location_o = parameter("settings_write_location").asString().getStrict();
     auto slam_mode = parameter("mode").asString().getStrict({"Stereo", "RGBD", "Mono"});
-    if (!vocabulary_path_o || !slam_mode) return POND_ERROR;
+    if (!vocabulary_path_o || !slam_mode || !settings_write_location_o) return POND_ERROR;
     
-    vocabulary_path = *vocabulary_path_o;
+    vocabulary_path = *vocabulary_path_o; settings_write_location = *settings_write_location_o;
     stereo_mode =  (slam_mode == "Stereo"); rgbd_mode = (slam_mode == "RGBD"); mono_mode = (slam_mode == "Mono");
     
     CameraInfo cam_info;
@@ -111,7 +111,7 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     });
 
     imu_data_points.reserve(100);
-    imu_receiver = createReceiver<ImuData>({"imu"}, [this](ImuData* data){
+    imu_receiver = createReceiver<ImuData>({"imu/data"}, [this](ImuData* data){
     
         std::lock_guard<std::mutex> lock(imu_mutex);
 
@@ -129,7 +129,7 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
 
     slam = std::make_shared<ORB_SLAM3::System>(
         vocabulary_path,
-        SETTINGS_PATH,
+        settings_write_location,
         mode,
         false
     );
@@ -148,6 +148,17 @@ void OrbSlam3::onShutdownTF()
     transform_distributor.destroy();
     keypoint_frame_distributor.destroy();
 }
+
+void write_double(std::ostream& os, double value)
+{
+    os << value;
+
+    if (std::isfinite(value) && std::trunc(value) == value) os << ".0";
+
+    os << "\n";
+}
+
+double vec_avg(Eigen::Vector3d& vec) {return (vec[0] + vec[1] + vec[2])/3.;}
 
 bool OrbSlam3::create_config(CameraInfo& cam_info)
 {
@@ -169,8 +180,9 @@ bool OrbSlam3::create_config(CameraInfo& cam_info)
     if (mono_mode) info_channel = "mono/info";
     if (!get_cam_info(cam_info, info_channel)) return false;
 
-    std::ofstream file(SETTINGS_PATH);
+    std::ofstream file(settings_write_location);
     file << std::setprecision(16);
+    std::cout << std::fixed << std::setprecision(1);
     file << "%YAML:1.0\n\n";
     file << "File.version: \"1.0\"\n\n";
     file << "Camera.type: \"Rectified\"\n\n";
@@ -202,8 +214,8 @@ bool OrbSlam3::create_config(CameraInfo& cam_info)
     }
 
     double base_line = (stereo_mode ? cam_request.tf.translation().x() : 0.1);
-    file << "Stereo.ThDepth: " << (far_threshold / base_line)  << "\n";
-    file << "Stereo.b: " << base_line << "\n\n";
+    file << "Stereo.ThDepth: "; write_double(file, far_threshold / base_line);
+    file << "Stereo.b: "; write_double(file, base_line);
 
     if (use_imu)
     {
@@ -217,7 +229,7 @@ bool OrbSlam3::create_config(CameraInfo& cam_info)
         file << "IMU.T_b_c1: !!opencv-matrix\n";
         file << "  rows: 4\n";
         file << "  cols: 4\n";
-        file << "  dt: f\n";
+        file << "  dt: f\n  data: [";
 
         for (uint32_t i = 0; i < 4; i++)
         {
@@ -226,16 +238,19 @@ bool OrbSlam3::create_config(CameraInfo& cam_info)
 
                 if (i == 3 && j == 3) file << "]\n"; else file << ", ";
             }
-            file << "\n  ";
+            file << "\n        ";
         }
+        file << "\n";
 
         file << "IMU.InsertKFsWhenLost: " << (imu_insert_kfs_when_lost ? 1 : 0) << "\n";
 
-        file << "IMU.NoiseGyro: " << imu_info.ang_vel.noise << "\n";
-        file << "IMU.NoiseAcc: " << imu_info.lin_acc.noise << "\n";
-        file << "IMU.GyroWalk: " << imu_info.ang_vel.random_walk << "\n";
-        file << "IMU.AccWalk: " << imu_info.lin_acc.random_walk << "\n";
-        file << "IMU.Frequency: " << (double)imu_info.rate << "\n";
+        
+
+        file << "IMU.NoiseGyro: " << vec_avg(imu_info.ang_vel.noise) << "\n";
+        file << "IMU.NoiseAcc: " << vec_avg(imu_info.lin_acc.noise) << "\n";
+        file << "IMU.GyroWalk: " << vec_avg(imu_info.ang_vel.random_walk) << "\n";
+        file << "IMU.AccWalk: " << vec_avg(imu_info.lin_acc.random_walk) << "\n";
+        file << "IMU.Frequency: "; write_double(file, imu_info.rate);
     }
 
     file << "ORBextractor.nFeatures: " << n_features << "\n";
@@ -243,6 +258,18 @@ bool OrbSlam3::create_config(CameraInfo& cam_info)
     file << "ORBextractor.nLevels: " << n_levels << "\n";
     file << "ORBextractor.iniThFAST: " << ini_th_fast << "\n";
     file << "ORBextractor.minThFAST: " << min_th_fast << "\n";
+
+    file <<
+        "\nViewer.KeyFrameSize: 0.05\n"
+        "Viewer.KeyFrameLineWidth: 1.0\n"
+        "Viewer.GraphLineWidth: 0.9\n"
+        "Viewer.PointSize: 2.0\n"
+        "Viewer.CameraSize: 0.08\n"
+        "Viewer.CameraLineWidth: 3.0\n"
+        "Viewer.ViewpointX: 0.0\n"
+        "Viewer.ViewpointY: -0.7\n"
+        "Viewer.ViewpointZ: -1.8\n"
+        "Viewer.ViewpointF: 500.0\n";
 
     file.close();
 
@@ -263,6 +290,7 @@ void OrbSlam3::onFrame()
     }
     else { pond::sleep(0.01); return; }
 
+    if (use_imu)
     {
         std::lock_guard<std::mutex> lock(imu_mutex);
         imu_data_points_c = std::move(imu_data_points);
@@ -288,7 +316,7 @@ void OrbSlam3::onFrame()
     }
     if (rgbd_mode)
     {
-        if (first_frame_c->format != ImgFrame::Format::RGB8 || first_frame_c->format != ImgFrame::Format::Depth16)
+        if (first_frame_c->format != ImgFrame::Format::RGB8 || second_frame_c->format != ImgFrame::Format::Depth16)
             POND_LOG_RETURN("ERROR: rgb->format (%s) != RGB8 || depth->format (%s) != Depth16", ImgFrame::formatToString(first_frame_c->format).c_str(), ImgFrame::formatToString(second_frame_c->format).c_str());
 
         cv::Mat rgb(first_frame_c->height, first_frame_c->width, CV_8UC3, first_frame_c->data);

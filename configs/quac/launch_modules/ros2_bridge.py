@@ -23,6 +23,12 @@ def ros2_bridge(pm: Manager):
                     "pond" : {"channel" : "tf",                         "type" : "std::vector<FrameTransform>"},
                     "ros"  : {"topic"   : "tf",                         "type" : "tf2_msgs::msg::TFMessage"}  
                 },
+                ############ tf ###########
+                {   "direction" : "POND_TO_ROS",
+
+                    "pond" : {"channel" : "slam_transform",             "type" : "FrameTransform"},
+                    "ros"  : {"topic"   : "tf",                         "type" : "tf2_msgs::msg::TFMessage"}  
+                },
                 ######## tf_static ########
                 {   "direction" : "POND_TO_ROS",
 
@@ -59,18 +65,29 @@ def ros2_bridge(pm: Manager):
                     "pond" : {"channel" : "arm_target",                 "type" : "Pose2D"},
                     "ros"  : {"topic"   : "quac/ee_pose",               "type" : "geometry_msgs::msg::Pose2D"}  
                 },
+                ######## imu_data #######
+                {   "direction" : "POND_TO_ROS",
 
+                    "pond" : {"channel" : "imu/data",                   "type" : "ImuData"},
+                    "ros"  : {"topic"   : "imu/data",                   "type" : "sensor_msgs::msg::Imu"}  
+                },
                 #### camera_front_info ####
                 {   "direction" : "POND_TO_ROS",
 
                     "pond" : {"channel" : "camera_front/color/info_rr",         "type" : "CameraInfo"},
                     "ros"  : {"topic"   : "quac/camera_front/info",             "type" : "sensor_msgs::msg::CameraInfo"}  
                 },
-                ##### camera_back_info ####
+                ##### camera_back_color_info ####
                 {   "direction" : "POND_TO_ROS",
 
                     "pond" : {"channel" : "camera_back/color/info_rr",          "type" : "CameraInfo"},
                     "ros"  : {"topic"   : "quac/camera_back/info",              "type" : "sensor_msgs::msg::CameraInfo"}  
+                },
+                ##### camera_back_depth_aligned_info ####
+                {   "direction" : "POND_TO_ROS",
+
+                    "pond" : {"channel" : "camera_back/depth_aligned/info_rr",          "type" : "CameraInfo"},
+                    "ros"  : {"topic"   : "quac/depth_aligned/info",              "type" : "sensor_msgs::msg::CameraInfo"}  
                 },
                 ### camera_gripper_info ###
                 {   "direction" : "POND_TO_ROS",
@@ -95,8 +112,8 @@ def ros2_bridge(pm: Manager):
         "camera_back_info_rate_reducer", "utility/channel_filter", thread_name,
         {
             "rate": 30,
-            "channels_in":   ["camera_back/color/info"],
-            "channels_out" : ["camera_back/color/info_rr"],
+            "channels_in":   ["camera_back/color/info", "camera_back/depth_aligned/info"],
+            "channels_out" : ["camera_back/color/info_rr", "camera_back/depth_aligned/info_rr"],
         },
     )
 

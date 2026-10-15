@@ -79,7 +79,7 @@ option(BUILD_ALL_BUNDLES "Build all bundles" OFF)
 foreach(bundle ${ALL_BUNDLES})
     option(BUILD_BUNDLE_${bundle} "Build bundle in subdirectory ${bundle}" OFF)
     
-    if(BUILD_BUNDLE_${bundle} OR BUILD_ALL)
+    if(BUILD_BUNDLE_${bundle} OR BUILD_ALL_BUNDLES)
         add_subdirectory(${bundle})
     endif()
 endforeach()
