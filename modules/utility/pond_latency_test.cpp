@@ -9,11 +9,11 @@ private:
 
     void do_test(uint32_t count)
     {
-        double time = pond::get_time();
+        double time = pond::get_monotonic_time();
 
         for (uint32_t i = 0; i < count; i++) distributor.distribute((void*)NULL);
 
-        POND_LOG("Distributed %7d times with average time %7.3f microseconds", count, (pond::get_time() - time) / (double)count * 1000000);
+        POND_LOG("Distributed %7d times with average time %7.3f microseconds", count, (pond::get_monotonic_time() - time) / (double)count * 1000000);
     }
 };
 

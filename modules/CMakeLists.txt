@@ -57,21 +57,22 @@ function(pond_module_common_setup TARGET)
 endfunction()
 
 set(ALL_BUNDLES
+    depthai
+    detection
+    gstreamer
+    mujoco
+    orb_slam3
+    quac_controllers
+    quadruped_controllers
+    realsense
+    robot_state
+    ros2
+    rplidar
+    rtabmap
     utility
     v4l2
-    depthai
-    realsense
-    gstreamer
     video
-    rplidar
-    robot_state
-    orb_slam3
-    rtabmap
     waveshare
-    controllers
-    mujoco
-    ros2
-    detection
 )
 
 option(BUILD_ALL_BUNDLES "Build all bundles" OFF)

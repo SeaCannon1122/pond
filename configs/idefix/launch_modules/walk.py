@@ -80,13 +80,14 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
                 "update_joint_states",
                 "schedule_gaits",
                 "calculate_trajectory_states",
-                "calculate_",
                 "write_servo_commands",
             ],
             "data_names" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_states"]
+                ["gait_phases", ],
+
+            "publish_data" : ["gait_phases"]
         },
         {}, "walk"
     )
