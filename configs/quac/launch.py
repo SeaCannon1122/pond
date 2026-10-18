@@ -1,10 +1,6 @@
-import signal
-import time
-import subprocess
-import os
+import subprocess, os
 
 from pond import Manager
-
 from launch_modules.arm import *
 from launch_modules.cameras import *
 from launch_modules.drive import *
@@ -13,17 +9,7 @@ from launch_modules.ros2_bridge import *
 from launch_modules.sensors import *
 from launch_modules.mujoco import *
 
-is_running = True
 config_prefix = os.getenv("POND_QUAC_CONFIG_PATH", "")
-
-def signal_handler(signum, frame):
-    global is_running
-
-    if signum not in (signal.SIGINT, signal.SIGTERM):
-        return
-
-    print(" INTERRUPT", flush=True)
-    is_running = False
 
 def compile_urdf(mesh_prefix: str, destination: str):
     
@@ -35,9 +21,6 @@ def compile_urdf(mesh_prefix: str, destination: str):
         )
 
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
     NATIVE_DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
     ROS_DESCRIPTION_PATH = config_prefix + "build/robot_ros.urdf"
 
@@ -58,22 +41,16 @@ def main():
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     #lidar(pm)
     
-    #mujoco(pm, NATIVE_DESCRIPTION_PATH)
+    mujoco(pm)
     
-    drive.drive(pm, False, True)
-    arm.arm(pm, False, True)
+    drive.drive(pm, False, False)
+    arm.arm(pm, False, False)
    
     #orb_slam3(pm, ip)
 
     ros2_bridge(pm, False)
 
-    try:
-        while is_running:
-            time.sleep(0.2)
-
-    finally:
-        pass
-
+    input("Press Enter to exit...")
 
 if __name__ == "__main__":
     main()

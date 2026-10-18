@@ -17,9 +17,3 @@ target_include_directories(callback PRIVATE ${LIBAV_INCLUDE_DIRS} ${OpenCV_INCLU
 target_link_libraries(callback PRIVATE ${LIBAV_LIBRARIES} ${OpenCV_LIBRARIES} pthread)
 
 target_compile_options(callback PRIVATE -O3 -Wall)
-
-add_library(get_tf_test-pond_bundle SHARED
-  get_tf_test.cpp
-)
-
-pond_module_common_setup(get_tf_test-pond_bundle)

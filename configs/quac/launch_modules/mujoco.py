@@ -3,39 +3,36 @@ import os
 from . import drive
 from . import arm
 
-def mujoco(pm: Manager, urdf_path: str):
+def mujoco(pm: Manager):
 
-    config_prefix = os.getenv("POND_QUAC_CONFIG_PATH", "")
-
-    xml_path = config_prefix + "build/robot_mujoco.xml"
-
-    # subprocess.run(
-    #     ["compile", urdf_path, xml_path],
-    #     input="y\n",
-    #     text=True,
-    #     check=True,
-    # )
-
-    # with open(xml_path, "r+", encoding="utf-8") as f:
-    #     xml = f.read()
-        
-    #     xml = xml.replace("<worldbody>", "<worldbody>\n  <body name=\"chassis\" pos=\"0 0 0.3\">\n    <freejoint/>", 1)
-    #     xml = xml.replace("</worldbody>", "  </body>\n    </worldbody>", 1)
-    #     xml = xml.replace("</mujoco>", "<include file=\"" + config_prefix + "mujoco.xml\"/>" + "\n</mujoco>", 1)
-
-    #     f.seek(0)
-    #     f.write(xml)
-    #     f.truncate()
-    
     pm.set_thread_frame_time("simulation_thread", 0.01)
 
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
         {
-            "robot_path" : xml_path,
+            "robot_path" : os.getenv("POND_QUAC_CONFIG_PATH", "") + "mujoco_robot.xml",
             "actuator_groups" : [
-                {"names" : drive.cfg.motor_names, "types" : len(drive.cfg.motor_names)*["velocity"]},
-                {"names" : arm.cfg.motor_names,   "types" : len(arm.cfg.motor_names)  *["position"]},
-            ]
+                {
+                    "names" : drive.cfg.motor_names,
+                    "types" : len(drive.cfg.motor_names)*["velocity"],
+                    "feedback_stage_name" : drive.cfg.feedback_stage,
+                    "command_stage_name" : drive.cfg.command_stage,
+                },
+                {
+                    "names" : arm.cfg.motor_names,
+                    "types" : len(arm.cfg.motor_names)*["position"],
+                    "feedback_stage_name" : arm.cfg.feedback_stage,
+                    "command_stage_name" : arm.cfg.command_stage,
+                },
+            ],
+
+            "settings" : 
+            {
+                "Rendering" : {
+                    "OpenGL Effects" : {
+                        "Shadow" : False
+                    }
+                }
+            }
         },
     )

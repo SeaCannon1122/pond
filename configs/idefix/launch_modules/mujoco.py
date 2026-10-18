@@ -15,7 +15,12 @@ def mujoco(pm: Manager):
         {
             "robot_path" : xml_path,
             "actuator_groups" : [
-                {"names" : walk.cfg.motor_names, "types" : 12*["position"]},
+                {
+                    "names" : walk.cfg.motor_names, 
+                    "types" : 12*["position"],
+                    "feedback_stage_name" : walk.cfg.feedback_stage,
+                    "command_stage_name" : walk.cfg.command_stage
+                },
             ]
         },
     )

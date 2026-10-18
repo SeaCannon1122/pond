@@ -2,33 +2,56 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug pond (GDB)",
+            "name": "Debug Quac (GDB)",
             "type": "cppdbg",
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": [ "configs/quac/run.py"],
+            "args": [ "configs/quac/launch.py"],
 
             "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
 
             "environment": [
+                {   "name": "PYTHONPATH",
+                    "value": "${workspaceFolder}/build/debug/python:/opt/ros/jazzy/lib/python3.12/site-packages:${env:PYTHONPATH}"},
+                {   "name": "POND_BUNDLE_PATH",
+                    "value": "${workspaceFolder}/build/debug/pond_bundles"},
+                {   "name": "POND_QUAC_CONFIG_PATH",
+                    "value": "${workspaceFolder}/configs/quac/"},
+                {   "name": "ROS_DISTRO",
+                    "value": "jazzy"}
+            ],
+
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+
+            "setupCommands": [
                 {
-                    "name": "PYTHONPATH",
-                    "value": "${workspaceFolder}/build/debug/python:${env:PYTHONPATH}"
-                },
-                {
-                    "name": "POND_BUNDLE_PATH",
-                    "value": "${workspaceFolder}/build/debug/pond_bundles"
-                },
-                {
-                    "name": "POND_IDEFIX_CONFIG_PATH",
-                    "value": "${workspaceFolder}/configs/idefix/"
-                },
-                {
-                    "name": "POND_QUAC_CONFIG_PATH",
-                    "value": "${workspaceFolder}/configs/quac/"
-                },
+                    "description": "Enable pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug Idefix (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+
+            "program": "/usr/bin/python3",
+            "args": [ "configs/idefix/launch.py"],
+
+            "cwd": "${workspaceFolder}",
+
+            "environment": [
+                {   "name": "PYTHONPATH",
+                    "value": "${workspaceFolder}/build/debug/python:/opt/ros/jazzy/lib/python3.12/site-packages:${env:PYTHONPATH}"},
+                {   "name": "POND_BUNDLE_PATH",
+                    "value": "${workspaceFolder}/build/debug/pond_bundles"},
+                {   "name": "POND_IDEFIX_CONFIG_PATH",
+                    "value": "${workspaceFolder}/configs/idefix/"},
+                {   "name": "ROS_DISTRO",
+                    "value": "jazzy"}
             ],
 
             "MIMode": "gdb",

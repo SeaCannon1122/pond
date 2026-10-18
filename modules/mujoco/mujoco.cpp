@@ -12,9 +12,19 @@ namespace mju = ::mujoco::sample_util;
 
 struct actuator
 {
+  std::string name;
+  MotorFeedback feedback;
+
   int aid, jid, ctrl_adr;
   double cmd_pos = 0, cmd_vel = 0, fb_pos = 0, fb_vel = 0, fb_torque = 0;
   bool cmd_is_pos = false, cmd_is_vel = false;
+};
+
+struct actuator_group
+{
+  std::vector<actuator> actuators;
+  pond::Callback command_callback, feedback_callback;
+  std::string command_stage_name, feedback_stage_name;
 };
 
 class Mujoco : public pond::ModuleBase
@@ -40,9 +50,7 @@ private:
   std::string robot_path;
   std::optional<std::string> plugin_dir;
 
-  std::vector<pond::Callback> command_callback, feedback_callback;
-  
-  std::vector<std::vector<actuator>> actuators_groups;
+  std::vector<actuator_group> actuators_groups;
   std::mutex interface_mutex;
   double last_update_time = 0;
 
@@ -82,6 +90,12 @@ private:
 
     sim = std::make_unique<mj::Simulate>(std::make_unique<mj::GlfwAdapter>(), &cam, &opt, &pert, false);
 
+    for (uint32_t i = 0; i < mjNRNDFLAG; i++) 
+    {
+      auto flag = parameter("settings.Rendering.OpenGL Effecs." + std::string(mjRNDSTRING[i][0])).asBool().getStrict({}, false);
+      if (flag) sim->scn.flags[i] = *flag;
+    }
+
     sim_created.store(true);
     sim->RenderLoop();
   }
@@ -119,41 +133,44 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
   auto space = parameterSpace("actuator_groups");
   actuators_groups.resize(space.listLength("names"));
-  command_callback.resize(actuators_groups.size());
-  feedback_callback.resize(actuators_groups.size());
 
   for (uint32_t gi = 0; gi < actuators_groups.size(); gi++)
   {
+    actuators_groups[gi].feedback_stage_name = space.parameterAtIndex(gi,"feedback_stage_name").asString().get("read_motor_feedback");
+    actuators_groups[gi].command_stage_name = space.parameterAtIndex(gi,"command_stage_name").asString().get("write_motor_commands");
+
     auto names = space.parameterAtIndex(gi, "names").asStringArray().get({});
     auto types = space.parameterAtIndex(gi, "types").asStringArray().get({}, names.size());
-    actuators_groups[gi].resize(names.size());
+    actuators_groups[gi].actuators.resize(names.size());
 
     pond::ChannelsInfo cmd_info, fb_info;
     for (uint32_t i = 0; i < names.size(); i++)
     {
-      cmd_info.channel<MotorCommand>(names[i] + "/command");
-      fb_info.channel<MotorFeedback>(names[i] + "/get_feedback");
+      actuators_groups[gi].actuators[i].name = names[i];
 
-      if ((actuators_groups[gi][i].aid = mj_name2id(m, mjOBJ_ACTUATOR, names[i].c_str())) == -1)
+      cmd_info.channel<MotorCommand*>(actuators_groups[gi].command_stage_name + "/" + names[i] + "_command");
+      fb_info.channel<MotorFeedback*>(actuators_groups[gi].feedback_stage_name + "/" + names[i] + "_feedback");
+      
+      if ((actuators_groups[gi].actuators[i].aid = mj_name2id(m, mjOBJ_ACTUATOR, names[i].c_str())) == -1)
       {
         mj_deleteModel(m);
         POND_LOG_RETURN_ERROR("Did not find actuator %s", names[i].c_str());
       }
 
-      actuators_groups[gi][i].jid = m->actuator_trnid[2 * actuators_groups[gi][i].aid];
+      actuators_groups[gi].actuators[i].jid = m->actuator_trnid[2 * actuators_groups[gi].actuators[i].aid];
 
-      int ctrl_num = m->actuator_ctrlnum[actuators_groups[gi][i].aid];
+      int ctrl_num = m->actuator_ctrlnum[actuators_groups[gi].actuators[i].aid];
       if (ctrl_num != 1)
       {
         mj_deleteModel(m);
         POND_LOG_RETURN_ERROR("actuator %s has %d control interfaces", names[i].c_str(), ctrl_num);
       }
 
-      actuators_groups[gi][i].cmd_is_pos = (types[i] == "position");
-      actuators_groups[gi][i].cmd_is_vel = (types[i] == "velocity");
-      actuators_groups[gi][i].ctrl_adr = m->actuator_ctrladr[actuators_groups[gi][i].aid];
+      actuators_groups[gi].actuators[i].cmd_is_pos = (types[i] == "position");
+      actuators_groups[gi].actuators[i].cmd_is_vel = (types[i] == "velocity");
+      actuators_groups[gi].actuators[i].ctrl_adr = m->actuator_ctrladr[actuators_groups[gi].actuators[i].aid];
 
-      if (!actuators_groups[gi][i].cmd_is_pos && !actuators_groups[gi][i].cmd_is_vel)
+      if (!actuators_groups[gi].actuators[i].cmd_is_pos && !actuators_groups[gi].actuators[i].cmd_is_vel)
       {
         mj_deleteModel(m);
         POND_LOG_RETURN_ERROR("Actuator type '%s' for actuator %s not implemented", types[i].c_str(), names[i].c_str());
@@ -162,29 +179,34 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
     last_update_time = pond::get_time();
 
-    feedback_callback[gi] = createCallback<MotorFeedback>(fb_info, [this, gi](MotorFeedback** feedbacks) {
+    actuators_groups[gi].feedback_callback = createCallback<MotorFeedback*>(fb_info, [this, gi](MotorFeedback*** feedbacks) {
+
+      for (uint32_t i = 0; i < actuators_groups[gi].actuators.size(); i++) *feedbacks[i] = &actuators_groups[gi].actuators[i].feedback;
 
       std::lock_guard<std::mutex> lock(interface_mutex);
 
-      for (size_t i = 0; i < actuators_groups[gi].size(); i++)
+      for (size_t i = 0; i < actuators_groups[gi].actuators.size(); i++)
       {
-        feedbacks[i]->pos = actuators_groups[gi][i].fb_pos;
-        feedbacks[i]->vel = actuators_groups[gi][i].fb_vel;
-        feedbacks[i]->torque = actuators_groups[gi][i].fb_torque;
+        feedbacks[i][0]->pos = actuators_groups[gi].actuators[i].fb_pos;
+        feedbacks[i][0]->vel = actuators_groups[gi].actuators[i].fb_vel;
+        feedbacks[i][0]->torque = actuators_groups[gi].actuators[i].fb_torque;
         
-        feedbacks[i]->time = last_update_time;
-        feedbacks[i]->hw_time = last_update_time;
+        feedbacks[i][0]->time = last_update_time;
+        feedbacks[i][0]->hw_time = last_update_time;
       }
     });
 
-    command_callback[gi] = createCallback<MotorCommand>(cmd_info, [this, gi](MotorCommand** commands) {
+    actuators_groups[gi].command_callback = createCallback<MotorCommand*>(cmd_info, [this, gi](MotorCommand*** commands) {
+
+      for (uint32_t i = 0; i < actuators_groups[gi].actuators.size(); i++) if (*commands[i] == NULL)
+            POND_LOG_RETURN("%s is NULL", (actuators_groups[gi].command_stage_name + "/" + actuators_groups[gi].actuators[i].name + "_command").c_str());
 
       std::lock_guard<std::mutex> lock(interface_mutex);
 
-      for (size_t i = 0; i < actuators_groups[gi].size(); i++)
+      for (size_t i = 0; i < actuators_groups[gi].actuators.size(); i++)
       {
-        if (commands[i]->pos) actuators_groups[gi][i].cmd_pos = *commands[i]->pos;
-        if (commands[i]->vel) actuators_groups[gi][i].cmd_vel = *commands[i]->vel;
+        if (commands[i][0]->pos) actuators_groups[gi].actuators[i].cmd_pos = *commands[i][0]->pos;
+        if (commands[i][0]->vel) actuators_groups[gi].actuators[i].cmd_vel = *commands[i][0]->vel;
       }
     });
   }   
@@ -202,8 +224,11 @@ void Mujoco::onShutdown()
   sim->exitrequest.store(1);
   gui_thread.join();
 
-  for (auto& rec : feedback_callback) rec.destroy();
-  for (auto& rec : command_callback) rec.destroy();
+  for (auto& group : actuators_groups)
+  {
+    group.command_callback.destroy();
+    group.feedback_callback.destroy();
+  }
 
   mj_deleteData(d);
   mj_deleteModel(m);
@@ -240,10 +265,10 @@ void Mujoco::onFrame()
 
       for (uint32_t gi = 0; gi < actuators_groups.size(); gi++)
       {
-        for (size_t i = 0; i < actuators_groups[gi].size(); i++)
+        for (size_t i = 0; i < actuators_groups[gi].actuators.size(); i++)
         {
-          if (actuators_groups[gi][i].cmd_is_pos) d->ctrl[actuators_groups[gi][i].ctrl_adr] = actuators_groups[gi][i].cmd_pos;
-          if (actuators_groups[gi][i].cmd_is_vel) d->ctrl[actuators_groups[gi][i].ctrl_adr] = actuators_groups[gi][i].cmd_vel;
+          if (actuators_groups[gi].actuators[i].cmd_is_pos) d->ctrl[actuators_groups[gi].actuators[i].ctrl_adr] = actuators_groups[gi].actuators[i].cmd_pos;
+          if (actuators_groups[gi].actuators[i].cmd_is_vel) d->ctrl[actuators_groups[gi].actuators[i].ctrl_adr] = actuators_groups[gi].actuators[i].cmd_vel;
         }
       }
     }
@@ -331,14 +356,14 @@ void Mujoco::onFrame()
 
     for (uint32_t gi = 0; gi < actuators_groups.size(); gi++)
     {
-      for (uint32_t i = 0; i < actuators_groups[gi].size(); i++)
+      for (uint32_t i = 0; i < actuators_groups[gi].actuators.size(); i++)
       {
-        int qpos_adr = m->jnt_qposadr[actuators_groups[gi][i].jid];
-        int dof_adr  = m->jnt_dofadr[actuators_groups[gi][i].jid];
+        int qpos_adr = m->jnt_qposadr[actuators_groups[gi].actuators[i].jid];
+        int dof_adr  = m->jnt_dofadr[actuators_groups[gi].actuators[i].jid];
 
-        actuators_groups[gi][i].fb_vel = d->qvel[dof_adr];
-        actuators_groups[gi][i].fb_pos = d->qpos[qpos_adr];
-        actuators_groups[gi][i].fb_torque = d->qfrc_actuator[dof_adr];
+        actuators_groups[gi].actuators[i].fb_vel = d->qvel[dof_adr];
+        actuators_groups[gi].actuators[i].fb_pos = d->qpos[qpos_adr];
+        actuators_groups[gi].actuators[i].fb_torque = d->qfrc_actuator[dof_adr];
       }
     }
   }

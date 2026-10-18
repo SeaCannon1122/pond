@@ -15,6 +15,9 @@ class cfg:
 
     phase_duration = 0.2
 
+    feedback_stage = "read_wheel_feedback"
+    command_stage = "write_wheel_commands"
+
     controller_params = {
         "joint_names" : joint_names,
         "motor_names" : motor_names,
@@ -47,11 +50,8 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
         
     pm.set_thread_frame_time(cfg.thread_name, 0.01)
 
-    # walk controller
-    pm.load_module(
-        "walk_controller", "controllers/quadruped_controller", cfg.thread_name,
-        cfg.controller_params
-    )
+    # controllers
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
 
     # hardware
     if real:
@@ -62,19 +62,15 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "dummy_servos", "utility/dummy_motor", cfg.thread_name,
             
-            {"mode" : "position", "max_speed" : 10.0, "motor_names": cfg.motor_names},
+            {"mode" : "position", "max_speed" : 10.0, "motor_names": cfg.motor_names, "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage},
         )
 
-    # controller manager
-    pm.load_module(
-        "quadruped_controller_manager", "utility/motor_controller_manager", cfg.thread_name,
-
-        {"frame_time_log" : False, "motor_names": cfg.motor_names},
-    )
-
+    # control flow manager
     pm.load_module(
         "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
         {
+            "frame_time_log" : True,
+
             "stage_names" : [
                 "read_servo_feedback",
                 "update_joint_states",
@@ -82,12 +78,11 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
                 "calculate_trajectory_states",
                 "write_servo_commands",
             ],
-            "data_names" :
+            "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", ],
+                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose"],
 
-            "publish_data" : ["gait_phases"]
-        },
-        {}, "walk"
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False]
+        }
     )

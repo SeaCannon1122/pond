@@ -44,8 +44,14 @@ def ros2_bridge(pm: Manager):
                 ########## gaits ##########
                 {   "direction" : "POND_TO_ROS",
 
-                    "pond" : {"channel" : "gaits",                      "type" : "std::vector<double>"},
-                    "ros"  : {"topic"   : "gaits",                      "type" : "std_msgs::msg::Float64MultiArray"}  
+                    "pond" : {"channel" : "gait_phases/out",            "type" : "std::vector<double>"},
+                    "ros"  : {"topic"   : "gait_phases",                "type" : "std_msgs::msg::Float64MultiArray"}  
+                },
+                #### stance and swing duration ####
+                {   "direction" : "POND_TO_ROS",
+
+                    "pond" : {"channel" : "partial_gait_durations/out", "type" : "std::vector<double>"},
+                    "ros"  : {"topic"   : "partial_gait_durations",     "type" : "std_msgs::msg::Float64MultiArray"}  
                 },
                 ########## gaits ##########
                 {   "direction" : "POND_TO_ROS",

@@ -14,6 +14,9 @@ struct ddsm115_motor
     int32_t id;
     double scalar;
     bool read = false;
+
+    std::string name;
+    MotorFeedback feedback;
 };
 
 class DDSM115Driver : public pond::ModuleBase
@@ -29,12 +32,16 @@ private:
 
     double last_time = 0;
     pond::Callback command_callback, feedback_callback;
+    std::string feedback_stage_name, command_stage_name;
 };
 
 POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115 Motors")
 
 pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 {
+    feedback_stage_name = parameter("feedback_stage_name").asString().get("read_motor_feedback");
+    command_stage_name = parameter("command_stage_name").asString().get("write_motor_commands");
+
     act = parameter("act").asInt().get(3);
     auto device = parameter("device").asString().getStrict();
     if (!device) return POND_ERROR;
@@ -46,17 +53,19 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
     pond::ChannelsInfo cmd_info, fb_info;
     for (uint32_t i = 0; i < motors.size(); i++)
     {
-        auto name = space.parameterAtIndex(i, "name").asString().get("motor_name");
+        motors[i].name = space.parameterAtIndex(i, "name").asString().get("motor_name");
         motors[i].id = space.parameterAtIndex(i, "id").asInt().get(255);
         motors[i].scalar = (space.parameterAtIndex(i, "invert").asBool().get(false) ? -1 : 1);
     
-        cmd_info.channel<MotorCommand>(name + "/command");
-        fb_info.channel<MotorFeedback>(name + "/get_feedback");
+        cmd_info.channel<MotorCommand*>(command_stage_name + "/" + motors[i].name + "_command");
+        fb_info.channel<MotorFeedback*>(feedback_stage_name + "/" + motors[i].name + "_feedback");
     }
     
     if (cmd.connect(*device) == false) POND_LOG_RETURN_ERROR(cmd.get_error());
 
-    feedback_callback = createCallback<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
+    feedback_callback = createCallback<MotorFeedback*>(fb_info, [this](MotorFeedback*** feedbacks) {
+
+        for (uint32_t i = 0; i < motors.size(); i++) *feedbacks[i] = &motors[i].feedback;
 
         double current_time = pond::get_time();
         double dt = current_time - last_time;
@@ -91,22 +100,26 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
                 cur = fb_cur;
             }
 
-            feedbacks[i]->vel = vel;
-            feedbacks[i]->pos = pos;
-            feedbacks[i]->current = cur;
-            feedbacks[i]->time = current_time;
-            feedbacks[i]->hw_time = current_time;
+            motors[i].feedback.vel = vel;
+            motors[i].feedback.pos = pos;
+            motors[i].feedback.current = cur;
+            motors[i].feedback.time = current_time;
+            motors[i].feedback.hw_time = current_time;
 
             motors[i].feedback_pos = pos;
             motors[i].feedback_vel = vel;
         }
     });
 
-    command_callback = createCallback<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
+    command_callback = createCallback<MotorCommand*>(cmd_info, [this](MotorCommand*** commands) {
+
+        for (uint32_t i = 0; i < motors.size(); i++) if (*commands[i] == NULL)
+            POND_LOG_RETURN("%s is NULL", (command_stage_name + "/" + motors[i].name + "_command").c_str());
+
 
         for (size_t i = 0; i < motors.size(); i++)
         {
-            motors[i].cmd_velocity = (commands[i]->vel ? *commands[i]->vel : 0);
+            motors[i].cmd_velocity = (commands[i][0]->vel ? *commands[i][0]->vel : 0);
 
             if (cmd.drive(motors[i].id, motors[i].cmd_velocity * motors[i].scalar, act, 0) == false) POND_LOG(cmd.get_error());
         }

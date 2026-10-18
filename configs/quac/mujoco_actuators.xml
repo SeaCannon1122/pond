@@ -1,6 +1,7 @@
 <mujoco>
 
     <asset>
+        <texture type="skybox" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="512" height="512"/>
         <texture name="grid" type="2d" builtin="checker" rgb1=".9 .4 .4" rgb2=".6 .7 .8" width="100" height="100"/>
         <material name="grid" texture="grid" texrepeat="8 8" texuniform="true" reflectance="0.06"/>
     </asset>
@@ -18,6 +19,8 @@
             condim="3"
         />
 
+        <light directional="true" pos="0 0 3" dir="0 0 -1" ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8"/>
+
     </worldbody>
 
     <actuator>
@@ -30,21 +33,21 @@
         
         <position
             name="arm_motor1" joint="arm_segment_1_joint" 
-            kp="100"
+            kp="80"
             kv="0.1"
             ctrlrange="-0.785398163 1.570796327" ctrllimited="true"
         />
 
         <position
             name="arm_motor2" joint="arm_segment_2_joint" 
-            kp="100"
+            kp="50"
             kv="0.1"
             ctrlrange="0 3.091592654" ctrllimited="true"
         />
 
         <position
             name="gripper_motor" joint="gripper_joint" 
-            kp="100"
+            kp="10"
             kv="0.1"
             ctrlrange="0 1.7" ctrllimited="true"
         />

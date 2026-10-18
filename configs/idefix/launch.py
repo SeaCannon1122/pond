@@ -1,9 +1,6 @@
-import time
-import subprocess
-import os
+import subprocess, os
 
 from pond import Manager
-
 from launch_modules.mujoco import *
 from launch_modules.ros2_bridge import *
 from launch_modules.walk import *
@@ -22,7 +19,7 @@ def compile_urdf(destination: str):
 def main():
 
     DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
-    #compile_urdf(DESCRIPTION_PATH)   
+    compile_urdf(DESCRIPTION_PATH)   
 
     pm = Manager(True, False)
 
@@ -40,19 +37,14 @@ def main():
     ros2_bridge(pm)
 
     mujoco_sim = True
-    #mujoco_sim = False
+    mujoco_sim = False
     
     walk(pm, False, not mujoco_sim)
 
     if mujoco_sim:
         mujoco(pm)
 
-    try:
-        while True:
-            time.sleep(0.1)
-
-    except KeyboardInterrupt:
-        pass
+    input("Press Enter to exit...")
 
 
 if __name__ == "__main__":

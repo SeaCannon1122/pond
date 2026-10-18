@@ -98,7 +98,7 @@ def arm(pm: Manager, real: bool = True, fake: bool = False):
                 "control_gripper",
                 cfg.command_stage,
             ],
-            "data_names" :
+            "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names]
         }
