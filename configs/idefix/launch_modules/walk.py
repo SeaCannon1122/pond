@@ -13,36 +13,32 @@ class cfg:
 
     motor_names = [joint + "_motor" for joint in joint_names]
 
-    phase_duration = 0.2
+    foot_link_names = ["FL_paw", "FR_paw", "BL_paw", "BR_paw"]
 
-    feedback_stage = "read_wheel_feedback"
-    command_stage = "write_wheel_commands"
+    feedback_stage = "read_servo_feedback"
+    command_stage = "write_servo_commands"
 
-    controller_params = {
+    trajectory_params = {
         "joint_names" : joint_names,
-        "motor_names" : motor_names,
+        "reference_link" : "base_link",
 
-        "timeout" : 0.5,
-
-        "robot_width" : 0.07,
-        "robot_length" : 0.26,
-        
-        "limb_length_hip_to_shoulder" : 0.065,
-        "limb_length_thigh" : 0.105,
-        "limb_length_shin" : 0.115,
-
-        "T_0" : 0.25 * phase_duration,
-        "T_1" : 0.75 * phase_duration,
-        "T_st" : phase_duration,
-        "T_sw" : phase_duration,
+        "foot_base_offset" : [0.015, 0.025, -0.181],
 
         "step_height" : 0.035,
-        "stance_amplitude" : 0.001,
-
         "max_step_length" : 1.0,
-        "stand_height" : 0.181,
         "max_step_speed" : 10.0,
-        "jerk" : 18.75 / (phase_duration * phase_duration * phase_duration),
+
+        "jerk_times_duration_to_the_3" : 18.75,
+        "stance_amplitude" : 0.001,
+        "T_0_in_swing_relative" : 0.25,
+        "T_1_in_swing_relative" : 0.75,
+    }
+
+    kinematics_params = {
+        "joint_names" : joint_names,
+        "motor_names" : motor_names,
+        "foot_link_names" : foot_link_names,   
+        "reference_link" : "base_link",
     }
 
 
@@ -51,8 +47,14 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
     pm.set_thread_frame_time(cfg.thread_name, 0.01)
 
     # controllers
+    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params)
+
     pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
 
+    pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
+
+    pm.load_module("leg_kinematics_controller", "quadruped_controllers/leg_kinematics_controller", cfg.thread_name, cfg.kinematics_params)
+        
     # hardware
     if real:
         pass
@@ -69,19 +71,20 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
     pm.load_module(
         "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
         {
-            "frame_time_log" : True,
+            "frame_time_log" : False,
 
             "stage_names" : [
                 "read_servo_feedback",
                 "update_joint_states",
                 "schedule_gaits",
-                "calculate_trajectory_states",
+                "evaluate_trajectories",
+                "calculate_joint_angles",
                 "write_servo_commands",
             ],
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose"],
+                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "foot_target_positions"],
 
             "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False]
         }

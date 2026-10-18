@@ -34,18 +34,21 @@ def main():
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
     # lidar(pm)
 
-    ros2_bridge(pm)
-
     mujoco_sim = True
-    mujoco_sim = False
-    
-    walk(pm, False, not mujoco_sim)
+    #mujoco_sim = False
 
     if mujoco_sim:
         mujoco(pm)
+    
+    walk(pm, False, not mujoco_sim)
 
-    input("Press Enter to exit...")
+    ros2_bridge(pm)
 
+    try:
+        input("Press Enter to exit...\n")
+
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()

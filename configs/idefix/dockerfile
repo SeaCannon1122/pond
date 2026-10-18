@@ -43,7 +43,7 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release -DMUJOCO_SIMULATE_USE_SYSTEM_GLFW=ON .. && 
 RUN apt install -y python3-pip
 RUN pip3 install "pybind11[global]" --break-system-packages
 
-RUN apt install -y ros-jazzy-rmw-cyclonedds-cpp
+RUN apt install -y ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-xacro
 
 WORKDIR /pond/pond
 
@@ -72,8 +72,8 @@ COPY modules/utility /pond/modules/utility
 RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_utility=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
 RUN cmake --build build
 
-COPY modules/controllers /pond/modules/controllers
-RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_controllers=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
+COPY modules/quadruped_controllers /pond/modules/quadruped_controllers
+RUN . /opt/ros/jazzy/setup.bash && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLE_quadruped_controllers=ON -DCMAKE_CXX_FLAGS="-I/pond/pond/include"
 RUN cmake --build build
 
 

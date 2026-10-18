@@ -36,7 +36,7 @@ def drive(pm: Manager, real: bool = True, fake: bool = False):
 
     # drive controller
     pm.load_module(
-        "drive_controller", "controllers/diff_drive_controller", cfg.thread_name,
+        "drive_controller", "quac_controllers/diff_drive_controller", cfg.thread_name,
 
         {"wheels" : cfg.wheels, "slip_multiplier" : cfg.slip_multiplier},
     )

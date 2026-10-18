@@ -50,7 +50,11 @@ def main():
 
     ros2_bridge(pm, False)
 
-    input("Press Enter to exit...")
+    try:
+        input("Press Enter to exit...")
+
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()

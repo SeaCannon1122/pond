@@ -51,22 +51,15 @@ def arm(pm: Manager, real: bool = True, fake: bool = False):
 
     pm.set_thread_frame_time(cfg.thread_name, 0.05)
 
-    # arm controller
-    # pm.load_module(
-    #     "arm_controller", "controllers/arm_controller", cfg.thread_name,
-        
-    #     {"arm_joint_names": cfg.arm_joints, "target_link_name": cfg.arm_end_effector, "max_angle_error": 0.3},
-    # )
-
     pm.load_module(
-        "arm_controller", "controllers/arm_controller_old", cfg.thread_name,
+        "arm_controller", "quac_controllers/arm_controller_old", cfg.thread_name,
         
         {"arm_joint_names": cfg.arm_joints, "target_link_name": cfg.arm_end_effector},
     )
 
     # gripper controller
     pm.load_module(
-        "gripper_controller", "controllers/angle_gripper_controller", cfg.thread_name,
+        "gripper_controller", "quac_controllers/angle_gripper_controller", cfg.thread_name,
         
         {"joint_name": cfg.gripper_joint, "radius": cfg.gripper_radius, "offset": cfg.gripper_offset},
     )

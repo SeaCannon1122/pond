@@ -102,7 +102,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
                         partial_durations[1] = duration/2.0;
 
                         phases[1] += duration/2.0;
-                        phases[3] += duration/2.0;
+                        phases[2] += duration/2.0;
                     } break;
                     case WALK: {
                         partial_durations[0] = 3*duration/4.0;
