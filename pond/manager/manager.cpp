@@ -1,66 +1,9 @@
 #include <algorithm>
+#include <chrono>
 #include <pond_manager/manager.hpp>
 #include <dlfcn.h>
 #include <sstream>
 #include <filesystem>
-
-void _pond_shutdown(pond_internal::ModuleContext* ctx)
-{
-    ctx->manager->api_shutdown(ctx->module);
-}
-
-void _pond_log(pond_internal::ModuleContext* ctx, uint8_t* format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    ctx->manager->api_log(ctx->module, format, args);
-    va_end(args);
-}
-
-void _pond_set_user_ptr(pond_internal::ModuleContext* ctx, void* ptr)
-{
-    ctx->manager->api_set_user_ptr(ctx->module, ptr);
-}
-
-void* _pond_get_user_ptr(pond_internal::ModuleContext* ctx)
-{
-    return ctx->manager->api_get_user_ptr(ctx->module);
-}
-
-void _pond_set_parameter(pond_internal::ModuleContext* ctx, uint8_t* name, pond_parameter* parameter)
-{
-    ctx->manager->api_set_parameter(ctx->module, name, parameter);
-}
-
-pond_parameter* _pond_get_parameter(pond_internal::ModuleContext* ctx, uint8_t* name)
-{
-    return ctx->manager->api_get_parameter(ctx->module, name);
-}
-
-int32_t _pond_create_distributor(pond_internal::ModuleContext* ctx, pond_dds_slot_info* slots, uint32_t slot_count)
-{
-    return ctx->manager->api_create_distributor(ctx->module, slots, slot_count);
-}
-
-void _pond_destroy_distributor(pond_internal::ModuleContext* ctx, uint32_t distributor)
-{
-    ctx->manager->api_destroy_distributor(ctx->module, distributor);
-}
-
-void _pond_distribute(pond_internal::ModuleContext* ctx, uint32_t distributor, void** data)
-{
-    ctx->manager->api_distribute(ctx->module,distributor, data);
-}
-
-int32_t _pond_create_receiver(pond_internal::ModuleContext* ctx, pond_dds_slot_info* slots, uint32_t slot_count, pfn_pond_receiver_callback callback, void* callback_pointer)
-{
-    return ctx->manager->api_create_receiver(ctx->module, slots, slot_count, callback, callback_pointer);
-}
-
-void _pond_destroy_receiver(pond_internal::ModuleContext* ctx, uint32_t receiver)
-{
-    ctx->manager->api_destroy_receiver(ctx->module, receiver);
-}
 
 std::vector<std::string> get_bundle_paths()
 {
@@ -200,20 +143,20 @@ std::string PondManager::load_module(
     module->context.manager = this;
     module->native_api.ctx = &module->context;
 
-    module->native_api.create_distributor = (pfn_pond_create_distributor)_pond_create_distributor;
-    module->native_api.destroy_distributor = (pfn_pond_destroy_distributor)_pond_destroy_distributor;
-    module->native_api.distribute = (pfn_pond_distribute)_pond_distribute;
+    module->native_api.create_distributor = (pfn_pond_create_distributor)&PondManager::api_create_distributor;
+    module->native_api.destroy_distributor = (pfn_pond_destroy_distributor)&PondManager::api_destroy_distributor;
+    module->native_api.distribute = (pfn_pond_distribute)&PondManager::api_distribute;
 
-    module->native_api.create_receiver = (pfn_pond_create_receiver)_pond_create_receiver;
-    module->native_api.destroy_receiver = (pfn_pond_destroy_receiver)_pond_destroy_receiver;
+    module->native_api.create_callback = (pfn_pond_create_callback)&PondManager::api_create_callback;
+    module->native_api.destroy_callback = (pfn_pond_destroy_callback)&PondManager::api_destroy_callback;
     
-    module->native_api.shutdown = (pfn_pond_shutdown)_pond_shutdown;
-    module->native_api.log = (pfn_pond_log)_pond_log;
-    module->native_api.set_user_ptr = (pfn_pond_set_user_ptr)_pond_set_user_ptr;
-    module->native_api.get_user_ptr = (pfn_pond_get_user_ptr)_pond_get_user_ptr;
+    module->native_api.shutdown = (pfn_pond_shutdown)&PondManager::api_shutdown;
+    module->native_api.log = (pfn_pond_log)&PondManager::api_log;
+    module->native_api.set_user_ptr = (pfn_pond_set_user_ptr)&PondManager::api_set_user_ptr;
+    module->native_api.get_user_ptr = (pfn_pond_get_user_ptr)&PondManager::api_get_user_ptr;
 
-    module->native_api.get_parameter = (pfn_pond_get_parameter)_pond_get_parameter;
-    module->native_api.set_parameter = (pfn_pond_set_parameter)_pond_set_parameter;
+    module->native_api.get_parameter = (pfn_pond_get_parameter)&PondManager::api_get_parameter;
+    module->native_api.set_parameter = (pfn_pond_set_parameter)&PondManager::api_set_parameter;
 
     std::shared_ptr<pond_internal::Thread> thread;
     for (auto& t : threads) if (t->name == thread_name) { thread = t; break; }
@@ -297,14 +240,14 @@ void PondManager::cleanup_module(pond_internal::Module* module)
     for (int i = 0; i < module->distributors.get_length(); i++) 
         if (module->distributors.is_used(i))
         {
-            api_destroy_distributor(module, i);
+            api_destroy_distributor(&module->context, i);
         }
             
 
-    for (int i = 0; i < module->receivers.get_length(); i++)
-        if (module->receivers.is_used(i))
+    for (int i = 0; i < module->callbacks.get_length(); i++)
+        if (module->callbacks.is_used(i))
         {
-            api_destroy_receiver(module, i);
+            api_destroy_callback(&module->context, i);
         }
             
 
@@ -325,7 +268,7 @@ void PondManager::thread_function(pond_internal::Thread* thread)
     bool shutdown = false;
     while (!shutdown)
     {
-        double this_time = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+        double this_time = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
         if (thread->last_time != 0.0)
         {
             double ft = thread->frame_time.load();

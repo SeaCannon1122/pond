@@ -6,10 +6,10 @@
 template<typename pond_data_type, typename ros_msg>
 struct pond_to_ros
 {
-    ~pond_to_ros() { receiver.destroy();}
+    ~pond_to_ros() { callback.destroy();}
 
     std::shared_ptr<rclcpp::Publisher<ros_msg>> publisher;
-    pond::Receiver receiver;
+    pond::Callback callback;
     bool is_vector;
 };
 
@@ -36,7 +36,7 @@ private:
         std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> obj = std::make_shared<pond_to_ros<pond_data_type, ros_msg>>();
 
         obj->publisher = node->create_publisher<ros_msg>(ros_topic, qos);
-        if (vector) obj->receiver = createReceiver<std::vector<pond_data_type>>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
+        if (vector) obj->callback = createCallback<std::vector<pond_data_type>>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
         {
             ros_msg msg;
             for (const auto& d : *data)
@@ -45,7 +45,7 @@ private:
                 pub_ptr->publish(msg);
             }
         });
-        else obj->receiver = createReceiver<pond_data_type>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type* data)
+        else obj->callback = createCallback<pond_data_type>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type* data)
         {
             ros_msg msg;
             convert_function(*data, msg);

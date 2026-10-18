@@ -24,23 +24,23 @@ def main():
     pm.set_thread_frame_time("thread", 0.1)
 
     pm.load_module(
-        name="receiver1",
+        name="callback1",
         bundle_name="utility",
-        module_name="latency_test_receiver",
+        module_name="latency_test_callback",
         thread_name="thread",
     )
 
     pm.load_module(
-        name="receiver2",
+        name="callback2",
         bundle_name="utility",
-        module_name="latency_test_receiver",
+        module_name="latency_test_callback",
         thread_name="thread",
     ) 
 
     pm.load_module(
-        name="receiver3",
+        name="callback3",
         bundle_name="utility",
-        module_name="latency_test_receiver",
+        module_name="latency_test_callback",
         thread_name="thread",
     ) 
 

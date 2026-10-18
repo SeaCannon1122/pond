@@ -11,12 +11,12 @@ pkg_check_modules(LIBAV REQUIRED
 
 find_package(OpenCV REQUIRED)
 
-add_executable(receiver receiver.cpp)
+add_executable(callback callback.cpp)
 
-target_include_directories(receiver PRIVATE ${LIBAV_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(receiver PRIVATE ${LIBAV_LIBRARIES} ${OpenCV_LIBRARIES} pthread)
+target_include_directories(callback PRIVATE ${LIBAV_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(callback PRIVATE ${LIBAV_LIBRARIES} ${OpenCV_LIBRARIES} pthread)
 
-target_compile_options(receiver PRIVATE -O3 -Wall)
+target_compile_options(callback PRIVATE -O3 -Wall)
 
 add_library(get_tf_test-pond_bundle SHARED
   get_tf_test.cpp

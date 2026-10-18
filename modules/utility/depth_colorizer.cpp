@@ -7,7 +7,7 @@ public:
     virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
 private:
-    pond::Receiver receiver;
+    pond::Callback callback;
     pond::DistributorTyped<ImgFrameSPtr> distributor;
     double max_depth;
 };
@@ -19,7 +19,7 @@ pond_result DepthColorizer::onStartup(const std::vector<void*>& args)
     max_depth = parameter("max_depth").asDouble().get(4000);
 
     distributor = createDistributorTyped<ImgFrameSPtr>({"out"});
-    receiver = createReceiver<ImgFrameSPtr>({"in"}, [this](ImgFrameSPtr* frame){
+    callback = createCallback<ImgFrameSPtr>({"in"}, [this](ImgFrameSPtr* frame){
 
         if ((*frame)->format != ImgFrame::Format::Depth8 && (*frame)->format != ImgFrame::Format::Depth16)
             POND_LOG_RETURN(
@@ -42,6 +42,6 @@ pond_result DepthColorizer::onStartup(const std::vector<void*>& args)
 
 void DepthColorizer::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
     distributor.destroy();
 }

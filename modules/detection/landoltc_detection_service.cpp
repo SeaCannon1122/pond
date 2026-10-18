@@ -10,7 +10,7 @@ public:
     virtual void onShutdown() override;
 private:
 
-    pond::Receiver receiver;
+    pond::Callback callback;
     uint32_t min_edge_count, color_threshold;
     double min_ratio_circle, min_depth;
 };
@@ -24,7 +24,7 @@ pond_result LandoltCDetector::onStartup(const std::vector<void*>& args)
     min_depth = parameter("min_depth").asDouble().get(10.0);
     color_threshold = parameter("color_threshold").asInt().get(100);
 
-    receiver = createReceiver<LandoltcDetectionRequest>({"request"}, [this](LandoltcDetectionRequest* request) {
+    callback = createCallback<LandoltcDetectionRequest>({"request"}, [this](LandoltcDetectionRequest* request) {
         
         if (request->image->format != ImgFrame::Format::RGB8 && request->image->format != ImgFrame::Format::BGR8 && request->image->format != ImgFrame::Format::Mono8)
         {
@@ -108,5 +108,5 @@ pond_result LandoltCDetector::onStartup(const std::vector<void*>& args)
 
 void LandoltCDetector::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
 }

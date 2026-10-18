@@ -7,8 +7,6 @@
 #include <pond_data_types/command_types.hpp>
 #include <pond_data_types/motor_types.hpp>
 
-#include "pond/pond.h"
-#include "pond_data_types/transform_types.hpp"
 #include "trajectory.hpp"
 
 class QuadrupedController : public pond::ModuleBaseTF
@@ -36,7 +34,7 @@ private:
     double stance_amplitude_;
     double T_st_, T_sw_, T_0_, T_1_;
 
-    pond::Receiver twist_receiver, body_pose_receiver, update_receiver, locomotion_receiver;
+    pond::Callback twist_callback, body_pose_callback, update_callback, locomotion_callback;
     pond::DistributorTyped<std::vector<double>> gait_distributor; 
     pond::DistributorTyped<std::vector<FrameTransform>> foot_position_distributor; 
     std::vector<FrameTransform> foot_positions_msg;
@@ -98,11 +96,11 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
         channels_info.channel<MotorInterface>(motor_names->at(i) + "/update");
     }
 
-    update_receiver = createReceiver<MotorInterface>(channels_info, std::bind(&QuadrupedController::update_controller, this, std::placeholders::_1));
+    update_callback = createCallback<MotorInterface>(channels_info, std::bind(&QuadrupedController::update_controller, this, std::placeholders::_1));
 
-    locomotion_receiver = createReceiver<bool>({"enable_locomotion"}, [this](bool* status) {locomotion_activated.store(status);});    
+    locomotion_callback = createCallback<bool>({"enable_locomotion"}, [this](bool* status) {locomotion_activated.store(status);});    
 
-    twist_receiver = createReceiver<TwistCommand>({"cmd_vel"}, [this](TwistCommand* new_twist){
+    twist_callback = createCallback<TwistCommand>({"cmd_vel"}, [this](TwistCommand* new_twist){
         
         if (new_twist->stamp.time + timeout < pond::get_time()) return;
 
@@ -110,7 +108,7 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
         twist_cmd = *new_twist;
     });
 
-    body_pose_receiver = createReceiver<FrameTransform>({"body_pose"}, [this](FrameTransform* new_pose){
+    body_pose_callback = createCallback<FrameTransform>({"body_pose"}, [this](FrameTransform* new_pose){
         
         if (new_pose->stamp.time + timeout < pond::get_time()) return;
 
@@ -123,10 +121,10 @@ pond_result QuadrupedController::onStartupTF(const std::vector<void*>& args)
 
 void QuadrupedController::onShutdownTF()
 {
-    update_receiver.destroy();
-    twist_receiver.destroy();
-    body_pose_receiver.destroy();
-    locomotion_receiver.destroy();
+    update_callback.destroy();
+    twist_callback.destroy();
+    body_pose_callback.destroy();
+    locomotion_callback.destroy();
     gait_distributor.destroy();
     foot_position_distributor.destroy();
 }

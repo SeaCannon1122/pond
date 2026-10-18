@@ -12,6 +12,7 @@ struct segment
     double max;
 
     Eigen::Vector2d vec;
+    MotorCommand motor_command;
 };
 
 class ArmController : public pond::ModuleBaseTF
@@ -23,18 +24,18 @@ private:
 
     struct
     {
-        pond::Receiver receiver;
+        pond::Callback callback;
         Pose2D received;
         std::mutex mutex;
     } target;
 
     struct
     {
-        pond::Receiver receiver;
+        pond::Callback callback;
         std::atomic<double> received{0.02};
     } arm_speed;
 
-    pond::Receiver update_receiver;
+    pond::Callback update_callback;
 
     std::vector<JointState> joint_states;
 
@@ -86,7 +87,7 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
     min_body = segments[0].vec + Eigen::Rotation2Dd(segments[1].min) * segments[1].vec;
     max_body = segments[0].vec.normalized() * (segments[0].vec.norm() + segments[1].vec.norm());
 
-    target.receiver = createReceiver<Pose2D>({"arm_target"}, [this](Pose2D* tf)
+    target.callback = createCallback<Pose2D>({"arm_target"}, [this](Pose2D* tf)
         {
             if (tf->stamp.time + timeout < pond::get_time()) return;
 
@@ -95,15 +96,25 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         }
     );
 
-    arm_speed.receiver = createReceiver<double>({"arm_speed"}, [this](double* speed) {arm_speed.received.store(*speed);});
+    arm_speed.callback = createCallback<double>({"arm_speed"}, [this](double* speed) {arm_speed.received.store(*speed);});
 
-    update_receiver = createReceiver<MotorInterface>(pond::ChannelsInfo().channels<MotorInterface, MotorInterface, MotorInterface>("arm_motor0/update", "arm_motor1/update", "arm_motor2/update"), [this](MotorInterface** ifs) {
+    pond::ChannelsInfo info;
+    info.channels<MotorCommand*>("control_arm/arm_motor0/command", "control_arm/arm_motor1/command", "control_arm/arm_motor2/command");
+    info.channels<MotorFeedback*>("control_arm/arm_motor0/feedback", "control_arm/arm_motor1/feedback", "control_arm/arm_motor2/feedback");
     
+    update_callback = createCallback<void>(info, [this](void** data) {
+    
+        MotorCommand*** commands = (MotorCommand***)data;
+        MotorFeedback*** feedbacks = (MotorFeedback***)&data[3];
+        
+        for (uint32_t i = 0; i < 3; i++) if (*feedbacks[i] == NULL) POND_LOG_RETURN("%s is NULL", ("control_arm/arm_motor"+ std::to_string(i) +"/feedback").c_str());
+        for (uint32_t i = 0; i < 3; i++) *commands[i] = &segments[i].motor_command;
+        
         for (uint32_t i = 0; i < 3; i++)
         {
-            joint_states[i].angle = (ifs[i]->feedback.pos ? *ifs[i]->feedback.pos : 0);
-            joint_states[i].time = ifs[i]->feedback.time;
-            joint_states[i].hw_time = ifs[i]->feedback.hw_time;
+            joint_states[i].angle = (feedbacks[i][0]->pos ? *feedbacks[i][0]->pos : 0);
+            joint_states[i].time = feedbacks[i][0]->time;
+            joint_states[i].hw_time = feedbacks[i][0]->hw_time;
         }
 
         tfSetJointStates(joint_states);
@@ -195,9 +206,9 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
         angles[2] = std::clamp(angles[2], segments[2].min, segments[2].max);
         
         
-        ifs[0]->command.pos = angles[0];
-        ifs[1]->command.pos = angles[1];
-        ifs[2]->command.pos = angles[2];
+        segments[0].motor_command.pos = angles[0];
+        segments[0].motor_command.pos = angles[1];
+        segments[0].motor_command.pos = angles[2];
     });
 
     return POND_SUCCESS;
@@ -205,7 +216,7 @@ pond_result ArmController::onStartupTF(const std::vector<void*>& args)
 
 void ArmController::onShutdownTF()
 {
-    update_receiver.destroy();
-    arm_speed.receiver.destroy();
-    target.receiver.destroy();
+    update_callback.destroy();
+    arm_speed.callback.destroy();
+    target.callback.destroy();
 }

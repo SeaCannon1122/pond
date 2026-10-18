@@ -44,6 +44,9 @@ class cfg:
         }
     ]
 
+    feedback_stage = "read_servo_feedback"
+    command_stage = "write_servo_commands"
+
 def arm(pm: Manager, real: bool = True, fake: bool = False):
 
     pm.set_thread_frame_time(cfg.thread_name, 0.05)
@@ -73,7 +76,7 @@ def arm(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "servo_driver", "waveshare/servo_driver", cfg.thread_name,
             
-            {"device" : cfg.servo_device, "baudrate" : cfg.servo_baudrate, "servos" : cfg.servo_motors},
+            {"device" : cfg.servo_device, "baudrate" : cfg.servo_baudrate, "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage, "servos" : cfg.servo_motors},
         )
 
     # mock hardware
@@ -81,12 +84,22 @@ def arm(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "dummy_servos", "utility/dummy_motor", cfg.thread_name,
             
-            {"mode" : "position", "max_speed" : cfg.max_arm_speed, "motor_names": cfg.motor_names},
+            {"mode" : "position", "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage, "max_speed" : cfg.max_arm_speed, "motor_names": cfg.motor_names},
         )
 
     # controller manager
     pm.load_module(
-        "arm_controller_manager", "utility/motor_controller_manager", cfg.thread_name,
-    
-        {"motor_names": cfg.motor_names},
+        "arm_cfm", "utility/control_flow_manager", cfg.thread_name,
+        {
+            "frame_time_log" : False,
+            "stage_names" : [
+                cfg.feedback_stage,
+                "control_arm",
+                "control_gripper",
+                cfg.command_stage,
+            ],
+            "data_names" :
+                [motor+"_command" for motor in cfg.motor_names] +
+                [motor+"_feedback" for motor in cfg.motor_names]
+        }
     )

@@ -22,11 +22,11 @@ namespace pond
             return Distributor(&_pond_api, info);
         }
 
-        template<typename... Args>
-        Distributor createDistributor(const std::array<std::string, sizeof...(Args)>& channels)
+        template<typename... Channel_Types>
+        Distributor createDistributor(const std::array<std::string, sizeof...(Channel_Types)>& channels)
         {
             ChannelsInfo info; auto it = channels.begin();
-            (info.channel<Args>(*it++),...);
+            (info.channel<Channel_Types>(*it++),...);
 
             return Distributor(&_pond_api, info);
         }
@@ -38,16 +38,16 @@ namespace pond
             return Distributor(&_pond_api, info);
         }
 
-        template<typename... Args>
-        DistributorTyped<Args...> createDistributorTyped(const std::array<std::string, sizeof...(Args)>& channels)
+        template<typename... Channel_Types>
+        DistributorTyped<Channel_Types...> createDistributorTyped(const std::array<std::string, sizeof...(Channel_Types)>& channels)
         {
-            return DistributorTyped<Args...>(&_pond_api, channels);
+            return DistributorTyped<Channel_Types...>(&_pond_api, channels);
         }
 
         template<size_t i> using argtype_void = void*;
 
         template<size_t... I>
-        static void typed_receiver_callback_entrypoint(pond_api* api, void* callback_pointer, void** data)
+        static void typed_callback_callback_entrypoint(pond_api* api, void* callback_pointer, void** data)
         {
             std::function<void(argtype_void<I>...)>* function = (std::function<void(argtype_void<I>...)>*)callback_pointer;
             (*function)(data[I]...);
@@ -59,41 +59,41 @@ namespace pond
         template <size_t... I>
         struct sequence_callback_generator<0, I...>
         {
-            static constexpr auto callback = typed_receiver_callback_entrypoint<I...>;
+            static constexpr auto callback = typed_callback_callback_entrypoint<I...>;
         };
 
-        template<typename... Args, typename Callback>
-        Receiver createReceiver(const std::array<std::string, sizeof...(Args)>& channels, const Callback& callback)
+        template<typename... Channel_Types, typename Callback_Type>
+        Callback createCallback(const std::array<std::string, sizeof...(Channel_Types)>& channels, const Callback_Type& callback)
         {
             ChannelsInfo info; auto it = channels.begin();
-            (info.channel<Args>(*it++),...);
+            (info.channel<Channel_Types>(*it++),...);
 
-            auto cb = std::make_shared<std::function<void(Args*...)>>(callback);
+            auto cb = std::make_shared<std::function<void(Channel_Types*...)>>(callback);
 
-            return Receiver(&_pond_api, info, *(std::shared_ptr<void>*)&cb, sequence_callback_generator<sizeof...(Args)>::callback);
+            return Callback(&_pond_api, info, *(std::shared_ptr<void>*)&cb, sequence_callback_generator<sizeof...(Channel_Types)>::callback);
         }
 
-        static void raw_receiver_callback_entrypoint(pond_api* api, void* callback_pointer, void** data)
+        static void raw_callback_callback_entrypoint(pond_api* api, void* callback_pointer, void** data)
         {
             std::function<void(void**)>* function = (std::function<void(void**)>*)callback_pointer;
             (*function)(data);
         }
 
-        template<typename T, typename Callback>
-        Receiver createReceiver(const ChannelsInfo& info, const Callback& callback)
+        template<typename Channel_Type, typename Callback_Type>
+        Callback createCallback(const ChannelsInfo& info, const Callback_Type& callback)
         {
-            auto cb = std::make_shared<std::function<void(T**)>>(callback);
+            auto cb = std::make_shared<std::function<void(Channel_Type**)>>(callback);
 
-            return Receiver(&_pond_api, info, *(std::shared_ptr<void>*)&cb, raw_receiver_callback_entrypoint);
+            return Callback(&_pond_api, info, *(std::shared_ptr<void>*)&cb, raw_callback_callback_entrypoint);
         }
 
-        Receiver createReceiver(const std::vector<std::string>& channels, const std::function<void(void**)>& callback)
+        Callback createCallback(const std::vector<std::string>& channels, const std::function<void(void**)>& callback)
         {
             auto cb = std::make_shared<std::function<void(void**)>>(callback);
             ChannelsInfo info;
             for (auto& c : channels) info.channel<void>(c);
 
-            return Receiver(&_pond_api, info, *(std::shared_ptr<void>*)&cb, raw_receiver_callback_entrypoint);
+            return Callback(&_pond_api, info, *(std::shared_ptr<void>*)&cb, raw_callback_callback_entrypoint);
         }
 
         pond_api _pond_api; 
@@ -104,3 +104,29 @@ namespace pond
 #define POND_LOG_RETURN(format, ...) {POND_LOG(format, ##__VA_ARGS__); return;}
 #define POND_LOG_RETURN_ERROR(format, ...) {POND_LOG(format, ##__VA_ARGS__); return POND_ERROR;}
 #define POND_LOG_RETURN_FALSE(format, ...) {POND_LOG(format, ##__VA_ARGS__); return false;}
+
+#define POND_MODULE_CPP_DECLARE(cls, _name, _info)\
+pond_result pond_module_##cls##_on_startup(pond_api* api, uint32_t argc, void** argv)\
+{\
+    cls* module = new cls();\
+    api->set_user_ptr(api->ctx, module);\
+    module->init(api);\
+    std::vector<void*> args(argc);\
+    for (uint32_t i = 0; i < argc; i++) args[i] = argv[i];\
+\
+    return module->onStartup(args);\
+}\
+\
+void pond_module_##cls##_on_shutdown(pond_api* api)\
+{\
+    cls* module = (cls*)api->get_user_ptr(api->ctx);\
+    module->onShutdown();\
+    delete module;\
+}\
+\
+void pond_module_##cls##_on_frame(pond_api* api)\
+{\
+    cls* module = (cls*)api->get_user_ptr(api->ctx);\
+    module->onFrame();\
+}\
+POND_MODULE_DECLARE(cls, _name, _info)

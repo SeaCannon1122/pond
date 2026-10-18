@@ -28,7 +28,7 @@ private:
     int32_t act;
 
     double last_time = 0;
-    pond::Receiver command_receiver, feedback_receiver;
+    pond::Callback command_callback, feedback_callback;
 };
 
 POND_MODULE_CPP_DECLARE(DDSM115Driver, "ddsm115_driver", "driver for the DDSM115 Motors")
@@ -56,7 +56,7 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
     
     if (cmd.connect(*device) == false) POND_LOG_RETURN_ERROR(cmd.get_error());
 
-    feedback_receiver = createReceiver<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
+    feedback_callback = createCallback<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
 
         double current_time = pond::get_time();
         double dt = current_time - last_time;
@@ -102,7 +102,7 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
         }
     });
 
-    command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
+    command_callback = createCallback<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
 
         for (size_t i = 0; i < motors.size(); i++)
         {
@@ -117,7 +117,7 @@ pond_result DDSM115Driver::onStartup(const std::vector<void*>& args)
 
 void DDSM115Driver::onShutdown()
 {
-    feedback_receiver.destroy();
-    command_receiver.destroy();
+    feedback_callback.destroy();
+    command_callback.destroy();
     cmd.disconnect();
 }

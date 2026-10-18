@@ -11,6 +11,8 @@ struct motor
     double cmd_pos = 0;
     double pos = 0;
     double vel = 0;
+
+    MotorFeedback feedback;
 };
 
 class DummyMotor : public pond::ModuleBase
@@ -19,8 +21,8 @@ public:
     virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
 private:
-    pond::Receiver command_receiver;
-    pond::Receiver feedback_receiver;
+    pond::Callback command_callback, feedback_callback;
+    std::string feedback_stage_name, command_stage_name;
 
     bool mode_pos;
     bool mode_vel;
@@ -39,7 +41,9 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
     mode_pos = (*mode_o == "position");
     mode_vel = (*mode_o == "velocity");
     max_speed = std::abs(parameter("max_speed").asDouble().get(0.0));
-
+    feedback_stage_name = parameter("feedback_stage_name").asString().get("read_motor_feedback");
+    command_stage_name = parameter("command_stage_name").asString().get("write_motor_commands");
+    
     auto names = parameter("motor_names").asStringArray().get({"motor"});
     motors.reserve(names.size());
 
@@ -47,11 +51,13 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
     for (auto& name : names)
     {
         motors.push_back({.name = name});
-        cmd_info.channel<MotorCommand>(name + "/command");
-        fb_info.channel<MotorFeedback>(name + "/get_feedback");
+        cmd_info.channel<MotorCommand*>(command_stage_name+"/" + name + "_command");
+        fb_info.channel<MotorFeedback*>(feedback_stage_name+"/" + name + "_feedback");
     }
 
-    feedback_receiver = createReceiver<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
+    feedback_callback = createCallback<MotorFeedback*>(fb_info, [this](MotorFeedback*** feedbacks) {
+
+        for (uint32_t i = 0; i < motors.size(); i++) *feedbacks[i] = &motors[i].feedback;
 
         double time = pond::get_time();
         if (last_time == 0) last_time = time;
@@ -67,8 +73,8 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
                 if (speed == 0)
                 {
                     motors[i].pos = motors[i].cmd_pos;
-                    feedbacks[i]->pos = motors[i].cmd_pos;
-                    feedbacks[i]->vel = 0;
+                    motors[i].feedback.pos = motors[i].cmd_pos;
+                    motors[i].feedback.vel = 0;
                 }
                 else
                 {
@@ -80,14 +86,14 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
                     {
                         double sign = (motors[i].cmd_pos > motors[i].pos ? 1.0 : -1.0);
                         motors[i].pos += sign * dt * speed;
-                        feedbacks[i]->pos = motors[i].pos;
-                        feedbacks[i]->vel = sign * speed;
+                        motors[i].feedback.pos = motors[i].pos;
+                        motors[i].feedback.vel = sign * speed;
                     }
                     else
                     {
                         motors[i].pos = motors[i].cmd_pos;
-                        feedbacks[i]->pos = motors[i].cmd_pos;
-                        feedbacks[i]->vel = 0;
+                        motors[i].feedback.pos = motors[i].cmd_pos;
+                        motors[i].feedback.vel = 0;
                     }
                 }
             }
@@ -95,28 +101,30 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
             {
                 motors[i].pos += motors[i].vel * dt;
 
-                feedbacks[i]->pos = motors[i].pos;
-                feedbacks[i]->vel = motors[i].vel;
+                motors[i].feedback.pos = motors[i].pos;
+                motors[i].feedback.vel = motors[i].vel;
             }
-            feedbacks[i]->time = time;
-            feedbacks[i]->hw_time = time;
+            motors[i].feedback.time = time;
+            motors[i].feedback.hw_time = time;
         }
         last_time = time;
     });
 
-    command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
+    command_callback = createCallback<MotorCommand*>(cmd_info, [this](MotorCommand*** commands) {
+
+        for (uint32_t i = 0; i < motors.size(); i++) if (*commands[i] == NULL) POND_LOG_RETURN("%s is NULL", (command_stage_name+"/" + motors[i].name + "_command").c_str());
 
         for (uint32_t i = 0; i < motors.size(); i++)
         {
-            if (commands[i]->pos)
+            if (commands[i][0]->pos)
             {
-                if(std::isfinite(*commands[i]->pos)) motors[i].cmd_pos = *commands[i]->pos;
-                else POND_LOG("Cannot set motor '%s' to position %f", motors[i].name.c_str(), *commands[i]->pos);
+                if(std::isfinite(*commands[i][0]->pos)) motors[i].cmd_pos = *commands[i][0]->pos;
+                else POND_LOG("Cannot set motor '%s' to position %f", motors[i].name.c_str(), *commands[i][0]->pos);
             }
-            if (commands[i]->vel)
+            if (commands[i][0]->vel)
             {
-                if(std::isfinite(*commands[i]->vel)) motors[i].vel = *commands[i]->vel;
-                else POND_LOG("Cannot set motor '%s' to velocity %f", motors[i].name.c_str(), *commands[i]->vel);
+                if(std::isfinite(*commands[i][0]->vel)) motors[i].vel = *commands[i][0]->vel;
+                else POND_LOG("Cannot set motor '%s' to velocity %f", motors[i].name.c_str(), *commands[i][0]->vel);
             }
         }
     });
@@ -126,6 +134,6 @@ pond_result DummyMotor::onStartup(const std::vector<void*>& args)
 
 void DummyMotor::onShutdown()
 {
-    feedback_receiver.destroy();
-    command_receiver.destroy();
+    feedback_callback.destroy();
+    command_callback.destroy();
 }

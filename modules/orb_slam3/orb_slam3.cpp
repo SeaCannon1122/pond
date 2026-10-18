@@ -1,4 +1,3 @@
-#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/cv_img_frame.hpp>
@@ -33,7 +32,7 @@ private:
 
     bool use_imu, stereo_mode, rgbd_mode, mono_mode;
 
-    pond::Receiver image_receiver, imu_receiver;
+    pond::Callback image_callback, imu_callback;
 
     pond::DistributorTyped<FrameTransform> transform_distributor;
     FrameTransform transform; Sophus::SE3d cam_tf_start;
@@ -46,18 +45,18 @@ POND_BUNDLE_DECLARE("ORB_SLAM3 pond bundle",POND_MODULE(OrbSlam3))
 
 bool OrbSlam3::get_cam_info(CameraInfo& info, const std::string& channel)
 {
-    pond::Receiver info_receiver = createReceiver<CameraInfo>({channel}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    pond::Callback info_callback = createCallback<CameraInfo>({channel}, [&](CameraInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
     for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
-    info_receiver.destroy();
+    info_callback.destroy();
     if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive camera info on channel '%s'", channel.c_str());
     return true;
 }
 
 bool OrbSlam3::get_imu_info(ImuInfo& info)
 {
-    pond::Receiver info_receiver = createReceiver<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
+    pond::Callback info_callback = createCallback<ImuInfo>({"imu/info"}, [&](ImuInfo* info_msg) {if (info.stamp.time == 0) info = *info_msg;});
     for (int i = 0; i < 100 && info.stamp.time == 0; i++) pond::sleep(0.01);
-    info_receiver.destroy();
+    info_callback.destroy();
     if (info.stamp.time == 0) POND_LOG_RETURN_FALSE("Did not receive imu info on channel 'imu/info'");
     return true;
 }
@@ -98,11 +97,11 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     new_frame.store(false);
 
     pond::ChannelsInfo channels_info;
-    if (stereo_mode) channels_info.channels<ImgFrameSPtr, ImgFrameSPtr>("stereo_left/image", "stereo_right/image");
-    if (rgbd_mode) channels_info.channels<ImgFrameSPtr, ImgFrameSPtr>("color/image", "depth/image");
+    if (stereo_mode) channels_info.channels<ImgFrameSPtr>("stereo_left/image", "stereo_right/image");
+    if (rgbd_mode) channels_info.channels<ImgFrameSPtr>("color/image", "depth/image");
     if (mono_mode) channels_info.channel<ImgFrameSPtr>("mono/image");
 
-    image_receiver = createReceiver<ImgFrameSPtr>(channels_info, [this](ImgFrameSPtr** frames){
+    image_callback = createCallback<ImgFrameSPtr>(channels_info, [this](ImgFrameSPtr** frames){
 
         std::lock_guard<std::mutex> lock(frame_mutex);
 
@@ -111,7 +110,7 @@ pond_result OrbSlam3::onStartupTF(const std::vector<void*>& args)
     });
 
     imu_data_points.reserve(100);
-    imu_receiver = createReceiver<ImuData>({"imu/data"}, [this](ImuData* data){
+    imu_callback = createCallback<ImuData>({"imu/data"}, [this](ImuData* data){
     
         std::lock_guard<std::mutex> lock(imu_mutex);
 
@@ -142,8 +141,8 @@ void OrbSlam3::onShutdownTF()
     slam->Shutdown();
     slam.reset();
    
-    image_receiver.destroy();
-    imu_receiver.destroy();
+    image_callback.destroy();
+    imu_callback.destroy();
 
     transform_distributor.destroy();
     keypoint_frame_distributor.destroy();

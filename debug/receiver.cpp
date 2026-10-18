@@ -145,8 +145,8 @@ int main() {
     int height = 480;  // Match robot resolution
     int port = 5000;
 
-    H264UDPReceiver receiver(width, height, port);
-    receiver.run();
+    H264UDPReceiver callback(width, height, port);
+    callback.run();
 
     return 0;
 }

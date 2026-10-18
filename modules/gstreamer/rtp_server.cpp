@@ -13,7 +13,7 @@ public:
 private:
     GstElement* pipeline;
     GstElement* appsrc;
-    pond::Receiver receiver;
+    pond::Callback callback;
     int32_t width, height, port;
     std::string ip;
     ImgFrame::Format image_format;
@@ -32,7 +32,7 @@ pond_result RTPServer::onStartup(const std::vector<void*>& args)
     if (!_format_string || !_width || !_height || !_port || !_ip) return POND_ERROR;
     width = *_width; height = *_height; port = *_port; ip = *_ip; image_format = ImgFrame::stringToFormat(*_format_string);
 
-    receiver = createReceiver<ImgFrameSPtr>(
+    callback = createCallback<ImgFrameSPtr>(
         {"in"},
         [this](ImgFrameSPtr* frame)
         {
@@ -110,7 +110,7 @@ void RTPServer::onShutdown()
 {
     gst_element_set_state(pipeline, GST_STATE_NULL);
     gst_object_unref(pipeline);
-    receiver.destroy();
+    callback.destroy();
 }
 
 void RTPServer::onFrame()

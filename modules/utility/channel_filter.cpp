@@ -7,7 +7,7 @@ public:
     virtual void onShutdown() override;
 
     pond::Distributor distributor;
-    pond::Receiver receiver;
+    pond::Callback callback;
     uint32_t counter = 0;
     uint32_t rate;
 };
@@ -25,13 +25,13 @@ pond_result ChannelFilter::onStartup(const std::vector<void*>& args)
     rate = parameter("rate").asInt().get(1);
 
     distributor = createDistributor(*channels_out);
-    receiver = createReceiver(*channels_in, [this](void** data) {distributor.distribute_raw(data);});
+    callback = createCallback(*channels_in, [this](void** data) {distributor.distribute_raw(data);});
     
     return POND_SUCCESS;
 }
 
 void ChannelFilter::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
     distributor.destroy();
 }

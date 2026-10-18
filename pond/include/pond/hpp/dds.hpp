@@ -13,12 +13,12 @@ namespace pond
 {
     class ModuleBase;
     class Distributor;
-    class Receiver;
+    class Callback;
 
     class ChannelsInfo
     {
     friend class Distributor;
-    friend class Receiver;
+    friend class Callback;
     public:
         ChannelsInfo() {infos.reserve(16);info_strings.reserve(16);}
 
@@ -35,10 +35,18 @@ namespace pond
 
         template<typename T> using argtype_string = const std::string&;
 
-        template<typename... Args>
-        ChannelsInfo& channels(argtype_string<Args>... names)
+        template<typename T, typename... Args>
+        ChannelsInfo& channels(Args... names)
         {
-            ((channel<Args>(names)), ...);
+            ((channel<T>(names)), ...);
+
+            return *this;
+        }
+
+        template<typename T, typename Iterable>
+        ChannelsInfo& channels(const Iterable& names)
+        {
+            for (auto& name : names) channel<T>(name);
 
             return *this;
         }
@@ -150,23 +158,23 @@ namespace pond
         DistributorTyped(pond_api* _api, const std::array<std::string, sizeof...(Args)>& channels) : Distributor(_api, make_infos(channels)) {}
     };
 
-    class Receiver
+    class Callback
     {
     friend class ModuleBase;
     public:
-        Receiver() = default;
+        Callback() = default;
         void destroy()
         {
             if (id == -1) return;
-            api->destroy_receiver(api->ctx, id);
+            api->destroy_callback(api->ctx, id);
         }
     private:
-        Receiver(pond_api* _api, const ChannelsInfo& channels_info, std::shared_ptr<void>& callback, pfn_pond_receiver_callback callback_function)
+        Callback(pond_api* _api, const ChannelsInfo& channels_info, std::shared_ptr<void>& callback, pfn_pond_callback_function callback_function)
         {
             api = _api;
             callback_ptr = callback;
 
-            id = api->create_receiver(
+            id = api->create_callback(
                 api->ctx, 
                 (pond_dds_slot_info*)channels_info.infos.data(), 
                 channels_info.infos.size(), 

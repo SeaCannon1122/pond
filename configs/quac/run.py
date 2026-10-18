@@ -54,20 +54,18 @@ def main():
 
     #dummy_cam(pm, "camera_front", 1280, 720, 30, True, ip)
     #camera_front(pm, 640, 480, 30, True, ip)
-    camera_back(pm, 640, 480, 30, "color_depth", True, True, ip)
+    #camera_back(pm, 640, 480, 30, "color_depth", True, True, ip)
     #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
-    # lidar(pm)
+    #lidar(pm)
     
     #mujoco(pm, NATIVE_DESCRIPTION_PATH)
     
-    #drive.drive(pm, False, True)
-    #arm.arm(pm, False, False)
-
-    # pm.load_module("get_tf_test", "get_tf_test/get_tf_test", "test_thread")
-        
+    drive.drive(pm, False, True)
+    arm.arm(pm, False, True)
+   
     #orb_slam3(pm, ip)
 
-    ros2_bridge(pm)
+    ros2_bridge(pm, False)
 
     try:
         while is_running:

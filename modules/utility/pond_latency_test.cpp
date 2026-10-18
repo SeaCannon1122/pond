@@ -39,25 +39,25 @@ pond_result Caller::onStartup(const std::vector<void*>& args)
     return POND_SUCCESS;
 }
 
-class Receiver : public pond::ModuleBase
+class Callback : public pond::ModuleBase
 {
 public:
     virtual pond_result onStartup(const std::vector<void*>& args) override;
     virtual void onShutdown() override;
 private:
-    pond::Receiver receiver;
+    pond::Callback callback;
 };
 
-POND_MODULE_CPP_DECLARE(Receiver, "latency_test_receiver", "info")
+POND_MODULE_CPP_DECLARE(Callback, "latency_test_callback", "info")
 
 
-pond_result Receiver::onStartup(const std::vector<void*>& args)
+pond_result Callback::onStartup(const std::vector<void*>& args)
 {
-    receiver = createReceiver({"latency_test_channel"}, [](void** data) {});
+    callback = createCallback({"latency_test_channel"}, [](void** data) {});
     return POND_SUCCESS;
 }
 
-void Receiver::onShutdown()
+void Callback::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
 }

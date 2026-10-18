@@ -27,6 +27,9 @@ class cfg:
         { "name" : motor_names[3],  "id" : 4,   "invert" : True,    },
     ]
 
+    feedback_stage = "read_wheel_feedback"
+    command_stage = "write_wheel_commands"
+
 def drive(pm: Manager, real: bool = True, fake: bool = False):
         
     pm.set_thread_frame_time(cfg.thread_name, 0.1)
@@ -43,7 +46,7 @@ def drive(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "wheel_driver", "waveshare/ddsm115_driver", cfg.thread_name,        
             
-            {"device" : cfg.ddsm_device, "act" : cfg.ddsm_act, "motors" : cfg.ddsm_motors}
+            {"device" : cfg.ddsm_device, "act" : cfg.ddsm_act, "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage, "motors" : cfg.ddsm_motors}
         )
 
     # mock hardware
@@ -51,12 +54,20 @@ def drive(pm: Manager, real: bool = True, fake: bool = False):
         pm.load_module(
             "dummy_wheels", "utility/dummy_motor", cfg.thread_name,
             
-            {"mode" : "velocity", "motor_names": cfg.motor_names},
+            {"mode" : "velocity", "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage, "motor_names": cfg.motor_names},
         )
 
     # controller manager
     pm.load_module(
-        "drive_controller_manager", "utility/motor_controller_manager", cfg.thread_name,
-
-        {"motor_names": cfg.motor_names},
+        "drive_cfm", "utility/control_flow_manager", cfg.thread_name,
+        {
+            "stage_names" : [
+                cfg.feedback_stage,
+                "control_wheels",
+                cfg.command_stage,
+            ],
+            "data_names" :
+                [motor+"_command" for motor in cfg.motor_names] +
+                [motor+"_feedback" for motor in cfg.motor_names]
+        }
     )

@@ -1,6 +1,6 @@
 from pond import Manager
 
-def ros2_bridge(pm: Manager):
+def ros2_bridge(pm: Manager, reducers: bool):
 
     thread_name = "ros2_bridge_thread"
 
@@ -99,29 +99,31 @@ def ros2_bridge(pm: Manager):
         },
     )
 
-    pm.load_module(
-        "camera_front_info_rate_reducer", "utility/channel_filter", thread_name,
-        {
-            "rate": 30,
-            "channels_in":   ["camera_front/color/info"],
-            "channels_out" : ["camera_front/color/info_rr"],
-        },
-    )
+    if reducers:
 
-    pm.load_module(
-        "camera_back_info_rate_reducer", "utility/channel_filter", thread_name,
-        {
-            "rate": 30,
-            "channels_in":   ["camera_back/color/info", "camera_back/depth_aligned/info"],
-            "channels_out" : ["camera_back/color/info_rr", "camera_back/depth_aligned/info_rr"],
-        },
-    )
+        pm.load_module(
+            "camera_front_info_rate_reducer", "utility/channel_filter", thread_name,
+            {
+                "rate": 30,
+                "channels_in":   ["camera_front/color/info"],
+                "channels_out" : ["camera_front/color/info_rr"],
+            },
+        )
 
-    pm.load_module(
-        "camera_gripper_info_rate_reducer", "utility/channel_filter", thread_name,
-        {
-            "rate": 30,
-            "channels_in":   ["camera_gripper/color/info"],
-            "channels_out" : ["camera_gripper/color/info_rr"],
-        },
-    )
+        pm.load_module(
+            "camera_back_info_rate_reducer", "utility/channel_filter", thread_name,
+            {
+                "rate": 30,
+                "channels_in":   ["camera_back/color/info", "camera_back/depth_aligned/info"],
+                "channels_out" : ["camera_back/color/info_rr", "camera_back/depth_aligned/info_rr"],
+            },
+        )
+
+        pm.load_module(
+            "camera_gripper_info_rate_reducer", "utility/channel_filter", thread_name,
+            {
+                "rate": 30,
+                "channels_in":   ["camera_gripper/color/info"],
+                "channels_out" : ["camera_gripper/color/info_rr"],
+            },
+        )

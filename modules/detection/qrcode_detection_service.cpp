@@ -14,7 +14,7 @@ private:
 
     quirc* q;
     uint32_t width = 0, height = 0;
-    pond::Receiver receiver;
+    pond::Callback callback;
 };
 
 POND_MODULE_CPP_DECLARE(QRCodeDetector, "qrcode_detection_service", "service for detecting qrcodes")
@@ -23,7 +23,7 @@ pond_result QRCodeDetector::onStartup(const std::vector<void*>& args)
 {
     if ((q = quirc_new()) == NULL) return POND_ERROR;
 
-    receiver = createReceiver<QRCodeDetectionRequest>({"request"}, [this](QRCodeDetectionRequest* request) {
+    callback = createCallback<QRCodeDetectionRequest>({"request"}, [this](QRCodeDetectionRequest* request) {
         
         if (request->image->format != ImgFrame::Format::RGB8 && request->image->format != ImgFrame::Format::BGR8 && request->image->format != ImgFrame::Format::Mono8)
         {
@@ -82,6 +82,6 @@ pond_result QRCodeDetector::onStartup(const std::vector<void*>& args)
 
 void QRCodeDetector::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
     quirc_destroy(q);
 }

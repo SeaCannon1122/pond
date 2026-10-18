@@ -26,7 +26,7 @@ public:
     virtual void onShutdown() override;
 
 private:
-    pond::Receiver command_receiver, feedback_receiver;
+    pond::Callback command_callback, feedback_callback;
 
     std::vector<servo> servos;
     std::vector<u8> ids;
@@ -80,7 +80,7 @@ pond_result ServoDriver::onStartup(const std::vector<void*>& args)
         else sm_st.Mode(servos[i].id, 0);
     }
 
-    feedback_receiver = createReceiver<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
+    feedback_callback = createCallback<MotorFeedback>(fb_info, [this](MotorFeedback** feedbacks) {
 
         double time = pond::get_time();
 
@@ -98,7 +98,7 @@ pond_result ServoDriver::onStartup(const std::vector<void*>& args)
         }
     });
 
-    command_receiver = createReceiver<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
+    command_callback = createCallback<MotorCommand>(cmd_info, [this](MotorCommand** commands) {
 
         uint32_t cmd_count = 0;
 
@@ -135,7 +135,7 @@ void ServoDriver::onShutdown()
 {
     for (uint32_t i = 0; i < servos.size(); i++) sm_st.EnableTorque((u8)servos[i].id, 0);
 
-    feedback_receiver.destroy();
-    command_receiver.destroy();
+    feedback_callback.destroy();
+    command_callback.destroy();
     sm_st.end();
 }

@@ -57,7 +57,7 @@ public:
 private:
     void set_joint(Joint* joint, double angle, double time, double hw_time, std::vector<FrameTransform>* tfs);
 
-    pond::Receiver tf_request_receiver, joint_request_receiver, joint_states_receiver;
+    pond::Callback tf_request_callback, joint_request_callback, joint_states_callback;
     
     std::mutex tf_distributor_mutex;
     pond::DistributorTyped<std::vector<FrameTransform>> tf_distributor;
@@ -231,7 +231,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
 
     description_distributor = createDistributorTyped<std::string>({"robot_description"});
 
-    tf_request_receiver = createReceiver<GetFrameTransformRequest>({"get_robot_transform"}, [this](GetFrameTransformRequest* request) {
+    tf_request_callback = createCallback<GetFrameTransformRequest>({"get_robot_transform"}, [this](GetFrameTransformRequest* request) {
 
         auto source_it = links_map.find(request->source_frame);
         if (source_it == links_map.end()) return;
@@ -306,7 +306,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         
     });
 
-    joint_request_receiver = createReceiver<GetJointInfoRequest>({"get_robot_joint_info"}, [this](GetJointInfoRequest* request) {
+    joint_request_callback = createCallback<GetJointInfoRequest>({"get_robot_joint_info"}, [this](GetJointInfoRequest* request) {
         const auto& joint = joints_map.find(request->joint_name);
         if (joint == joints_map.end()) return;
 
@@ -322,7 +322,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
     tf_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf"});
     tf_static_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf_static"});
 
-    joint_states_receiver = createReceiver<std::vector<JointState>>({"set_robot_joints"}, [this](std::vector<JointState>* states){
+    joint_states_callback = createCallback<std::vector<JointState>>({"set_robot_joints"}, [this](std::vector<JointState>* states){
 
         std::vector<FrameTransform> tfs; tfs.reserve(states->size()+10);
 
@@ -366,9 +366,9 @@ void StateTracker::set_joint(Joint* joint, double angle, double time, double hw_
 
 void StateTracker::onShutdown()
 {
-    joint_states_receiver.destroy();
-    tf_request_receiver.destroy();
-    joint_request_receiver.destroy();
+    joint_states_callback.destroy();
+    tf_request_callback.destroy();
+    joint_request_callback.destroy();
     tf_distributor.destroy();
     tf_static_distributor.destroy();
     description_distributor.destroy();

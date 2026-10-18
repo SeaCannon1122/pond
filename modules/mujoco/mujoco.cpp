@@ -1,5 +1,6 @@
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
+#include <thread>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>
@@ -39,7 +40,7 @@ private:
   std::string robot_path;
   std::optional<std::string> plugin_dir;
 
-  std::vector<pond::Receiver> command_receiver, feedback_receiver;
+  std::vector<pond::Callback> command_callback, feedback_callback;
   
   std::vector<std::vector<actuator>> actuators_groups;
   std::mutex interface_mutex;
@@ -118,8 +119,8 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
   auto space = parameterSpace("actuator_groups");
   actuators_groups.resize(space.listLength("names"));
-  command_receiver.resize(actuators_groups.size());
-  feedback_receiver.resize(actuators_groups.size());
+  command_callback.resize(actuators_groups.size());
+  feedback_callback.resize(actuators_groups.size());
 
   for (uint32_t gi = 0; gi < actuators_groups.size(); gi++)
   {
@@ -161,7 +162,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
     last_update_time = pond::get_time();
 
-    feedback_receiver[gi] = createReceiver<MotorFeedback>(fb_info, [this, gi](MotorFeedback** feedbacks) {
+    feedback_callback[gi] = createCallback<MotorFeedback>(fb_info, [this, gi](MotorFeedback** feedbacks) {
 
       std::lock_guard<std::mutex> lock(interface_mutex);
 
@@ -176,7 +177,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       }
     });
 
-    command_receiver[gi] = createReceiver<MotorCommand>(cmd_info, [this, gi](MotorCommand** commands) {
+    command_callback[gi] = createCallback<MotorCommand>(cmd_info, [this, gi](MotorCommand** commands) {
 
       std::lock_guard<std::mutex> lock(interface_mutex);
 
@@ -201,8 +202,8 @@ void Mujoco::onShutdown()
   sim->exitrequest.store(1);
   gui_thread.join();
 
-  for (auto& rec : feedback_receiver) rec.destroy();
-  for (auto& rec : command_receiver) rec.destroy();
+  for (auto& rec : feedback_callback) rec.destroy();
+  for (auto& rec : command_callback) rec.destroy();
 
   mj_deleteData(d);
   mj_deleteModel(m);

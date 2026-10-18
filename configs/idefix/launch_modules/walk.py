@@ -71,3 +71,22 @@ def walk(pm: Manager, real: bool = True, fake: bool = False):
 
         {"frame_time_log" : False, "motor_names": cfg.motor_names},
     )
+
+    pm.load_module(
+        "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
+        {
+            "stage_names" : [
+                "read_servo_feedback",
+                "update_joint_states",
+                "schedule_gaits",
+                "calculate_trajectory_states",
+                "calculate_",
+                "write_servo_commands",
+            ],
+            "data_names" :
+                [motor+"_command" for motor in cfg.motor_names] +
+                [motor+"_feedback" for motor in cfg.motor_names] +
+                ["gait_states"]
+        },
+        {}, "walk"
+    )

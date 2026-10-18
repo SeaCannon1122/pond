@@ -1,3 +1,4 @@
+#include <optional>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/motor_types.hpp>
@@ -9,12 +10,13 @@ public:
     virtual void onShutdownTF() override;
 private:
 
-    pond::Receiver width_receiver, disable_receiver, update_receiver;
+    pond::Callback width_callback, update_callback;
     std::string gripper_joint;
 
-    std::atomic<double> received_width{-1}, received_disable{false};
+    MotorCommand motor_command;
+
+    std::atomic<double> received_width{-1};
     double radius, offset;
-    bool disabled = false;
 };
 
 POND_MODULE_CPP_DECLARE(AngleGripperController, "angle_gripper_controller", "Control an angle gripper")
@@ -28,35 +30,25 @@ pond_result AngleGripperController::onStartupTF(const std::vector<void*>& args)
     radius = parameter("radius").asDouble().get(0.1);
     offset = parameter("offset").asDouble().get(0.1);
     
-    update_receiver = createReceiver<MotorInterface>({"gripper_motor/update"}, [this](MotorInterface* interface) {
+    update_callback = createCallback<MotorCommand*, MotorFeedback*>({"control_gripper/gripper_motor_command", "control_gripper/gripper_motor_feedback"}, [this](MotorCommand** cmd, MotorFeedback** fb) {
 
-        tfSetJointState(gripper_joint, interface->feedback.pos ? *interface->feedback.pos : 0, interface->feedback.time);
+        if (*fb == NULL) POND_LOG_RETURN("%s is NULL", "control_gripper/gripper_motor_feedback");
+        *cmd = &motor_command;
 
-        if (received_disable.load())
-        {
-            if (!disabled) interface->command.disable = true;
-            disabled = true;
-            received_width.store(-1);
-        }
-        else
-        {
-            if (disabled) interface->command.disable = false;
-            disabled = false;
+        tfSetJointState(gripper_joint, fb[0]->pos ? *fb[0]->pos : 0, fb[0]->time);
 
-            double width = received_width.load();
-            if (width != -1) interface->command.pos = safe_asin((width + 2.0 * offset) / radius / 2);
-        }
+        double width = received_width.load();
+        if (width != -1) motor_command.pos = safe_asin((width + 2.0 * offset) / radius / 2);
+        else motor_command.pos = std::nullopt;
     });
 
-    width_receiver = createReceiver<double>({"gripper_width"}, [this](double* width) {received_width.store(*width);});
-    disable_receiver = createReceiver<bool>({"disable_gripper"}, [this](bool* disable) {received_disable.store(*disable);});
+    width_callback = createCallback<double>({"gripper_width"}, [this](double* width) {received_width.store(*width);});
 
     return POND_SUCCESS;
 }
 
 void AngleGripperController::onShutdownTF()
 {
-    update_receiver.destroy();
-    width_receiver.destroy();
-    disable_receiver.destroy();
+    update_callback.destroy();
+    width_callback.destroy();
 }

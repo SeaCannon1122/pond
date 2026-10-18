@@ -40,7 +40,7 @@ private:
     SwsContext* sws_ctx = nullptr;
     int64_t frame_count = 0;
 
-    pond::Receiver receiver;
+    pond::Callback callback;
 };
 
 POND_MODULE_CPP_DECLARE(H264UDPStreamer, "streamer", "template module info")
@@ -122,7 +122,7 @@ pond_result H264UDPStreamer::onStartup(const std::vector<void*>& args)
     
     pkt = av_packet_alloc();
 
-    receiver = createReceiver<ImgFrameSPtr>(
+    callback = createCallback<ImgFrameSPtr>(
     {"in"},
     [this](ImgFrameSPtr* frame)
         {
@@ -164,7 +164,7 @@ pond_result H264UDPStreamer::onStartup(const std::vector<void*>& args)
 
 void H264UDPStreamer::onShutdown()
 {
-    receiver.destroy();
+    callback.destroy();
 
     sws_freeContext(sws_ctx);
     // Do not free src_frame->data[0] since it references Pond's internal memory

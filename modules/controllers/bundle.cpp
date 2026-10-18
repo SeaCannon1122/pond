@@ -5,7 +5,7 @@ EXTERN_POND_MODULE(DiffDriveController);
 EXTERN_POND_MODULE(ArmController);
 EXTERN_POND_MODULE(ArmControllerOld);
 EXTERN_POND_MODULE(AngleGripperController);
-EXTERN_POND_MODULE(QuadrupedController);
+//EXTERN_POND_MODULE(QuadrupedController);
 
 POND_BUNDLE_DECLARE(
     "Controllers for different hardware components",
@@ -13,5 +13,5 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(ArmController),
     POND_MODULE(ArmControllerOld),
     POND_MODULE(AngleGripperController),
-    POND_MODULE(QuadrupedController)
+    //POND_MODULE(QuadrupedController)
 )
