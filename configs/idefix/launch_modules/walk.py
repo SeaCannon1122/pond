@@ -41,8 +41,36 @@ class cfg:
         "reference_link" : "base_link",
     }
 
+def walk_mpc(pm: Manager):
+    pm.set_thread_frame_time(cfg.thread_name, 0.01)
 
-def walk(pm: Manager, real: bool = True, fake: bool = False):
+    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params)
+    
+    pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
+
+    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", cfg.thread_name)
+
+    pm.load_module(
+        "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
+        {
+            "frame_time_log" : False,
+
+            "stage_names" : [
+                "read_servo_feedback",
+                "update_joint_states",
+                "calculate_torque",
+                "write_servo_commands",
+            ],
+            "data_ids" :
+                [motor+"_command" for motor in cfg.motor_names] +
+                [motor+"_feedback" for motor in cfg.motor_names] +
+                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "foot_target_positions"],
+
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False]
+        }
+    )
+
+def walk_position(pm: Manager, real: bool = True, fake: bool = False):
         
     pm.set_thread_frame_time(cfg.thread_name, 0.01)
 

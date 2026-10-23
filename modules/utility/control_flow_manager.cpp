@@ -77,5 +77,5 @@ void ControlFlowManager::onFrame()
 
     if (frame_time_log) POND_LOG("Frame took %f ms", (end-start)*1000.0);
 
-    for (uint32_t i = 0; i < data_distributors.size(); i++) data_distributors[i].distribute(*out_data_address_pointers[i]);
+    for (uint32_t i = 0; i < data_distributors.size(); i++) if (*out_data_address_pointers[i]) data_distributors[i].distribute(*out_data_address_pointers[i]);
 }

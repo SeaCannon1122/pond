@@ -3,7 +3,7 @@
 
   <default>
     <!-- Sets default damping and frictionloss for all joints -->
-    <joint damping="0.5" frictionloss="0.3"/>
+    <joint damping="0.1" frictionloss="0.0"/>
   </default>
 
   <worldbody>

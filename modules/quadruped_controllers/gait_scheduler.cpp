@@ -113,7 +113,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
                         phases[3] += duration/4.0;
                     } break;
                     case AMBLE: {
-                        phases[1] += duration/2.0;
+                        phases[2] += duration/2.0;
                         phases[3] += duration/2.0;
                     } break;
                 }

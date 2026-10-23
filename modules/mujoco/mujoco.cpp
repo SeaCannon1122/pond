@@ -16,8 +16,8 @@ struct actuator
   MotorFeedback feedback;
 
   int aid, jid, ctrl_adr;
-  double cmd_pos = 0, cmd_vel = 0, fb_pos = 0, fb_vel = 0, fb_torque = 0;
-  bool cmd_is_pos = false, cmd_is_vel = false;
+  double cmd_pos = 0, cmd_vel = 0, cmd_torque = 0, fb_pos = 0, fb_vel = 0, fb_torque = 0;
+  bool cmd_is_pos = false, cmd_is_vel = false, cmd_is_torque = false;
 };
 
 struct actuator_group
@@ -168,9 +168,10 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
       actuators_groups[gi].actuators[i].cmd_is_pos = (types[i] == "position");
       actuators_groups[gi].actuators[i].cmd_is_vel = (types[i] == "velocity");
+      actuators_groups[gi].actuators[i].cmd_is_torque = (types[i] == "torque");
       actuators_groups[gi].actuators[i].ctrl_adr = m->actuator_ctrladr[actuators_groups[gi].actuators[i].aid];
 
-      if (!actuators_groups[gi].actuators[i].cmd_is_pos && !actuators_groups[gi].actuators[i].cmd_is_vel)
+      if (!actuators_groups[gi].actuators[i].cmd_is_pos && !actuators_groups[gi].actuators[i].cmd_is_vel && !actuators_groups[gi].actuators[i].cmd_is_torque)
       {
         mj_deleteModel(m);
         POND_LOG_RETURN_ERROR("Actuator type '%s' for actuator %s not implemented", types[i].c_str(), names[i].c_str());
@@ -207,6 +208,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       {
         if (commands[i][0]->pos) actuators_groups[gi].actuators[i].cmd_pos = *commands[i][0]->pos;
         if (commands[i][0]->vel) actuators_groups[gi].actuators[i].cmd_vel = *commands[i][0]->vel;
+        if (commands[i][0]->torque) actuators_groups[gi].actuators[i].cmd_torque = *commands[i][0]->torque;
       }
     });
   }   
@@ -269,6 +271,7 @@ void Mujoco::onFrame()
         {
           if (actuators_groups[gi].actuators[i].cmd_is_pos) d->ctrl[actuators_groups[gi].actuators[i].ctrl_adr] = actuators_groups[gi].actuators[i].cmd_pos;
           if (actuators_groups[gi].actuators[i].cmd_is_vel) d->ctrl[actuators_groups[gi].actuators[i].ctrl_adr] = actuators_groups[gi].actuators[i].cmd_vel;
+          if (actuators_groups[gi].actuators[i].cmd_is_torque) d->ctrl[actuators_groups[gi].actuators[i].ctrl_adr] = actuators_groups[gi].actuators[i].cmd_torque;
         }
       }
     }

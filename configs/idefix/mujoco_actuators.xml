@@ -24,7 +24,7 @@
     </worldbody>
 
     <actuator>
-        <position name="FR_motor" joint="FR" kp="100" kv="0.1"/>
+        <!-- <position name="FR_motor" joint="FR" kp="100" kv="0.1"/>
         <position name="BR_motor" joint="BR" kp="100" kv="0.1"/>
         <position name="FL_motor" joint="FL" kp="100" kv="0.1"/>
         <position name="BL_motor" joint="BL" kp="100" kv="0.1"/>
@@ -37,7 +37,22 @@
         <position name="FR_foot_motor" joint="FR_foot" kp="10" kv="0.1"/>
         <position name="BR_foot_motor" joint="BR_foot" kp="10" kv="0.1"/>
         <position name="FL_foot_motor" joint="FL_foot" kp="10" kv="0.1"/>
-        <position name="BL_foot_motor" joint="BL_foot" kp="10" kv="0.1"/>
+        <position name="BL_foot_motor" joint="BL_foot" kp="10" kv="0.1"/> -->
+
+        <motor name="FR_motor" joint="FR" gear="1"/>
+        <motor name="BR_motor" joint="BR" gear="1"/>
+        <motor name="FL_motor" joint="FL" gear="1"/>
+        <motor name="BL_motor" joint="BL" gear="1"/>
+
+        <motor name="FR_leg_motor" joint="FR_leg" gear="1"/>
+        <motor name="BR_leg_motor" joint="BR_leg" gear="1"/>
+        <motor name="FL_leg_motor" joint="FL_leg" gear="1"/>
+        <motor name="BL_leg_motor" joint="BL_leg" gear="1"/>
+
+        <motor name="FR_foot_motor" joint="FR_foot" gear="1"/>
+        <motor name="BR_foot_motor" joint="BR_foot" gear="1"/>
+        <motor name="FL_foot_motor" joint="FL_foot" gear="1"/>
+        <motor name="BL_foot_motor" joint="BL_foot" gear="1"/>
 
     </actuator>
 </mujoco>
