@@ -23,8 +23,7 @@ private:
 
     std::array<DynamicTrajectory, 4> trajectories;
 
-    std::vector<Eigen::Vector3d> foot_target_positions, foot_target_velocities, foot_target_accelerations;
-
+    std::vector<TrajectoryState> trajectory_states;
     TwistCommand last_twist_cmd{{}, {0.1, 0, 0}, {0, 0, 0}};
     double last_T_sw = -1, last_T_st = -1;
 
@@ -74,30 +73,28 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         if (i%2) foot_base_positions[i][1] *= -1;
     }
 
-    foot_target_positions.resize(4);
-    foot_target_velocities.resize(4);
-    foot_target_accelerations.resize(4);
+    trajectory_states.resize(4);
     
     stage_callback = createCallback<
         std::vector<double>*, 
         std::vector<double>*, 
         TwistCommand*, 
         FrameTransform*,
-        std::vector<Eigen::Vector3d>*
+        std::vector<TrajectoryState>*
     >(
         {
             "evaluate_trajectories/gait_phases",
             "evaluate_trajectories/partial_gait_durations",
             "evaluate_trajectories/twist_command",
             "evaluate_trajectories/robot_pose",
-            "evaluate_trajectories/foot_target_positions"
+            "evaluate_trajectories/target_trajectory_states",
         },
         [this](
             std::vector<double>** phases_in,
             std::vector<double>** partial_durations_in,
             TwistCommand** twist_cmd_in,
             FrameTransform** pose_tf_in,
-            std::vector<Eigen::Vector3d>** foot_target_positions_out
+            std::vector<TrajectoryState>** target_trajectory_states_out
         )
         {
             if (*phases_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_phases is NULL");
@@ -105,7 +102,7 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
             if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_trajectories/twist_command is NULL");
             if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_trajectories/robot_pose is NULL");
 
-            *foot_target_positions_out = &foot_target_positions;
+            *target_trajectory_states_out = &trajectory_states;
 
             if (
                 twist_cmd_in[0]->lin[0] != last_twist_cmd.lin[0] || 
@@ -156,16 +153,11 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
                 );
             }
 
-            std::array<Eigen::Vector3d, 4> positions, velocities, accelerations;
-
             for(size_t i = 0; i < 4; i++)
             {
-                trajectories[i].get_state(phases_in[0][0][i], positions[i], velocities[i], accelerations[i]);
-                positions[i] += foot_base_positions[i];
+                trajectories[i].get_state(phases_in[0][0][i], trajectory_states[i]);
 
-                foot_target_positions[i][0] = positions[i][0];
-                foot_target_positions[i][1] = positions[i][1];
-                foot_target_positions[i][2] = positions[i][2];
+                trajectory_states[i].pos += foot_base_positions[i];
             }
         }
     );

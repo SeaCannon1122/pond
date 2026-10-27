@@ -66,6 +66,12 @@ class cfg:
             "pond" : {"channel" : "force",              "type" : "double"},
             "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
         },
+        ###### gait_duration ######
+        {   "direction" : "POND_TO_ROS",
+
+            "pond" : {"channel" : "target_trajectory_states/out", "type" : "std::vector<TrajectoryState>"},
+            "ros"  : {"topic"   : "target_trajectory_states",     "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+        },
     ]
 
 def ros2_bridge(pm: Manager):

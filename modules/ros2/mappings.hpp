@@ -1,5 +1,6 @@
 #pragma once
 
+#include "trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp"
 #include <rclcpp/rclcpp.hpp>
 
 #include <std_msgs/msg/string.hpp>
@@ -20,6 +21,8 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp>
+
 #include <pond/pond.hpp>
 
 #include <pond_data_types/video_types.hpp>
@@ -28,6 +31,7 @@
 #include <pond_data_types/transform_types.hpp>
 #include <pond_data_types/laser_scan_types.hpp>
 #include <pond_data_types/robot_state_types.hpp>
+#include <pond_data_types/trajectory_types.hpp>
 
 void ImuData__to__sensor_msgs_msg_Imu(const ImuData& pond, sensor_msgs::msg::Imu& ros);
 
@@ -52,6 +56,8 @@ void tf2_msgs_msg_TFMessage__to__FrameTransform(FrameTransform& pond, const tf2_
 void tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform(std::vector<FrameTransform>& pond, const tf2_msgs::msg::TFMessage& ros);
 
 void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg::Pose2D& ros);
+
+void std_vector_TrajectoryState__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryState>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros);
 
 void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros);
 void geometry_msgs_msg_TwistStamped__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::TwistStamped& ros);

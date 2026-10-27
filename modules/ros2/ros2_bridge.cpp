@@ -60,6 +60,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 IF_POND_TO_ROS(double,                      std_msgs::msg::Float64,                 double__to__std_msgs_msg_Float64)
                 IF_POND_TO_ROS(std::vector<double>,         std_msgs::msg::Float64MultiArray,       std_vector_double__to__std_msgs_msg_Float64MultiArray)
                 IF_POND_TO_ROS(bool,                        std_msgs::msg::Bool,                    bool__to__std_msgs_msg_Bool)
+                IF_POND_TO_ROS(std::vector<TrajectoryState>,trajectory_msgs::msg::MultiDOFJointTrajectoryPoint, std_vector_TrajectoryState__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint)
                 
                 return false;
             }();

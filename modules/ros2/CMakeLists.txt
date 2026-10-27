@@ -8,6 +8,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 
 add_library(ros2-pond_bundle SHARED
   ros2_bridge.cpp
@@ -29,6 +30,7 @@ ament_target_dependencies(ros2-pond_bundle
   visualization_msgs
   std_msgs
   tf2_msgs
+  trajectory_msgs
 )
 
 pond_module_common_setup(ros2-pond_bundle)

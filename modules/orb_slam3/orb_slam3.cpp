@@ -2,11 +2,8 @@
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/cv_img_frame.hpp>
 #include <pond_data_types/imu_types.hpp>
-#include <sophus/se3.hpp>
 
 #include "System.h"
-#include "pond/pond.h"
-#include "pond_data_types/robot_state_types.hpp"
 
 class OrbSlam3 : public pond::ModuleBaseTF
 {

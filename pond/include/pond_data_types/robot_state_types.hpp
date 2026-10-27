@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Eigen/src/Core/Matrix.h>
 #include <optional>
 #include <stdint.h>
 #include "transform_types.hpp"
@@ -19,11 +20,22 @@ struct GetJointInfoRequest
     bool fulfilled = false;
 
     Sophus::SE3d tf;
+    Eigen::Vector3d axis;
     bool is_static;
     std::optional<double> min_angle;
     std::optional<double> max_angle;
     std::string parent_link_name;
     std::string child_link_name;
+};
+
+struct GetLinkInfoRequest
+{
+    std::string link_name;
+    bool fulfilled = false;
+
+    double mass;
+    Eigen::Matrix3d inertia;
+    Sophus::SE3d inertia_tf;
 };
 
 struct JointState

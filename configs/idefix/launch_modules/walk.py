@@ -64,9 +64,9 @@ def walk_mpc(pm: Manager):
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "foot_target_positions"],
+                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False]
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False, True]
         }
     )
 
@@ -112,8 +112,8 @@ def walk_position(pm: Manager, real: bool = True, fake: bool = False):
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "foot_target_positions"],
+                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False]
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False, True]
         }
     )

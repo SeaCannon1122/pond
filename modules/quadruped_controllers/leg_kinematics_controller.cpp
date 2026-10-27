@@ -1,6 +1,7 @@
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/motor_types.hpp>
+#include <pond_data_types/trajectory_types.hpp>
 
 class LegKinematicsController : public pond::ModuleBaseTF
 {
@@ -54,16 +55,16 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
     half_width = total.translation().y()/2.0;
 
     pond::ChannelsInfo info;
-    info.channel<std::vector<Eigen::Vector3d>*>("calculate_joint_angles/foot_target_positions");
+    info.channel<std::vector<TrajectoryState>*>("calculate_joint_angles/target_trajectory_states");
     
     for (uint32_t i = 0; i < 12; i++) info.channel<MotorCommand*>("calculate_joint_angles/" + motor_names->at(i) + "_command");
 
     stage_callback = createCallback<void>(info, [this](void** data)
         {
-            std::vector<Eigen::Vector3d>** foot_target_positions_in = (std::vector<Eigen::Vector3d>**)data[0];
+            std::vector<TrajectoryState>** trajectory_states_in = (std::vector<TrajectoryState>**)data[0];
             MotorCommand*** commands_out = (MotorCommand***)&data[1];
 
-            if (*foot_target_positions_in == NULL) POND_LOG_RETURN("calculate_joint_angles/foot_target_positions is NULL");
+            if (*trajectory_states_in == NULL) POND_LOG_RETURN("calculate_joint_angles/target_trajectory_states is NULL");
             for (uint32_t i = 0; i < 12; i++) *commands_out[i] = &commands[i];
 
             auto law_of_cosines = +[](double l1, double l2, double b, double* theta) -> bool
@@ -78,9 +79,9 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
 
             for(size_t i = 0; i < 4; i++)
             {
-                double x = foot_target_positions_in[0][0][i][0] - (i < 2 ? half_length: -half_length);
-                double y = foot_target_positions_in[0][0][i][1] - (i % 2 == 0 ? half_width : -half_width);
-                double z = foot_target_positions_in[0][0][i][2];
+                double x = trajectory_states_in[0][0][i].pos[0] - (i < 2 ? half_length: -half_length);
+                double y = trajectory_states_in[0][0][i].pos[1] - (i % 2 == 0 ? half_width : -half_width);
+                double z = trajectory_states_in[0][0][i].pos[2];
 
                 if (i % 2 != 0) y = -y;
                 if (z > 0) x*= -1;

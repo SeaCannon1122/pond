@@ -1,5 +1,7 @@
 #include "trajectory_function.hpp"
 
+#include <pond_data_types/trajectory_types.hpp>
+
 class DynamicTrajectory
 {    
 public: 
@@ -103,7 +105,7 @@ public:
         return true;
     }
 
-    void get_state(double t, Eigen::Vector3d &pos, Eigen::Vector3d &vel, Eigen::Vector3d &acc)
+    void get_state(double t, TrajectoryState& point)
     {
         // Normalize time to a single gait cycle [0.0, 1.0]
         t = std::fmod(t, T_st + T_sw);
@@ -111,27 +113,27 @@ public:
         // Select the appropriate gait phase based on the duty cycle
         if (t <= T_st)
         {
-            pos = stance_function.eval_d<0>(t);
-            vel = stance_function.eval_d<1>(t);
-            acc = stance_function.eval_d<2>(t);
+            point.pos = stance_function.eval_d<0>(t);
+            point.vel = stance_function.eval_d<1>(t);
+            point.acc = stance_function.eval_d<2>(t);
         }
         else if(t < T_st + T_sw/2.0)
         {
-            pos = swing_I_function.eval_d<0>(t - T_st);
-            vel = swing_I_function.eval_d<1>(t - T_st);
-            acc = swing_I_function.eval_d<2>(t - T_st);
+            point.pos = swing_I_function.eval_d<0>(t - T_st);
+            point.vel = swing_I_function.eval_d<1>(t - T_st);
+            point.acc = swing_I_function.eval_d<2>(t - T_st);
         }
         else
         {
-            pos = swing_II_function.eval_d<0>(t - T_st);
-            vel = swing_II_function.eval_d<1>(t - T_st);
-            acc = swing_II_function.eval_d<2>(t - T_st);
+            point.pos = swing_II_function.eval_d<0>(t - T_st);
+            point.vel = swing_II_function.eval_d<1>(t - T_st);
+            point.acc = swing_II_function.eval_d<2>(t - T_st);
         }
 
         // Transform local trajectory state into the global movement direction
-        pos = v_rot_mat * pos;
-        vel = v_rot_mat * vel;
-        acc = v_rot_mat * acc;
+        point.pos = v_rot_mat * point.pos;
+        point.vel = v_rot_mat * point.vel;
+        point.acc = v_rot_mat * point.acc;
     }
 
     trajectory_function_3d stance_function;

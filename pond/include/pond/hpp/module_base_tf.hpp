@@ -14,12 +14,15 @@ namespace pond
         {
             tf_request_distributor = createDistributorTyped<GetFrameTransformRequest>({"get_robot_transform"});
             joint_request_distributor = createDistributorTyped<GetJointInfoRequest>({"get_robot_joint_info"});
+            link_request_distributor = createDistributorTyped<GetLinkInfoRequest>({"get_robot_link_info"});
+
             joint_state_distributor = createDistributorTyped<std::vector<JointState>>({"set_robot_joints"});
             joint_state.resize(1);
             if (onStartupTF(args) != POND_SUCCESS)
             {
                 joint_state_distributor.destroy();
                 joint_request_distributor.destroy();
+                link_request_distributor.destroy();
                 tf_request_distributor.destroy();
                 return POND_ERROR;
             }
@@ -30,6 +33,7 @@ namespace pond
         {
             onShutdownTF();
             joint_state_distributor.destroy();
+            link_request_distributor.destroy();
             joint_request_distributor.destroy();
             tf_request_distributor.destroy();
         }
@@ -53,6 +57,14 @@ namespace pond
             return request.fulfilled;
         }
 
+        bool tfGetLinkInfo(const std::string& link_name, GetLinkInfoRequest& request, bool verbose = true)
+        {
+            request.link_name = link_name;
+            link_request_distributor.distribute(&request);
+            if (verbose && !request.fulfilled) POND_LOG("Failed to get info about link '%s'", link_name.c_str());
+            return request.fulfilled;
+        }
+
         void tfSetJointState(const std::string& joint_name, double angle, double time)
         {
             joint_state[0].time = time;
@@ -70,6 +82,7 @@ namespace pond
     private:
         DistributorTyped<GetFrameTransformRequest> tf_request_distributor;
         DistributorTyped<GetJointInfoRequest> joint_request_distributor;
+        DistributorTyped<GetLinkInfoRequest> link_request_distributor;
         DistributorTyped<std::vector<JointState>> joint_state_distributor;
         std::vector<JointState> joint_state;
     };

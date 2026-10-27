@@ -156,6 +156,26 @@ void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg
     pond.theta = ros.theta;
 }
 
+void std_vector_TrajectoryState__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryState>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros)
+{
+    ros.transforms.resize(pond.size()); ros.velocities.resize(pond.size()); ros.accelerations.resize(pond.size());
+
+    for (uint32_t i = 0; i < pond.size(); i++)
+    {
+        ros.transforms[i].translation.x = pond[i].pos.x();
+        ros.transforms[i].translation.y = pond[i].pos.y();
+        ros.transforms[i].translation.z = pond[i].pos.z();
+
+        ros.velocities[i].linear.x = pond[i].vel.x();
+        ros.velocities[i].linear.y = pond[i].vel.y();
+        ros.velocities[i].linear.z = pond[i].vel.z();
+
+        ros.accelerations[i].linear.x = pond[i].acc.x();
+        ros.accelerations[i].linear.y = pond[i].acc.y();
+        ros.accelerations[i].linear.z = pond[i].acc.z();
+    }
+}
+
 void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros)
 {
     pond.stamp.frame_id = "base_link";

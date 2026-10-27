@@ -9,7 +9,7 @@ add_library(quadruped_controllers-pond_bundle SHARED
     leg_kinematics_controller.cpp
     motor_joint_updater.cpp
     leg_torque_controller.cpp
-    mpc_controller.cpp
+    #mpc_controller.cpp
 )
 
 target_include_directories(quadruped_controllers-pond_bundle PUBLIC ${QPOASES_INCLUDE_DIR})

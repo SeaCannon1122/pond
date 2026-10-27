@@ -11,7 +11,7 @@ def compile_urdf(destination: str):
     
     with open(destination, "w") as f:
         subprocess.run(
-            ["xacro", config_prefix + "urdf/Robodog.urdf.xacro"],
+            ["xacro", config_prefix + "description/Robodog.urdf.xacro"],
             stdout=f,
             check=True,
         )
@@ -37,11 +37,13 @@ def main():
     mujoco_sim = True
     #mujoco_sim = False
 
+    mpc_mode = False
+
     if mujoco_sim:
-        mujoco(pm, True)
+        mujoco(pm, mpc_mode)
     
-    #walk_position(pm, False, not mujoco_sim)
-    walk_mpc(pm)
+    walk_position(pm, False, not mujoco_sim)
+    #walk_mpc(pm)
 
     ros2_bridge(pm)
 

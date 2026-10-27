@@ -9,7 +9,7 @@ def mujoco(pm: Manager, torque_mode: bool):
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
         {
-            "robot_path" : os.getenv("POND_IDEFIX_CONFIG_PATH", "") + "mujoco_robot.xml",
+            "robot_path" : os.getenv("POND_IDEFIX_CONFIG_PATH", "") + "description/mujoco_robot.xml",
             "actuator_groups" : [
                 {
                     "names" : walk.cfg.motor_names, 

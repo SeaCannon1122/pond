@@ -1,5 +1,7 @@
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond_data_types/robot_state_types.hpp>
+#include <sophus/se3.hpp>
 #include <urdf_model/model.hpp>
 #include <urdf_parser/urdf_parser.hpp>
 #include <deque>
@@ -20,6 +22,10 @@ struct Link
 
     std::vector<Link*> child_links;
     uint32_t level;
+
+    double mass;
+    Eigen::Matrix3d inertia;
+    Sophus::SE3d inertia_tf;
 };
 
 struct Joint
@@ -57,7 +63,7 @@ public:
 private:
     void set_joint(Joint* joint, double angle, double time, double hw_time, std::vector<FrameTransform>* tfs);
 
-    pond::Callback tf_request_callback, joint_request_callback, joint_states_callback;
+    pond::Callback tf_request_callback, joint_request_callback, link_request_callback, joint_states_callback;
     
     std::mutex tf_distributor_mutex;
     pond::DistributorTyped<std::vector<FrameTransform>> tf_distributor;
@@ -194,6 +200,25 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         Link* link = links_map[l.second->name];
 
         link->name = l.second->name;
+        link->mass = l.second->inertial->mass;
+
+        link->inertia <<    l.second->inertial->ixx, l.second->inertial->ixy, l.second->inertial->ixz,
+                            l.second->inertial->ixy, l.second->inertial->iyy, l.second->inertial->iyz,
+                            l.second->inertial->ixz, l.second->inertial->iyz, l.second->inertial->izz;
+
+        link->inertia_tf = Sophus::SE3d(
+            Eigen::Quaterniond(
+                l.second->inertial->origin.rotation.w,
+                l.second->inertial->origin.rotation.x,
+                l.second->inertial->origin.rotation.y,
+                l.second->inertial->origin.rotation.z
+            ),
+            Eigen::Vector3d(
+                l.second->inertial->origin.position.x,
+                l.second->inertial->origin.position.y,
+                l.second->inertial->origin.position.z
+            )
+        );
         link->child_links.resize(l.second->child_joints.size());
         
         for (uint32_t i = 0; i < link->child_links.size(); i++)
@@ -315,8 +340,18 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         request->is_static = joint->second->is_static;
         request->fulfilled = true;
         request->tf = joint->second->tf;
+        request->axis = joint->second->axis;
         request->min_angle = joint->second->min_angle;
         request->max_angle = joint->second->max_angle;
+    });
+
+    link_request_callback = createCallback<GetLinkInfoRequest>({"get_robot_link_info"}, [this](GetLinkInfoRequest* request) {
+        const auto& link = links_map.find(request->link_name);
+        if (link == links_map.end()) return;
+
+        request->mass = link->second->mass;
+        request->inertia = link->second->inertia;
+        request->inertia_tf = link->second->inertia_tf;
     });
 
     tf_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf"});
@@ -369,6 +404,8 @@ void StateTracker::onShutdown()
     joint_states_callback.destroy();
     tf_request_callback.destroy();
     joint_request_callback.destroy();
+    link_request_callback.destroy();
+
     tf_distributor.destroy();
     tf_static_distributor.destroy();
     description_distributor.destroy();
