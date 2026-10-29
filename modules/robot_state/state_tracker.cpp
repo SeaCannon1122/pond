@@ -352,6 +352,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         request->mass = link->second->mass;
         request->inertia = link->second->inertia;
         request->inertia_tf = link->second->inertia_tf;
+        request->fulfilled = true;
     });
 
     tf_distributor = createDistributorTyped<std::vector<FrameTransform>>({"tf"});

@@ -28,16 +28,16 @@ class cfg:
         "max_step_length" : 1.0,
         "max_step_speed" : 10.0,
 
-        "jerk_times_duration_to_the_3" : 18.75,
+        "jerk_times_duration_to_the_3" : 150.0,
         "stance_amplitude" : 0.001,
-        "T_0_in_swing_relative" : 0.25,
-        "T_1_in_swing_relative" : 0.75,
+        "T_0_in_swing_relative" : 0.2,
+        "T_1_in_swing_relative" : 0.8
     }
 
     kinematics_params = {
         "joint_names" : joint_names,
         "motor_names" : motor_names,
-        "foot_link_names" : foot_link_names,   
+        "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
     }
 
@@ -45,7 +45,11 @@ def walk_mpc(pm: Manager):
     pm.set_thread_frame_time(cfg.thread_name, 0.01)
 
     pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params)
+
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
     
+    pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
+
     pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", cfg.thread_name)
@@ -58,15 +62,17 @@ def walk_mpc(pm: Manager):
             "stage_names" : [
                 "read_servo_feedback",
                 "update_joint_states",
+                "schedule_gaits",
+                "evaluate_trajectories",
                 "calculate_torque",
                 "write_servo_commands",
             ],
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False, True]
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
         }
     )
 
@@ -112,8 +118,8 @@ def walk_position(pm: Manager, real: bool = True, fake: bool = False):
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, False, False, True]
+            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
         }
     )

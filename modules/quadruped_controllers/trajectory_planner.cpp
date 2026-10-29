@@ -2,7 +2,10 @@
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
 #include <sophus/se3.hpp>
+#include <sophus/so3.hpp>
 
+#include "pond/hpp/dds.hpp"
+#include "pond_data_types/transform_types.hpp"
 #include "trajectory.hpp"
 
 class TrajectoryPlanner : public pond::ModuleBaseTF
@@ -12,6 +15,8 @@ public:
     virtual void onShutdownTF() override;
 private:
     std::array<Eigen::Vector3d, 4> foot_base_positions;
+    std::vector<FrameTransform> foot_positions_msg;
+    pond::DistributorTyped<std::vector<FrameTransform>> foot_position_distributor;
 
     double step_height;
     double max_step_length;
@@ -61,8 +66,8 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
     Sophus::SE3d total = tf_requests[0].tf * joint_requests[0].tf;
 
     Eigen::Vector3d foot_base_pos_dims(
-        foot_base_offset_vec[0] + total.translation().x()/2.0,
-        foot_base_offset_vec[1] + total.translation().y()/2.0 + (tf_requests[1].tf * joint_requests[1].tf).translation().norm(),
+        foot_base_offset_vec[0] + total.translation().x(),
+        foot_base_offset_vec[1] + total.translation().y() + (tf_requests[1].tf * joint_requests[1].tf).translation().norm(),
         foot_base_offset_vec[2]
     );
 
@@ -74,7 +79,11 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
     }
 
     trajectory_states.resize(4);
+    foot_positions_msg.resize(4);
+    for (uint32_t i = 0; i < 4; i++) foot_positions_msg[i].stamp.frame_id = *reference_link;
     
+    foot_position_distributor = createDistributorTyped<std::vector<FrameTransform>>({"foot_target_poses"});
+
     stage_callback = createCallback<
         std::vector<double>*, 
         std::vector<double>*, 
@@ -83,21 +92,21 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         std::vector<TrajectoryState>*
     >(
         {
-            "evaluate_trajectories/gait_phases",
+            "evaluate_trajectories/gait_periods",
             "evaluate_trajectories/partial_gait_durations",
             "evaluate_trajectories/twist_command",
             "evaluate_trajectories/robot_pose",
             "evaluate_trajectories/target_trajectory_states",
         },
         [this](
-            std::vector<double>** phases_in,
+            std::vector<double>** periods_in,
             std::vector<double>** partial_durations_in,
             TwistCommand** twist_cmd_in,
             FrameTransform** pose_tf_in,
             std::vector<TrajectoryState>** target_trajectory_states_out
         )
         {
-            if (*phases_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_phases is NULL");
+            if (*periods_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_periods is NULL");
             if (*partial_durations_in == NULL) POND_LOG_RETURN("evaluate_trajectories/partial_gait_durations is NULL");
             if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_trajectories/twist_command is NULL");
             if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_trajectories/robot_pose is NULL");
@@ -130,6 +139,8 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
                     // find vector of max velocity
                     for(size_t i = 0; i < 4; i++)
                     {
+                        foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
+
                         double vel = foot_velocities[i].norm();
                         
                         if (vel < epsilon) foot_velocities[i] = Eigen::Vector2d::Zero();
@@ -155,11 +166,16 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
 
             for(size_t i = 0; i < 4; i++)
             {
-                trajectories[i].get_state(phases_in[0][0][i], trajectory_states[i]);
+                trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
 
                 trajectory_states[i].pos += foot_base_positions[i];
+
+                foot_positions_msg[i].tf.translation() = trajectory_states[i].pos;
             }
+
+            foot_position_distributor.distribute(&foot_positions_msg);
         }
+        
     );
 
     return POND_SUCCESS;
@@ -168,4 +184,5 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
 void TrajectoryPlanner::onShutdownTF()
 {
     stage_callback.destroy();
+    foot_position_distributor.destroy();
 }

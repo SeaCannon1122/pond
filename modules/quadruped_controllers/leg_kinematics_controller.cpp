@@ -51,8 +51,8 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
     if (!tfGetTransform(joint_requests[0].parent_link_name, *reference_link, 0, tf_requests[3])) return POND_ERROR;
     Sophus::SE3d total = tf_requests[3].tf * joint_requests[0].tf;
 
-    half_length = total.translation().x()/2.0;
-    half_width = total.translation().y()/2.0;
+    half_length = total.translation().x();
+    half_width = total.translation().y();
 
     pond::ChannelsInfo info;
     info.channel<std::vector<TrajectoryState>*>("calculate_joint_angles/target_trajectory_states");

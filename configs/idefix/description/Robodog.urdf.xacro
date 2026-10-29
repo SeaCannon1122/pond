@@ -61,7 +61,7 @@
   </xacro:macro>
 
   <!-- Links -->
-  <xacro:box_link name="base_link"         mass = "0.1" size_x="0.216" size_y="0.114" size_z="0.075" xyz="0 0 0" rpy="0 0 0" color="green"/>
+  <xacro:box_link name="base_link"         mass = "5.0" size_x="0.216" size_y="0.114" size_z="0.075" xyz="0 0 0" rpy="0 0 0" color="green"/>
   <xacro:box_link name="connector_front"   mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
   <xacro:box_link name="connector_back"    mass = "0.1" size_x="0.045" size_y="0.02"  size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>
   <xacro:box_link name="head"              mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      rpy="0 0 0" color="green"/>

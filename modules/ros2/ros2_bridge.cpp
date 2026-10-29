@@ -29,6 +29,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
         auto ros_type_o = space.parameterAtIndex(i, "ros.type").asString().getStrict();
         if (!direction_o || !pond_channel_o || !pond_type_o || !ros_type_o) continue;
 
+        uint32_t rate = space.parameterAtIndex(i, "rate").asInt().get(1);
         std::string direction = *direction_o, pond_channel = *pond_channel_o, pond_type = *pond_type_o, ros_type = *ros_type_o;
         std::string ros_topic = space.parameterAtIndex(i, "ros.topic").asString().get(pond_channel);
 
@@ -42,7 +43,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
             bool is_vector = space.parameterAtIndex(i, "pond.is_vector").asBool().get(false);
             
             #define IF_POND_TO_ROS(_pond_type, _ros_type, function) if (pond_type == #_pond_type && ros_type == #_ros_type) \
-                { bridges.emplace_back( create_pond_to_ros<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos, is_vector)); return true;}
+                { bridges.emplace_back( create_pond_to_ros<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos, rate, is_vector)); return true;}
 
             bool bridged = [&]() -> bool {
 
@@ -71,8 +72,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
         else
         {
             #define IF_ROS_TO_POND(_ros_type, _pond_type, function) if (pond_type == #_pond_type && ros_type == #_ros_type) \
-                { bridges.emplace_back( create_ros_to_pond<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos)); return true; }
-
+                { bridges.emplace_back( create_ros_to_pond<_pond_type, _ros_type>(pond_channel, ros_topic, function, qos, rate)); return true; }
 
             bool bridged = [&]() -> bool {
 

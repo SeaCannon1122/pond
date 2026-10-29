@@ -10,6 +10,8 @@ struct pond_to_ros
 
     std::shared_ptr<rclcpp::Publisher<ros_msg>> publisher;
     pond::Callback callback;
+    uint32_t filter_rate;
+    uint32_t rate_i;
     bool is_vector;
 };
 
@@ -20,6 +22,8 @@ struct ros_to_pond
 
     std::shared_ptr<rclcpp::Subscription<ros_msg>> subscriber;
     pond::DistributorTyped<pond_data_type> distributor;
+    uint32_t filter_rate;
+    uint32_t rate_i;
 };
 
 class Ros2Bridge : public pond::ModuleBase
@@ -31,25 +35,30 @@ public:
 private:
 
     template<typename pond_data_type, typename ros_msg>
-    std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> create_pond_to_ros(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(const pond_data_type&, ros_msg&), rclcpp::QoS& qos, bool vector)
+    std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> create_pond_to_ros(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(const pond_data_type&, ros_msg&), rclcpp::QoS& qos, uint32_t filter_rate, bool vector)
     {
         std::shared_ptr<pond_to_ros<pond_data_type, ros_msg>> obj = std::make_shared<pond_to_ros<pond_data_type, ros_msg>>();
 
+        obj->filter_rate = filter_rate;
+        obj->rate_i = filter_rate-1;
+
         obj->publisher = node->create_publisher<ros_msg>(ros_topic, qos);
-        if (vector) obj->callback = createCallback<std::vector<pond_data_type>>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](std::vector<pond_data_type>* data)
+        if (vector) obj->callback = createCallback<std::vector<pond_data_type>>({pond_channel}, [o = obj.get(), convert_function](std::vector<pond_data_type>* data)
         {
             ros_msg msg;
             for (const auto& d : *data)
             {
                 convert_function(d, msg);
-                pub_ptr->publish(msg);
+                o->publisher->publish(msg);
             }
         });
-        else obj->callback = createCallback<pond_data_type>({pond_channel}, [pub_ptr = obj->publisher.get(), convert_function](pond_data_type* data)
+        else obj->callback = createCallback<pond_data_type>({pond_channel}, [o = obj.get(), convert_function](pond_data_type* data)
         {
+            if (o->rate_i = (o->rate_i+1)%o->filter_rate) return;
+
             ros_msg msg;
             convert_function(*data, msg);
-            pub_ptr->publish(msg);
+            o->publisher->publish(msg);
         });
 
         obj->is_vector = vector;
@@ -57,16 +66,21 @@ private:
     }
 
     template<typename pond_data_type, typename ros_msg>
-    std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> create_ros_to_pond(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(pond_data_type&, const ros_msg&), rclcpp::QoS& qos)
+    std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> create_ros_to_pond(const std::string& pond_channel, const std::string& ros_topic, void (*convert_function)(pond_data_type&, const ros_msg&), rclcpp::QoS& qos, uint32_t filter_rate)
     {
         std::shared_ptr<ros_to_pond<pond_data_type, ros_msg>> obj = std::make_shared<ros_to_pond<pond_data_type, ros_msg>>();
+        
+        obj->filter_rate = filter_rate;
+        obj->rate_i = filter_rate-1;
 
         obj->distributor = createDistributorTyped<pond_data_type>({pond_channel});
-        obj->subscriber = node->create_subscription<ros_msg>(ros_topic, qos, [dis_ptr = &obj->distributor, convert_function](const std::shared_ptr<ros_msg> msg)
+        obj->subscriber = node->create_subscription<ros_msg>(ros_topic, qos, [o = obj.get(), convert_function](const std::shared_ptr<ros_msg> msg)
         {
+            if (o->rate_i = (o->rate_i+1)%o->filter_rate) return;
+
             pond_data_type data;
             convert_function(data, *msg);
-            dis_ptr->distribute(&data);
+            o->distributor.distribute(&data);
         });
 
         return obj;

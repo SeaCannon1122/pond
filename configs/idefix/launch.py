@@ -37,13 +37,16 @@ def main():
     mujoco_sim = True
     #mujoco_sim = False
 
-    mpc_mode = False
+    mpc_mode = True
 
     if mujoco_sim:
         mujoco(pm, mpc_mode)
+
+    if mpc_mode:
+        walk_mpc(pm)
+    else:
+        walk_position(pm, False, not mujoco_sim)
     
-    walk_position(pm, False, not mujoco_sim)
-    #walk_mpc(pm)
 
     ros2_bridge(pm)
 

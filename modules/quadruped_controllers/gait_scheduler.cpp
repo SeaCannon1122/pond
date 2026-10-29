@@ -20,7 +20,7 @@ private:
     std::atomic<double> gait_duration{1.5};
     pond::Callback gait_type_callback, gait_duration_callback, schedule_callback, twist_callback, pose_callback;
 
-    std::vector<double> phases, partial_durations;
+    std::vector<double> periods, partial_durations; std::vector<bool> phases;
     TwistCommand twist_cmd, twist_cmd_received;
     FrameTransform pose_tf, pose_tf_received;
     std::mutex cmd_mutex;
@@ -57,13 +57,14 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
     });
 
     phases.resize(4);
-    // first stance, then swing
+    periods.resize(4);
     partial_durations.resize(2);
 
-    schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, TwistCommand*, FrameTransform*>(
-        {"schedule_gaits/gait_phases", "schedule_gaits/partial_gait_durations", "schedule_gaits/twist_command", "schedule_gaits/robot_pose"},
-        [this](std::vector<double>** phases_out, std::vector<double>** partial_durations_out, TwistCommand** twist_cmd_out, FrameTransform** pose_tf_out)
+    schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<bool>*, TwistCommand*, FrameTransform*>(
+        {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/twist_command", "schedule_gaits/robot_pose"},
+        [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TwistCommand** twist_cmd_out, FrameTransform** pose_tf_out)
         {
+            *periods_out = &periods;
             *phases_out = &phases;
             *partial_durations_out = &partial_durations;
             *twist_cmd_out = &twist_cmd;
@@ -89,11 +90,11 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
             
             cmd_mutex.unlock();
 
-            // calculate phases
+            // calculate periods
 
             if (twist_usable)
             {
-                for (uint32_t i = 0; i < 4; i++) phases[i] = time_now;
+                for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
 
                 switch (gait_type.load())
                 {
@@ -101,31 +102,39 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
                         partial_durations[0] = duration/2.0;
                         partial_durations[1] = duration/2.0;
 
-                        phases[1] += duration/2.0;
-                        phases[2] += duration/2.0;
+                        periods[1] += duration/2.0;
+                        periods[2] += duration/2.0;
                     } break;
                     case WALK: {
                         partial_durations[0] = 3*duration/4.0;
                         partial_durations[1] = duration/4.0;
 
-                        phases[1] += 3.0*duration/4.0;
-                        phases[2] += duration/2.0;
-                        phases[3] += duration/4.0;
+                        periods[1] += 3.0*duration/4.0;
+                        periods[2] += duration/2.0;
+                        periods[3] += duration/4.0;
                     } break;
                     case AMBLE: {
-                        phases[2] += duration/2.0;
-                        phases[3] += duration/2.0;
+                        periods[2] += duration/2.0;
+                        periods[3] += duration/2.0;
                     } break;
                 }
 
-                for (uint32_t i = 0; i < 4; i++) phases[i] = fmod(phases[i], duration);
+                for (uint32_t i = 0; i < 4; i++)
+                {
+                    periods[i] = fmod(periods[i], duration);
+                    phases[i] = (periods[i] > partial_durations[0]);
+                }
             }
             else
             {
                 partial_durations[0] = 1.0;
                 partial_durations[1] = 1.0;
 
-                for (uint32_t i = 0; i < 4; i++) phases[i] = 0.5;
+                for (uint32_t i = 0; i < 4; i++)
+                {
+                    periods[i] = 0.5;
+                    phases[i] = false;
+                }
             }
 
         }
