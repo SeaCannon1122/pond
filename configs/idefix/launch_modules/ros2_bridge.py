@@ -66,11 +66,17 @@ class cfg:
             "pond" : {"channel" : "force",              "type" : "double"},
             "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64"}  
         },
-        ###### gait_duration ######
-        {   "direction" : "POND_TO_ROS", "rate" : 4,
+        ###### foot_target_poses ######
+        {   "direction" : "POND_TO_ROS", "rate" : 1,
 
             "pond" : {"channel" : "foot_target_poses",            "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "foot_target_poses",            "type" : "geometry_msgs::msg::PoseArray"}  
+        },
+        ###### foot_poses ######
+        {   "direction" : "POND_TO_ROS", "rate" : 1,
+
+            "pond" : {"channel" : "foot_poses",                   "type" : "std::vector<FrameTransform>"},
+            "ros"  : {"topic"   : "foot_poses",                   "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### gait_duration ######
         {   "direction" : "POND_TO_ROS",

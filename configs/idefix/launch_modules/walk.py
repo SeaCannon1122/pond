@@ -39,6 +39,10 @@ class cfg:
         "motor_names" : motor_names,
         "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
+        "max_swing_torque" : 2.0,
+        "natural_frequency" : 20.0,
+        "oob_kp" : 0.02,
+        "inertia_damping_factor" : 0.01
     }
 
 def walk_mpc(pm: Manager):

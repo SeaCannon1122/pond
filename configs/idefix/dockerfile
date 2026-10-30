@@ -45,6 +45,11 @@ RUN pip3 install "pybind11[global]" --break-system-packages
 
 RUN apt install -y ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-xacro
 
+WORKDIR /lib_sources
+RUN git clone  https://github.com/coin-or/qpOASES.git
+WORKDIR /lib_sources/qpOASES
+RUN cmake -S . -B build && cmake --build build && cmake --install build
+
 WORKDIR /pond/pond
 
 COPY pond/ /pond/pond

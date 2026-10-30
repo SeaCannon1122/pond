@@ -1,6 +1,3 @@
-volumes:
-  config_build_cache:
-
 services:
   idefix:
     build:
@@ -8,11 +5,11 @@ services:
       dockerfile: configs/idefix/dockerfile
     image: idefix_pond:latest
     container_name: idefix
+    restart: "no"
     
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - .:/pond/configs/idefix:ro
-      - config_build_cache:/pond/configs/idefix/build
+      - .:/pond/configs/idefix
 
     devices:
       - /dev/dri:/dev/dri
@@ -33,4 +30,4 @@ services:
     network_mode: "host"
 
     working_dir: /pond/configs/idefix
-    command: bash -c "source /opt/ros/jazzy/setup.bash && python3 launch.py"
+    command: python3 launch.py

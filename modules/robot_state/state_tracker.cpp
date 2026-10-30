@@ -48,6 +48,7 @@ struct Joint
     Sophus::SE3d tf;
     std::optional<double> min_angle = std::nullopt;
     std::optional<double> max_angle = std::nullopt;
+    std::optional<double> max_effort = std::nullopt;
     Eigen::Vector3d axis;
     std::deque<std::tuple<double, double>> past_states;
 
@@ -160,6 +161,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         {
             joint->min_angle = j.second->limits->lower;
             joint->max_angle = j.second->limits->upper;
+            joint->max_effort = j.second->limits->effort;
         }
 
         joint->axis = Eigen::Vector3d(j.second->axis.x, j.second->axis.y, j.second->axis.z).normalized();
@@ -343,6 +345,7 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         request->axis = joint->second->axis;
         request->min_angle = joint->second->min_angle;
         request->max_angle = joint->second->max_angle;
+        request->max_effort = joint->second->max_effort;
     });
 
     link_request_callback = createCallback<GetLinkInfoRequest>({"get_robot_link_info"}, [this](GetLinkInfoRequest* request) {

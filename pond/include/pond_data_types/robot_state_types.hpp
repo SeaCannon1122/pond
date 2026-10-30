@@ -24,6 +24,7 @@ struct GetJointInfoRequest
     bool is_static;
     std::optional<double> min_angle;
     std::optional<double> max_angle;
+    std::optional<double> max_effort;
     std::string parent_link_name;
     std::string child_link_name;
 };
