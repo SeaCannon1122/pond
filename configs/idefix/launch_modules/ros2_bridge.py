@@ -1,5 +1,7 @@
 from pond import Manager
 
+from . import walk
+
 class cfg:
     robot_state_bridges = [
         #### robot_description ####
@@ -49,13 +51,13 @@ class cfg:
     ]
     debug_bridges = [
         ########## gaits ##########
-        {   "direction" : "POND_TO_ROS", "rate" : 1,
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.1 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "gait_periods/out",           "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "gait_periods",               "type" : "std_msgs::msg::Float64MultiArray"}  
         },
         #### stance and swing duration ####
-        {   "direction" : "POND_TO_ROS", "rate" : 20,
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.2 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "partial_gait_durations/out", "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "partial_gait_durations",     "type" : "std_msgs::msg::Float64MultiArray"}  
@@ -79,13 +81,13 @@ class cfg:
             "ros"  : {"topic"   : "foot_poses",                   "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### gait_duration ######
-        {   "direction" : "POND_TO_ROS",
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.05 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "target_trajectory_states/out", "type" : "std::vector<TrajectoryState>"},
             "ros"  : {"topic"   : "target_trajectory_states",     "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
         ###### target_torques ######
-        {   "direction" : "POND_TO_ROS", "rate" : 1,
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.05 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "target_torques",              "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "target_torques",              "type" : "std_msgs::msg::Float64MultiArray"}  

@@ -39,16 +39,27 @@ class cfg:
         "motor_names" : motor_names,
         "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
-        "max_swing_torque" : 2.0,
-        "natural_frequency" : 20.0,
-        "oob_kp" : 0.02,
+        "max_swing_torque" : 8.0,
+        "natural_frequency" : 180.0,
+        "oob_kp" : 0.01,
         "inertia_damping_factor" : 0.01
     }
 
-def walk_mpc(pm: Manager):
-    pm.set_thread_frame_time(cfg.thread_name, 0.01)
+    frame_dt = 0.0002
 
-    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params)
+def walk_mpc(pm: Manager):
+    pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
+
+    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
+
+    pm.load_module(
+        "robot_joint_rate_reducer", "utility/channel_filter", cfg.thread_name,
+        {
+            "rate": int(0.04 / cfg.frame_dt),
+            "channels_in":   ["set_robot_joints_high_rate"],
+            "channels_out" : ["set_robot_joints"],
+        },
+    )
 
     pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
     

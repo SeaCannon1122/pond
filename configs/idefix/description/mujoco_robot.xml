@@ -3,7 +3,7 @@
 
   <default>
     <!-- Sets default damping and frictionloss for all joints -->
-    <joint damping="0.004" frictionloss="0.0002"/>
+    <joint damping="0.001" frictionloss="0.001"/>
   </default>
 
   <asset>
@@ -26,7 +26,7 @@
 
     <light directional="true" pos="0 0 3" dir="0 0 -1" ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8"/>
 
-    <body name="chassis" pos="0 0 0.3">
+    <body name="chassis" pos="0 0 0.24">
       <!-- <freejoint/> -->
 
       <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="5.0" diaginertia="0.0048 0.00403333 0.00403333"/>

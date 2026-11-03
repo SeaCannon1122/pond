@@ -4,6 +4,8 @@
 #include "pond_data_types/transform_types.hpp"
 #include <Eigen/src/Core/Matrix.h>
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdlib>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
@@ -161,13 +163,33 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
         {
             Eigen::Vector3d joint_pos = {*feedbacks[3*i+0][0]->pos, *feedbacks[3*i+1][0]->pos, *feedbacks[3*i+2][0]->pos};
             Eigen::Vector3d joint_vel = {*feedbacks[3*i+0][0]->vel, *feedbacks[3*i+1][0]->vel, *feedbacks[3*i+2][0]->vel};
-            Eigen::Vector3d torque;
+            Eigen::Vector3d torque = Eigen::Vector3d::Zero(), oob_torque = Eigen::Vector3d::Zero();
             
             leg_dynamics dynamics;
-            calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), true /*gait_phases[0][0][i]*/);
 
-            if (true)//gait_phases[0][0][i])
+            std::array<bool, 3> oob = {false, false, false};
+
+            for (uint32_t j = 0; j < 3; j++)
             {
+                if (configs[i].links[j].joint_min > joint_pos[j])
+                {
+                    oob[j] = true;
+                    oob_torque[j] = oob_kp * (configs[i].links[j].joint_min - joint_pos[j]);
+                    joint_pos[j] = configs[i].links[j].joint_min;
+                }
+                else if (configs[i].links[j].joint_max < joint_pos[j])
+                {
+                    oob[j] = true;
+                    oob_torque[j] = oob_kp * (configs[i].links[j].joint_max - joint_pos[j]);
+                    joint_pos[j] = configs[i].links[j].joint_max;
+                }
+            }
+
+
+            if (gait_phases[0][0][i])
+            {
+                calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), true);
+
                 Eigen::Matrix3d Kp, Kd;
 
                 for (uint32_t i = 0; i < 3; i++)
@@ -187,13 +209,14 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
             }
             else
             {
+                calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), false);
                 torque = dynamics.jacobian.transpose() * forces[i];
             }
             
             for (uint32_t j = 0; j < 3; j++)
             {
-                if (configs[i].links[j].joint_min > joint_pos[j]) torque[j] = oob_kp * (configs[i].links[j].joint_min - joint_pos[j]);
-                else if (configs[i].links[j].joint_max < joint_pos[j]) torque[j] = oob_kp * (configs[i].links[j].joint_max - joint_pos[j]);
+                if (oob[j]) torque[j] = oob_torque[j];
+                else if (!std::isfinite(torque[j])) torque[j] = 0;
                 else torque[j] = std::clamp(torque[j], -configs[i].links[j].effort_max, configs[i].links[j].effort_max);
             }
 

@@ -8,7 +8,7 @@ public:
 
     pond::Distributor distributor;
     pond::Callback callback;
-    uint32_t counter = 0;
+    uint32_t counter;
     uint32_t rate;
 };
 
@@ -23,9 +23,14 @@ pond_result ChannelFilter::onStartup(const std::vector<void*>& args)
     if (!channels_in) return POND_ERROR;
 
     rate = parameter("rate").asInt().get(1);
+    counter = rate - 1;
 
     distributor = createDistributor(*channels_out);
-    callback = createCallback(*channels_in, [this](void** data) {distributor.distribute_raw(data);});
+    callback = createCallback(*channels_in, [this](void** data) {
+        
+        if (counter = (counter+1)%rate) return;
+        distributor.distribute_raw(data);
+    });
     
     return POND_SUCCESS;
 }
