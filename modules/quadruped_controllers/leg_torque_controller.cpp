@@ -186,11 +186,11 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
             }
 
 
-            if (gait_phases[0][0][i])
+            if (!gait_phases[0][0][i])
             {
                 calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), true);
 
-                Eigen::Matrix3d Kp, Kd;
+                Eigen::Matrix3d Kp = Eigen::Matrix3d::Zero(), Kd = Eigen::Matrix3d::Zero();
 
                 for (uint32_t i = 0; i < 3; i++)
                 {

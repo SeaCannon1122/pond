@@ -49,6 +49,9 @@ class cfg:
 
 def walk_mpc(pm: Manager):
     pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
+    pm.set_thread_frame_time("mpc_thread", 1.0/30.0)
+
+    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread")
 
     pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
@@ -78,6 +81,7 @@ def walk_mpc(pm: Manager):
                 "read_servo_feedback",
                 "update_joint_states",
                 "schedule_gaits",
+                "update_mpc",
                 "evaluate_trajectories",
                 "calculate_torque",
                 "write_servo_commands",

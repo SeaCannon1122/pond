@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mappings.hpp"
+#include "pond/pond.hpp"
 
 inline rclcpp::Time to_ros_time(double time) { return rclcpp::Time(static_cast<int64_t>(time * (double)1e9), RCL_SYSTEM_TIME); }
 
@@ -72,6 +73,20 @@ void std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray(const std::vecto
 
     ros.poses.resize(pond.size());
     for (int i = 0; i < pond.size(); i++) FrameTransform__to__geometry_msgs_msg_Pose(pond[i], ros.poses[i]);
+}
+
+void std_vector_Eigen_Vector3d__to__geometry_msgs_msg_PoseArray(const std::vector<Eigen::Vector3d>& pond, geometry_msgs::msg::PoseArray& ros)
+{
+    if (pond.size() == 0) return;
+    ros.header.stamp = to_ros_time(pond::get_time());
+
+    ros.poses.resize(pond.size());
+    for (int i = 0; i < pond.size(); i++)
+    {
+        ros.poses[i].position.x = pond[i].x();
+        ros.poses[i].position.y = pond[i].y();
+        ros.poses[i].position.z = pond[i].z();
+    }
 }
 
 void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransform& pond, geometry_msgs::msg::PoseStamped& ros)

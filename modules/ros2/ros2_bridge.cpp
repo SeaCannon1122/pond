@@ -1,5 +1,6 @@
 #include "ros2_bridge.hpp"
 #include "mappings.hpp"
+#include <Eigen/src/Core/Matrix.h>
 
 POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types to ros2")
 
@@ -54,6 +55,7 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 IF_POND_TO_ROS(FrameTransform,              tf2_msgs::msg::TFMessage,               FrameTransform__to__tf2_msgs_msg_TFMessage)
                 IF_POND_TO_ROS(std::vector<FrameTransform>, tf2_msgs::msg::TFMessage,               std_vector_FrameTransform__to__tf2_msgs_msg_TFMessage)
                 IF_POND_TO_ROS(std::vector<FrameTransform>, geometry_msgs::msg::PoseArray,          std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray)
+                IF_POND_TO_ROS(std::vector<Eigen::Vector3d>,geometry_msgs::msg::PoseArray,          std_vector_Eigen_Vector3d__to__geometry_msgs_msg_PoseArray)
                 IF_POND_TO_ROS(std::string,                 std_msgs::msg::String,                  std_string__to__std_msgs_msg_String)
                 IF_POND_TO_ROS(LaserScanSPtr,               sensor_msgs::msg::LaserScan,            LaserScanSPtr__to__sensor_msgs_msg_LaserScan)
                 IF_POND_TO_ROS(std::vector<JointState>,     sensor_msgs::msg::JointState,           std_vector_JointState__to__sensor_msgs_msg_JointState)

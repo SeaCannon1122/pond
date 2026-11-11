@@ -68,6 +68,12 @@ class cfg:
             "pond" : {"channel" : "force",              "type" : "double"},
             "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64"}  
         },
+        ###### ground_forces ######
+        {   "direction" : "POND_TO_ROS", "rate" : 1,
+
+            "pond" : {"channel" : "ground_forces",                "type" : "std::vector<Eigen::Vector3d>"},
+            "ros"  : {"topic"   : "ground_forces",                "type" : "geometry_msgs::msg::PoseArray"}  
+        },
         ###### foot_target_poses ######
         {   "direction" : "POND_TO_ROS", "rate" : 1,
 
@@ -87,7 +93,7 @@ class cfg:
             "ros"  : {"topic"   : "target_trajectory_states",     "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
         ###### target_torques ######
-        {   "direction" : "POND_TO_ROS", "rate" : int(0.05 / walk.cfg.frame_dt),
+        {   "direction" : "POND_TO_ROS", "rate" : 10,
 
             "pond" : {"channel" : "target_torques",              "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "target_torques",              "type" : "std_msgs::msg::Float64MultiArray"}  

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <rclcpp/rclcpp.hpp>
 
 #include <std_msgs/msg/string.hpp>
@@ -40,6 +41,8 @@ void FrameTransform__to__geometry_msgs_msg_Pose(const FrameTransform& pond, geom
 void geometry_msgs_msg_PoseStamped__to__FrameTransform(FrameTransform& pond, const geometry_msgs::msg::PoseStamped& ros);
 
 void std_vector_FrameTransform__to__geometry_msgs_msg_PoseArray(const std::vector<FrameTransform>& pond, geometry_msgs::msg::PoseArray& ros);
+
+void std_vector_Eigen_Vector3d__to__geometry_msgs_msg_PoseArray(const std::vector<Eigen::Vector3d>& pond, geometry_msgs::msg::PoseArray& ros);
 
 void FrameTransform__to__geometry_msgs_msg_PoseStamped(const FrameTransform& pond, geometry_msgs::msg::PoseStamped& ros);
 

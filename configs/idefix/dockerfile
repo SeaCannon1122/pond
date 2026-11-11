@@ -48,7 +48,7 @@ RUN apt install -y ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-xacro
 WORKDIR /lib_sources
 RUN git clone  https://github.com/coin-or/qpOASES.git
 WORKDIR /lib_sources/qpOASES
-RUN cmake -S . -B build && cmake --build build && cmake --install build
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && cmake --build build --config Release && cmake --install build
 
 WORKDIR /pond/pond
 

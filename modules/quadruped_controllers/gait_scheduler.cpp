@@ -122,7 +122,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
                 for (uint32_t i = 0; i < 4; i++)
                 {
                     periods[i] = fmod(periods[i], duration);
-                    phases[i] = (periods[i] > partial_durations[0]);
+                    phases[i] = (periods[i] < partial_durations[0]);
                 }
             }
             else
@@ -133,7 +133,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
                 for (uint32_t i = 0; i < 4; i++)
                 {
                     periods[i] = 0.5;
-                    phases[i] = false;
+                    phases[i] = true;
                 }
             }
 

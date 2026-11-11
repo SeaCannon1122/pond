@@ -4,7 +4,7 @@ from . import walk
 
 def mujoco(pm: Manager, torque_mode: bool):
     
-    pm.set_thread_frame_time("simulation_thread", 0.0)
+    pm.set_thread_frame_time("simulation_thread", 0.001)
 
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
