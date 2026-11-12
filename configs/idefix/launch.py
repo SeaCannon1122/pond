@@ -37,7 +37,7 @@ def main():
     mujoco_sim = True
     #mujoco_sim = False
 
-    mpc_mode = True
+    mpc_mode = False
 
     if mujoco_sim:
         mujoco(pm, mpc_mode)
