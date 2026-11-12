@@ -41,8 +41,7 @@ class cfg:
         "reference_link" : "base_link",
         "max_swing_torque" : 8.0,
         "natural_frequency" : 180.0,
-        "oob_kp" : 0.01,
-        "inertia_damping_factor" : 0.01
+        "oob_spring_frequency" : 20.0
     }
 
     frame_dt = 0.0002
@@ -52,6 +51,8 @@ def walk_mpc(pm: Manager):
     pm.set_thread_frame_time("mpc_thread", 1.0/30.0)
 
     pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread")
+
+    return
 
     pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
@@ -69,8 +70,6 @@ def walk_mpc(pm: Manager):
     pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
 
     pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
-
-    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", cfg.thread_name)
 
     pm.load_module(
         "walk_cfm", "utility/control_flow_manager", cfg.thread_name,

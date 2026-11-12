@@ -69,19 +69,19 @@ class cfg:
             "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64"}  
         },
         ###### ground_forces ######
-        {   "direction" : "POND_TO_ROS", "rate" : 1,
+        {   "direction" : "POND_TO_ROS", "rate" : 10,
 
             "pond" : {"channel" : "ground_forces",                "type" : "std::vector<Eigen::Vector3d>"},
             "ros"  : {"topic"   : "ground_forces",                "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### foot_target_poses ######
-        {   "direction" : "POND_TO_ROS", "rate" : 1,
+        {   "direction" : "POND_TO_ROS", "rate" : 10,
 
             "pond" : {"channel" : "foot_target_poses",            "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "foot_target_poses",            "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### foot_poses ######
-        {   "direction" : "POND_TO_ROS", "rate" : 1,
+        {   "direction" : "POND_TO_ROS", "rate" : 10,
 
             "pond" : {"channel" : "foot_poses",                   "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "foot_poses",                   "type" : "geometry_msgs::msg::PoseArray"}  

@@ -1,17 +1,10 @@
-#include "pond/hpp/dds.hpp"
-#include "pond/hpp/module_base.hpp"
-#include "pond_data_types/robot_state_types.hpp"
-#include "pond_data_types/transform_types.hpp"
 #include <Eigen/src/Core/Matrix.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstdlib>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
-#include <sophus/se3.hpp>
 #include <vector>
 
 struct link_data
@@ -32,11 +25,12 @@ struct leg_config
 struct leg_dynamics
 {
     Eigen::Vector3d p_foot, v_foot;
+
     Eigen::Matrix3d jacobian;
     Eigen::Matrix3d jacobian_dot;
-    Eigen::Matrix3d lambda;
-    Eigen::Vector3d c_qdot;
-    Eigen::Vector3d g;
+
+    Eigen::Matrix3d m, lambda;
+    Eigen::Vector3d c_qdot, g;
 };
 
 class LegTorqueController : public pond::ModuleBaseTF
@@ -46,7 +40,7 @@ public:
     virtual void onShutdownTF() override;
 private:
 
-    void calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity, bool calc_ff_torque);
+    void calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity);
 
     pond::Callback force_callback, stage_callback;
     pond::DistributorTyped<std::vector<double>> torque_distributor;
@@ -58,7 +52,9 @@ private:
 
     leg_config configs[4];
 
-    double natural_frequency, max_swing_torque, oob_kp, inertia_damping_factor;
+    double natural_frequency, oob_spring_frequency, max_swing_torque;
+
+    std::array<Eigen::Vector3d, 4> last_oob_free_joint_positions;
 
     std::vector<std::string> motor_names;
     std::vector<MotorCommand> motor_commands;
@@ -69,10 +65,9 @@ POND_MODULE_CPP_DECLARE(LegTorqueController, "leg_torque_controller", "torque co
 
 pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 {
-    natural_frequency = parameter("natural_frequency").asDouble().get(20.0);
+    natural_frequency = parameter("natural_frequency").asDouble().get(180.0);
+    oob_spring_frequency = parameter("oob_spring_frequency").asDouble().get(2.0);
     max_swing_torque = parameter("max_swing_torque").asDouble().get(1.0);
-    oob_kp = std::abs(parameter("oob_kp").asDouble().get(0.1));
-    inertia_damping_factor = std::abs(parameter("inertia_damping_factor").asDouble().get(0.01));
 
     auto reference_link = parameter("reference_link").asString().get("base_link");
 
@@ -121,6 +116,8 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
             configs[l].links[i].com = link_requests[i].inertia_tf.translation();
             configs[l].links[i].inertia = link_requests[i].inertia;
         }
+
+        last_oob_free_joint_positions[l] = Eigen::Vector3d(0, 0, configs[l].links[2].joint_max); 
     }
 
     torque_distributor = createDistributorTyped<std::vector<double>>({"target_torques"});
@@ -161,35 +158,46 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
         for (uint32_t i = 0; i < 4; i++)
         {
-            Eigen::Vector3d joint_pos = {*feedbacks[3*i+0][0]->pos, *feedbacks[3*i+1][0]->pos, *feedbacks[3*i+2][0]->pos};
+            Eigen::Vector3d joint_pos_actual = {*feedbacks[3*i+0][0]->pos, *feedbacks[3*i+1][0]->pos, *feedbacks[3*i+2][0]->pos};
             Eigen::Vector3d joint_vel = {*feedbacks[3*i+0][0]->vel, *feedbacks[3*i+1][0]->vel, *feedbacks[3*i+2][0]->vel};
-            Eigen::Vector3d torque = Eigen::Vector3d::Zero(), oob_torque = Eigen::Vector3d::Zero();
+            Eigen::Vector3d torque = Eigen::Vector3d::Zero();
             
-            leg_dynamics dynamics;
+            Eigen::Vector3d joint_pos = joint_pos_actual;
 
-            std::array<bool, 3> oob = {false, false, false};
+            leg_dynamics dynamics, dynamics_actual;
+
+            uint32_t oob = 0;
 
             for (uint32_t j = 0; j < 3; j++)
             {
                 if (configs[i].links[j].joint_min > joint_pos[j])
                 {
-                    oob[j] = true;
-                    oob_torque[j] = oob_kp * (configs[i].links[j].joint_min - joint_pos[j]);
+                    oob |= 1<<j;
                     joint_pos[j] = configs[i].links[j].joint_min;
                 }
                 else if (configs[i].links[j].joint_max < joint_pos[j])
                 {
-                    oob[j] = true;
-                    oob_torque[j] = oob_kp * (configs[i].links[j].joint_max - joint_pos[j]);
+                    oob |= 1<<j;
                     joint_pos[j] = configs[i].links[j].joint_max;
                 }
             }
 
+            if (oob)
+            {
+                if (gait_phases[0][0][i]) for (uint32_t j = 0; j < 3; j++)
+                {
+                    joint_pos[j] = last_oob_free_joint_positions[i][j];
+                    oob |= 1<<j;
+                }
+                
+                calculate_leg_dynamics(i, dynamics_actual, joint_pos_actual, joint_vel, Eigen::Vector3d(0, 0, -9.81));
+            }
+            else last_oob_free_joint_positions[i] = joint_pos;
 
+            calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81));
+            
             if (!gait_phases[0][0][i])
             {
-                calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), true);
-
                 Eigen::Matrix3d Kp = Eigen::Matrix3d::Zero(), Kd = Eigen::Matrix3d::Zero();
 
                 for (uint32_t i = 0; i < 3; i++)
@@ -207,16 +215,16 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
                 for (uint32_t j = 0; j < 3; j++) torque[j] = std::clamp(torque[j], -max_swing_torque, max_swing_torque);
             }
-            else
-            {
-                calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81), false);
-                torque = dynamics.jacobian.transpose() * forces[i];
-            }
+            else if (oob == 0) torque = dynamics.jacobian.transpose() * forces[i];
             
             for (uint32_t j = 0; j < 3; j++)
             {
-                if (oob[j]) torque[j] = oob_torque[j];
-                else if (!std::isfinite(torque[j])) torque[j] = 0;
+                if (oob & (1<<j)) torque[j] =
+                    oob_spring_frequency * oob_spring_frequency * dynamics_actual.m(j, j) * (joint_pos[j] - joint_pos_actual[j])
+                    - 2.0 * oob_spring_frequency * dynamics_actual.m(j, j) * joint_vel[j]
+                    + dynamics_actual.c_qdot[j] + dynamics_actual.g[j];
+                
+                if (std::isnan(torque[j])) torque[j] = 0;
                 else torque[j] = std::clamp(torque[j], -configs[i].links[j].effort_max, configs[i].links[j].effort_max);
             }
 
@@ -254,7 +262,7 @@ void LegTorqueController::onShutdownTF()
     poses_distributor.destroy();
 }
 
-void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity, bool calc_ff_torque)
+void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)
 {
     // 1. Forward Kinematics & Transforms
     Sophus::SO3d R[3];
@@ -285,8 +293,6 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
 
     dynamics.v_foot = dynamics.jacobian * q_dot;
 
-    if (!calc_ff_torque) return;
-
     // 3. Angular & Linear Velocities (Required for J_dot and Coriolis)
     Eigen::Vector3d omega[3];
     omega[0] =            w[0] * q_dot[0];
@@ -313,7 +319,7 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
     }
 
     // 5. Compute Mass Matrix (M), Gravity (G), and Coriolis (C*q_dot)
-    Eigen::Matrix3d M = Eigen::Matrix3d::Zero();
+    dynamics.m = Eigen::Matrix3d::Zero();
     dynamics.g = Eigen::Vector3d::Zero();
     dynamics.c_qdot = Eigen::Vector3d::Zero();
 
@@ -341,7 +347,7 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
         }
 
         // Accumulate Mass Matrix & Gravity Vector
-        M += configs[leg_i].links[k].mass * Jv_com.transpose() * Jv_com + Jw_com.transpose() * I_base_k * Jw_com;
+        dynamics.m += configs[leg_i].links[k].mass * Jv_com.transpose() * Jv_com + Jw_com.transpose() * I_base_k * Jw_com;
         dynamics.g -= Jv_com.transpose() * (configs[leg_i].links[k].mass * gravity);
 
         // Accumulate Coriolis Term (C * q_dot) via Recursive Newton-Euler mapping
@@ -351,9 +357,7 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
 
     // 6. Compute Operational Space Inertia Matrix ($\boldsymbol{\Lambda}$)
     
-    Eigen::Matrix3d lambda_inverse = dynamics.jacobian * M.inverse() * dynamics.jacobian.transpose();
-    
-    lambda_inverse += (inertia_damping_factor * inertia_damping_factor) * Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d lambda_inverse = dynamics.jacobian * dynamics.m.inverse() * dynamics.jacobian.transpose();
 
     dynamics.lambda = lambda_inverse.inverse();
 }

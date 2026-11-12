@@ -1,4 +1,5 @@
 #include "pond/hpp/module_base.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <array>
 #include <atomic>
 #include <pond/pond.hpp>
@@ -6,11 +7,15 @@
 #include <pond_data_types/command_types.hpp>
 
 #include <qpOASES.hpp>
+#include <sophus/so3.hpp>
 
 using Matrix13 = Eigen::Matrix<double, 13, 13>;
 using Matrix13x12 = Eigen::Matrix<double, 13, 12>;
 using Matrix12 = Eigen::Matrix<double, 12, 12>;
 using Vector13 = Eigen::Matrix<double, 13, 1>;
+
+const int state_dim = 13;
+const int input_dim = 12;
 
 struct HGSolution { Eigen::MatrixXd H; Eigen::VectorXd g;};
 
@@ -21,17 +26,12 @@ public:
     virtual void onShutdownTF() override;
     virtual void onFrame() override;
 
-    Matrix13x12 computeBhat(double psi, const std::array<Eigen::Vector3d, 4> &r_i);
-    Eigen::MatrixXd computeAhat();
-    
-    Eigen::MatrixXd computeH(const std::vector<Matrix13x12> &B_hat_sequence);
-    Eigen::VectorXd computeg(const Eigen::VectorXd &x0, const std::vector<Matrix13x12> &B_hat_sequence, const std::vector<Eigen::Vector<double, 13>> &x_ref_sequence);
     Eigen::VectorXd solveQPWithConstraints(const Eigen::MatrixXd& H, const Eigen::VectorXd& g, const std::array<bool, 4>& foot_contact);
 
     pond::Callback twist_callback, orientation_callback, update_callback;
     pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
     std::vector<Eigen::Vector3d> forces;
-    std::atomic<uint32_t> phases_buf;
+    std::atomic<uint32_t> phases_buf{0b1111};
 
     Sophus::SO3d orientation_received;
 
@@ -64,7 +64,7 @@ private:
     static constexpr double G_ACCEL = 9.81;
 
     // Cached discrete A matrix
-    Eigen::MatrixXd A_hat_cached_;
+    Matrix13 A_hat_cached_;
     bool A_hat_valid_ = false;
 
     // Preallocated buffers to avoid per-cycle allocations (dynamic to avoid huge stack objects)
@@ -175,8 +175,8 @@ void MPCController::onFrame()
     uint32_t phases_int = phases_buf.load();
     std::array<bool, 4> foot_contacts = {
         phases_int & 0b0001 ? true : false,
-        phases_int & 0b0100 ? true : false,
         phases_int & 0b0010 ? true : false,
+        phases_int & 0b0100 ? true : false,
         phases_int & 0b1000 ? true : false,
     };
 
@@ -187,7 +187,7 @@ void MPCController::onFrame()
         std::vector<Matrix13x12> B_hat_sequence;
         
         double yaw_integrated = 0;
-        Eigen::Vector2d pos_integrated = Eigen::Vector2d::Zero();
+        Eigen::Vector3d pos_integrated = Eigen::Vector3d::Zero();
         
         for (uint32_t n = 0; n < mpc_N_; n++)
         {
@@ -214,16 +214,30 @@ void MPCController::onFrame()
 
             std::array<Eigen::Vector3d, 4> r_i_world;
             for (int leg = 0; leg < 4; leg++) r_i_world[leg] = yaw_rot * r_i_body[leg];
+
+            // calculate B_c
+            Matrix13x12 B_c = Matrix13x12::Zero();
+
+            Eigen::Matrix3d I_hat_inv = (yaw_rot.matrix() * robot_I_body_ * yaw_rot.matrix().transpose()).inverse();
+
+            for (uint32_t i = 0; i < 4; i++)
+            {
+                const Eigen::Vector3d& r = r_i_world[i];
+                Eigen::Matrix3d r_cross;
+                r_cross <<    0, -r[2],  r[1],
+                           r[2],     0, -r[0],
+                          -r[1],  r[0],     0;
+                
+                B_c.block<3,3>(6, 3*i) = I_hat_inv * r_cross;
+                B_c.block<3,3>(9, 3*i).setIdentity();
+                B_c.block<3,3>(9, 3*i) /= robot_m_;
+            }
             
-            Matrix13x12 B_hat = computeBhat(yaw_integrated, r_i_world);
-            B_hat_sequence.push_back(B_hat);
+            B_hat_sequence.push_back(mpc_dt_ * B_c);
             
-            // Update for next timestep
+            // integrate timestep
             yaw_integrated += twist_cmd.ang[2] * mpc_dt_;
-            
-            Eigen::Vector3d v_world = yaw_rot * twist_cmd.lin;
-            pos_integrated[0] += v_world[0] * mpc_dt_;
-            pos_integrated[1] += v_world[1] * mpc_dt_;
+            pos_integrated += yaw_rot * twist_cmd.lin * mpc_dt_;
         }
 
         // === 3. CURRENT STATE ===
@@ -234,16 +248,63 @@ void MPCController::onFrame()
         x_current(9) = twist_cmd.lin[0];
         x_current(10) = twist_cmd.lin[1];
         x_current(12) = G_ACCEL;
-          
+
         // === 4. BUILD AND SOLVE QP ===
 
-        Eigen::MatrixXd H = computeH(B_hat_sequence);
-        Eigen::VectorXd g = computeg(x_current, B_hat_sequence, x_ref_sequence);
+        const int H_dim = input_dim * mpc_N_;
+        Eigen::MatrixXd H = Eigen::MatrixXd::Zero(H_dim, H_dim);
+        Eigen::VectorXd g = Eigen::VectorXd::Zero(H_dim);
+        Eigen::MatrixXd B_qp = Eigen::MatrixXd::Zero(state_dim * mpc_N_, H_dim);
 
-        // Quick sanity check
-        if (H.rows() == 0 || H.cols() == 0) POND_LOG_RETURN("H is empty!");
+        Matrix13 A_c = Matrix13::Zero();
+        A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
+        Matrix13 A_hat = Matrix13::Identity() + mpc_dt_ * A_c;
 
-        if (g.size() == 0) POND_LOG_RETURN("g is empty!");
+        std::vector<Matrix13> A_powers(mpc_N_);
+        A_powers[0] = Matrix13::Identity();
+
+        for (uint32_t i = 0; i < mpc_N_; ++i)
+        {
+            if (i) A_powers[i] = A_powers[i-1] * A_hat;
+            // Only compute lower triangular matrix (j <= i)
+            for (int j = 0; j <= i; ++j) B_qp.block<state_dim, input_dim>(state_dim * i, input_dim * j) = A_powers[i] * B_hat_sequence[j];
+        }
+
+        // 4. EFFICIENTLY USE DIAGONAL Q AND R
+        Eigen::Vector<double, state_dim> q_diag = mpc_Q_.diagonal();
+        Eigen::Vector<double, input_dim> r_diag = mpc_R_.diagonal();
+        
+        {   
+            // 5. BUILD H with symmetric updates
+            // R-contribution first (block diagonal)
+            for (uint32_t blk = 0; blk < mpc_N_; blk++) H.block<input_dim, input_dim>(input_dim * blk, input_dim * blk).diagonal() = 2.0 * r_diag;
+            
+            // Q-contribution: Use symmetry - only fill lower triangular matrix
+            for (uint32_t i = 0; i < mpc_N_; i++)
+            {
+                Eigen::VectorXd x_pred = A_powers[i] * x_current;
+                const Eigen::VectorXd& x_ref = x_ref_sequence[i];
+
+                for (uint32_t s = 0; s < state_dim; s++)
+                {
+                    double q = q_diag[s];
+                    if (q == 0.0) continue;
+                    
+                    Eigen::RowVectorXd v_row = B_qp.row(state_dim * i + s);
+
+                    double err = x_pred(s) - x_ref(s);
+                    if (std::abs(err) > 1e-10) g.noalias() += 2.0 * q * err * v_row;
+
+                    // Symmetric update: H += 2q * (v^T * v)
+                    // Only fill lower triangular matrix
+                    for (int col = 0; col < H_dim; ++col) if (v_row[col] != 0.0)
+                        for (int row = col; row < H_dim; ++row) H(row, col) += 2.0 * q * v_row[col] * v_row[row];
+                }
+            }
+        
+            // Mirror upper triangular matrix
+            H.triangularView<Eigen::StrictlyUpper>() = H.triangularView<Eigen::StrictlyLower>().transpose();
+        }
 
         Eigen::VectorXd U_opt = solveQPWithConstraints(H, g, foot_contacts);
 
@@ -263,232 +324,8 @@ void MPCController::onFrame()
     } catch (const std::exception &e) {POND_LOG("MPC error: %s", e.what());}
 }
 
-Matrix13x12 MPCController::computeBhat(double psi, const std::array<Eigen::Vector3d, 4>& r_i) {
-    // CACHED VERSION - 10x faster with same psi
-    
-    // 1. CACHE for rotation matrix and LDLT
-    static double cached_psi = -1000.0;
-    static Eigen::Matrix3d cached_R_z;
-    static Eigen::LDLT<Eigen::Matrix3d> cached_I_hat_ldlt;
-    
-    if (std::abs(psi - cached_psi) > 1e-6) {
-        // Only recompute if psi changes significantly
-        cached_psi = psi;
-        
-        cached_R_z << cos(psi), -sin(psi), 0,
-                    sin(psi),  cos(psi), 0,
-                    0,         0,        1;
-        
-        Eigen::Matrix3d I_hat = cached_R_z * robot_I_body_ * cached_R_z.transpose();
-        cached_I_hat_ldlt.compute(I_hat);
-    }
-    
-    // 2. Build B_c matrix with pre-allocated blocks
-    static Matrix13x12 B_c;  // Static for reuse
-    B_c.setZero();
-    
-    // UNROLLED LOOP for all 4 legs
-    for (uint32_t i = 0; i < 4; i++)
-    {
-            const Eigen::Vector3d& r = r_i[i];
-            Eigen::Matrix3d r_cross;
-            r_cross << 0, -r[2],  r[1],
-                    r[2],     0, -r[0],
-                -r[1],  r[0],     0;
-            
-            B_c.block<3,3>(6, 3*i) = cached_I_hat_ldlt.solve(r_cross);
-            B_c.block<3,3>(9, 3*i).setIdentity();
-            B_c.block<3,3>(9, 3*i) /= robot_m_;
-    }
-    
-    return mpc_dt_ * B_c;
-}
-
-Eigen::MatrixXd MPCController::computeAhat() {
-  // Cached Â (depends only on mpc_dt_)
-  if (A_hat_valid_) {
-    return A_hat_cached_;
-  }
-
-  Eigen::MatrixXd A_c = Eigen::MatrixXd::Zero(13, 13);
-  // Block for Ṗ = v
-  A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
-
-  A_hat_cached_ = Eigen::MatrixXd::Identity(13, 13) + mpc_dt_ * A_c;
-  A_hat_valid_ = true;
-  return A_hat_cached_;
-}
-
-Eigen::MatrixXd MPCController::computeH(const std::vector<Matrix13x12>& B_hat_sequence)
-{
-    // OPTIMIZED: Uses symmetry and block-wise updates
-    const int state_dim = 13;
-    const int input_dim = 12;
-    const int H_dim = input_dim * mpc_N_;
-    
-    // 1. STATIC PRE-ALLOCATION (most important performance gain)
-    static Eigen::MatrixXd H_buffer;
-    static Eigen::MatrixXd B_qp_buffer;
-    
-    if (H_buffer.rows() != H_dim || H_buffer.cols() != H_dim)
-    {
-        H_buffer.resize(H_dim, H_dim);
-        B_qp_buffer.resize(state_dim * mpc_N_, H_dim);
-    }
-    
-    H_buffer.setZero();
-    B_qp_buffer.setZero();
-    
-    // 2. A^k PRE-COMPUTE with optimization for small N
-    static Eigen::MatrixXd A_hat;
-    static bool A_hat_computed = false;
-    
-    if (!A_hat_computed)
-    {
-        Eigen::MatrixXd A_c = Eigen::MatrixXd::Zero(13, 13);
-        A_c.block<3,3>(3, 9) = Eigen::Matrix3d::Identity();
-        A_hat = Eigen::MatrixXd::Identity(13, 13) + mpc_dt_ * A_c;
-        A_hat_computed = true;
-    }
-    
-    // Static A_powers buffer
-    static std::vector<Eigen::MatrixXd> A_powers(mpc_N_);
-    
-    // Only recompute if necessary
-    static int last_mpc_N = 0;
-    if (last_mpc_N != mpc_N_)
-    {
-        last_mpc_N = mpc_N_;
-        A_powers.resize(mpc_N_);
-        A_powers[0] = Eigen::MatrixXd::Identity(13, 13);
-        for (int i = 1; i < mpc_N_; ++i) A_powers[i] = A_powers[i-1] * A_hat;
-    }
-    
-    // 3. OPTIMIZED B_qp COMPUTATION
-    // Exploit symmetry: only compute lower triangular matrix
-    for (int i = 0; i < mpc_N_; ++i)
-    {
-        // Block for j = i (Diagonal)
-        B_qp_buffer.block(state_dim * i, input_dim * i, state_dim, input_dim) = A_powers[i] * B_hat_sequence[i];
-        
-        // Only compute lower triangular matrix (j < i)
-        for (int j = 0; j < i; ++j) B_qp_buffer.block(state_dim * i, input_dim * j, state_dim, input_dim) = A_powers[i] * B_hat_sequence[j];
-    }
-    
-    // 4. EFFICIENTLY USE DIAGONAL Q AND R
-    static const Eigen::VectorXd q_diag = mpc_Q_.diagonal();
-    static const Eigen::VectorXd r_diag = mpc_R_.diagonal();
-    
-    // 5. BUILD H with symmetric updates
-    // R-contribution first (block diagonal)
-    for (int blk = 0; blk < mpc_N_; ++blk) H_buffer.block(input_dim * blk, input_dim * blk, input_dim, input_dim).diagonal() = 2.0 * r_diag;
-    
-    // Q-contribution: Use symmetry - only fill lower triangular matrix
-    for (int i = 0; i < mpc_N_; ++i) for (int s = 0; s < state_dim; ++s)
-    {
-        double q = q_diag[s];
-        if (q == 0.0) continue;
-        
-        Eigen::RowVectorXd v_row = B_qp_buffer.row(state_dim * i + s);
-        
-        // Symmetric update: H += 2q * (v^T * v)
-        // Only fill lower triangular matrix
-        for (int col = 0; col < H_dim; ++col) if (v_row[col] != 0.0)
-            for (int row = col; row < H_dim; ++row) H_buffer(row, col) += 2.0 * q * v_row[col] * v_row[row];
-    }
-  
-  // Mirror upper triangular matrix
-  H_buffer.triangularView<Eigen::StrictlyUpper>() = H_buffer.triangularView<Eigen::StrictlyLower>().transpose();
-  
-  return H_buffer;
-}
-
-Eigen::VectorXd MPCController::computeg(const Eigen::VectorXd& x0, const std::vector<Matrix13x12>& B_hat_sequence, const std::vector<Eigen::Vector<double, 13>>& x_ref_sequence)
-{  
-  const int state_dim = 13;
-  const int input_dim = 12;
-  const int H_dim = input_dim * mpc_N_;
-  
-  // 1. STATIC BUFFER REUSE
-  static Eigen::VectorXd g_buffer;
-  static Eigen::MatrixXd B_qp_buffer;
-  
-  if (g_buffer.size() != H_dim)
-  {
-    g_buffer.resize(H_dim);
-    B_qp_buffer.resize(state_dim * mpc_N_, H_dim);
-  }
-  
-  g_buffer.setZero();
-  
-  // 2. B_qp IS SHARED WITH computeH() - no double computation!
-  // Here we need to either reuse B_qp_buffer from computeH()
-  // or recompute. Better: combine computeH() and computeg().
-  
-  // Optimization: Combine H and g computation
-  static bool buffers_computed = false;
-  static std::vector<Eigen::MatrixXd> A_powers(mpc_N_);
-  
-  if (!buffers_computed)
-  {
-    // Compute A^k (once only)
-    Eigen::MatrixXd A_hat = computeAhat();
-    A_powers.resize(mpc_N_);
-    A_powers[0] = Eigen::MatrixXd::Identity(13, 13);
-    for (int i = 1; i < mpc_N_; ++i) A_powers[i] = A_powers[i-1] * A_hat;
-    
-    // B_qp berechnen
-    for (int i = 0; i < mpc_N_; ++i) for (int j = 0; j <= i; ++j)
-      B_qp_buffer.block(state_dim * i, input_dim * j, state_dim, input_dim) = A_powers[i] * B_hat_sequence[j];
-    
-    buffers_computed = true;
-  }
-  
-  // 3. ONLY COMPUTE RELEVANT STATES (not all 13)
-  // Your Q-Matrix has only few non-zero entries:
-  // Indizes: 2,3,4,5,8,9,10,12 sind ≠ 0 (8 von 13)
-  static const std::array<int, 8> relevant_states = {2, 3, 4, 5, 8, 9, 10, 12};
-  static const Eigen::VectorXd q_diag = mpc_Q_.diagonal();
-  
-  // 4. OPTIMIZED ERROR COMPUTATION
-    for (int i = 0; i < mpc_N_; ++i)
-    {
-        Eigen::VectorXd x_pred = A_powers[i] * x0;
-        const Eigen::VectorXd& x_ref = x_ref_sequence[i];
-        
-        // Only process relevant states
-        for (int s_idx = 0; s_idx < 8; ++s_idx)
-        {
-            int s = relevant_states[s_idx];
-            double q = q_diag[s];
-            if (q == 0.0) continue;
-            
-            double err = x_pred(s) - x_ref(s);
-            if (std::abs(err) < 1e-10) continue;  // Skip small errors
-            
-            Eigen::RowVectorXd v = B_qp_buffer.row(state_dim * i + s);
-            g_buffer.noalias() += 2.0 * q * err * v;
-        }
-    }
-  
-  return g_buffer;
-}
-
 Eigen::VectorXd MPCController::solveQPWithConstraints(const Eigen::MatrixXd& H, const Eigen::VectorXd& g, const std::array<bool, 4>& foot_contact)
 {
-    // Check dimensions
-    if (H.rows() != 12 * mpc_N_ || H.cols() != 12 * mpc_N_)
-    {
-        POND_LOG("ERROR H has wrong dimensions! Expected %dx%d, got %ldx%ld", 12*mpc_N_, 12*mpc_N_, H.rows(), H.cols());
-        return Eigen::VectorXd::Zero(12 * mpc_N_);
-    }
-    
-    if (g.size() != 12 * mpc_N_)
-    {
-        POND_LOG("ERROR g has wrong size! Expected %d, got %td", 12*mpc_N_, g.size());
-        return Eigen::VectorXd::Zero(12 * mpc_N_);
-    }
-    
     int nV = H.rows();
     
     // Quick check for NaN in H and g
