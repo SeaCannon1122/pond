@@ -30,4 +30,4 @@ services:
     network_mode: "host"
 
     working_dir: /pond/configs/idefix
-    command: python3 launch.py
+    command: python3 launch.py -docker

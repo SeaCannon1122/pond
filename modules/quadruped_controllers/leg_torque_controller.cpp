@@ -9,6 +9,7 @@
 
 struct link_data
 {
+    Eigen::Vector3d next_offset;
     double mass;
     Eigen::Vector3d com;
     Eigen::Matrix3d inertia;
@@ -17,7 +18,6 @@ struct link_data
 
 struct leg_config
 {
-    double length_hip, length_thigh, length_shin;
     Eigen::Vector3d origin_pos;
     link_data links[3];
 };
@@ -101,9 +101,9 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
         if (!tfGetTransform(joint_requests[2].parent_link_name, joint_requests[1].child_link_name, 0, tf_requests[1])) return POND_ERROR;
         if (!tfGetTransform(foot_link_names->at(l), joint_requests[2].child_link_name, 0, tf_requests[2])) return POND_ERROR;
 
-        configs[l].length_hip   = (tf_requests[0].tf * joint_requests[1].tf).translation().norm();
-        configs[l].length_thigh = (tf_requests[1].tf * joint_requests[2].tf).translation().norm();
-        configs[l].length_shin  = (tf_requests[2].tf).translation().norm();
+        configs[l].links[0].next_offset = (tf_requests[0].tf * joint_requests[1].tf).translation();
+        configs[l].links[1].next_offset = (tf_requests[1].tf * joint_requests[2].tf).translation();
+        configs[l].links[2].next_offset = (tf_requests[2].tf).translation();
 
         if (!tfGetTransform(joint_requests[0].parent_link_name, reference_link, 0, tf_requests[3])) return POND_ERROR;
         configs[l].origin_pos = tf_requests[3].tf * joint_requests[0].tf * Eigen::Vector3d::Zero();
@@ -215,7 +215,7 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
                 for (uint32_t j = 0; j < 3; j++) torque[j] = std::clamp(torque[j], -max_swing_torque, max_swing_torque);
             }
-            else if (oob == 0) torque = dynamics.jacobian.transpose() * forces[i];
+            else if (oob == 0) torque = dynamics.jacobian.transpose() * (-forces[i]);
             
             for (uint32_t j = 0; j < 3; j++)
             {
@@ -270,13 +270,13 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
 
     // Apply side_sign to the lateral hip offset vector
     R[0] = Sophus::SO3d::rotX(q[0]);
-    p[1] = p[0] + R[0] * Eigen::Vector3d(0.0, (leg_i%2 ? -1.0 : 1.0) * configs[leg_i].length_hip, 0.0);
+    p[1] = p[0] + R[0] * configs[leg_i].links[0].next_offset;
 
     R[1] = R[0] * Sophus::SO3d::rotY(q[1]);
-    p[2] = p[1] + R[1] * Eigen::Vector3d(0.0, 0.0, -configs[leg_i].length_thigh);
+    p[2] = p[1] + R[1] * configs[leg_i].links[1].next_offset;
 
     R[2] = R[1] * Sophus::SO3d::rotY(q[2]);
-    p[3] = p[2] + R[2] * Eigen::Vector3d(0.0, 0.0, -configs[leg_i].length_shin);
+    p[3] = p[2] + R[2] * configs[leg_i].links[2].next_offset;
 
     dynamics.p_foot = p[3] + configs[leg_i].origin_pos;
 

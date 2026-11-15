@@ -1,3 +1,4 @@
+#include "pond/h/module.h"
 #include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
@@ -22,6 +23,7 @@ public:
     virtual void onShutdownTF() override;
     virtual void onFrame() override;
 
+private:
     pond::Callback update_callback;
     pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
     std::vector<Eigen::Vector3d> forces;
@@ -31,7 +33,8 @@ public:
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
     std::mutex mutex;
 
-private:
+    std::vector<std::string> foot_link_names; std::string reference_link;
+
     bool debug_log;
     // Robot parameters (constant, static)
     double robot_mass, robot_mu; // robot mass, Friction coefficient
@@ -65,6 +68,12 @@ POND_MODULE_CPP_DECLARE(MPCController, "mpc_controller", "model predictive contr
 
 pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 {
+    auto foot_link_names_o = parameter("foot_link_names").asStringArray().getStrict(4, 4);
+    auto reference_link_o = parameter("reference_link").asString().getStrict();
+    if (!foot_link_names_o || !reference_link_o) return POND_ERROR;
+
+    reference_link = *reference_link_o; foot_link_names = *foot_link_names_o;
+
     debug_log = parameter("debug_log").asBool().get(false);
     robot_mass = parameter("robot.mass").asDouble().get(5);
     robot_mu = parameter("robot.mu").asDouble().get(0.6); // Friction coefficient μ - typically 0.6 for rubber feet
@@ -186,13 +195,13 @@ void MPCController::onFrame()
         for (uint32_t n = 0; n < mpc_N_; n++)
         {
             // Compute B_hat
-            const std::array<Eigen::Vector3d, 4> r_i_body =
+            GetFrameTransformRequest tf_request;
+            std::array<Eigen::Vector3d, 4> r_i_body;
+            for (uint32_t i = 0; i < 4; i++)
             {
-                Eigen::Vector3d(0.3, 0.2, -0.4),
-                Eigen::Vector3d(0.3, -0.2, -0.4),
-                Eigen::Vector3d(-0.3, 0.2, -0.4),
-                Eigen::Vector3d(-0.3, -0.2, -0.4)
-            };
+                if (!tfGetTransform(foot_link_names[i], reference_link, 0, tf_request)) return;
+                r_i_body[i] = tf_request.tf.translation();
+            }
             
             auto yaw_rot = Sophus::SO3d::rotZ(yaw_integrated);
 

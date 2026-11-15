@@ -4,6 +4,10 @@
   <default>
     <!-- Sets default damping and frictionloss for all joints -->
     <joint damping="0.001" frictionloss="0.001"/>
+
+    <default class="rubber_foot">
+      <geom friction="1.0 0.01 0.001" condim="3" rgba="0.5 0.1 0.1 1"/>
+    </default>
   </default>
 
   <asset>
@@ -20,14 +24,14 @@
       pos="0 0 0"
       rgba="1 1 1 1"
       material="grid"
-      friction="1.0 0.3 0.01"
+      friction="1.0 0.05 0.01"
       condim="3"
     />
 
     <light directional="true" pos="0 0 3" dir="0 0 -1" ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8"/>
 
     <body name="chassis" pos="0 0 0.2">
-      <!-- <freejoint/> -->
+      <freejoint/>
 
       <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="5.0" diaginertia="0.0048 0.00403333 0.00403333"/>
 
@@ -48,7 +52,7 @@
             <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
             <joint name="FR_foot" range="-1.5 1.5" axis="0 1 0"/>
             <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
-            <geom size="0.015" pos="0 0 -0.108"/>
+            <geom class="rubber_foot" size="0.015" pos="0 0 -0.108"/>
           </body>
         </body>
       </body>
@@ -64,7 +68,7 @@
             <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
             <joint name="BR_foot" range="-1.5 1.5" axis="0 1 0"/>
             <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
-            <geom size="0.015" pos="0 0 -0.108"/>
+            <geom class="rubber_foot" size="0.015" pos="0 0 -0.108"/>
           </body>
         </body>
       </body>
@@ -80,7 +84,7 @@
             <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
             <joint name="FL_foot" range="-1.5 1.5" axis="0 1 0"/>
             <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
-            <geom size="0.015" pos="0 0 -0.108"/>
+            <geom class="rubber_foot" size="0.015" pos="0 0 -0.108"/>
           </body>
         </body>
       </body>
@@ -96,7 +100,7 @@
             <inertial pos="0 0 -0.0805" quat="0.707107 0 0 0.707107" mass="0.2" diaginertia="0.000264758 0.000261833 1.3425e-05"/>
             <joint name="BL_foot" range="-1.5 1.5" axis="0 1 0"/>
             <geom size="0.0105 0.0047435 0.055" pos="0 0 -0.053" type="box"/>
-            <geom size="0.015" pos="0 0 -0.108"/>
+            <geom class="rubber_foot" size="0.015" pos="0 0 -0.108"/>
           </body>
         </body>
       </body>

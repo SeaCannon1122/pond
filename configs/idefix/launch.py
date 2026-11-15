@@ -9,7 +9,8 @@ config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
 
 def main():
     build_type = "release" if "-release" in sys.argv else "debug"
-    os.environ["POND_BUNDLE_PATH"] = f"/home/christopher/pond/build/{build_type}/pond_bundles"
+    if not ("-docker" in sys.argv):
+        os.environ["POND_BUNDLE_PATH"] = f"/home/christopher/pond/build/{build_type}/pond_bundles"
 
     with open(config_prefix + "build/robot.urdf", "w") as f:
         subprocess.run(["xacro", config_prefix + "description/Robodog.urdf.xacro"], stdout=f, check=True)

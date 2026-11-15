@@ -46,11 +46,44 @@ class cfg:
 
     frame_dt = 0.0002
 
+    mpc_parameters = {
+        "foot_link_names" : foot_link_names,
+        "reference_link" : "base_link",
+        "debug_log": False,
+        "robot": {
+            "mass": 7.0,
+            "mu": 0.6,
+            "f_range": [0.0, 300.0],
+            "I_body": [0.5, 0.8, 0.3],
+        },
+        "mpc": {
+            "dt": 0.03,
+            "N": 12,
+            "max_iter": 100,
+            "alpha": 0.0001,
+            "Q_weights": [
+                0.8,  # φ (roll) - always 0 in reference
+                0.8,  # θ (pitch) - always 0 in reference
+                0.5,  # ψ (yaw) - important
+                1.0,  # x position [m]
+                1.0,  # y position [m]
+                10.0, # z position [m] - VERY important for height control!
+                0.05, # ω_x (roll rate) [rad/s] - always 0 in reference
+                0.05, # ω_y (pitch rate) [rad/s] - always 0 in reference
+                0.02, # ω_z (yaw rate) [rad/s] - important
+                0.1,  # v_x (x velocity) [m/s] - important
+                0.1,  # v_y (y velocity) [m/s] - important
+                1.0,  # v_z (z velocity) [m/s] - always 0 in reference
+                0.0   # g (gravity state) - constant
+            ]
+        }
+    }
+
 def walk_mpc(pm: Manager):
     pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
-    pm.set_thread_frame_time("mpc_thread", 1.0/30.0)
+    pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
 
-    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", {"debug_log" : False})
+    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
 
     pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
