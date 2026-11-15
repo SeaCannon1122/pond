@@ -126,47 +126,57 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
                 last_T_sw = partial_durations_in[0][0][1];
                 double gait_duration = last_T_st + last_T_sw;
 
-                std::array<Eigen::Vector2d, 4> foot_velocities;
+                if (last_T_sw > 0.0)
                 {
-                    for (uint32_t i = 0; i < 4; i++) foot_velocities[i] =
+                    std::array<Eigen::Vector2d, 4> foot_velocities;
                     {
-                        last_twist_cmd.lin[0] - last_twist_cmd.ang[2] * foot_base_positions[i][1], 
-                        last_twist_cmd.lin[1] + last_twist_cmd.ang[2] * foot_base_positions[i][0]
-                    };
-                    
-                    double epsilon = 1e-5, max_velocity = 0.0;
-
-                    // find vector of max velocity
-                    for(size_t i = 0; i < 4; i++)
-                    {
-                        foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
-
-                        double vel = foot_velocities[i].norm();
+                        for (uint32_t i = 0; i < 4; i++) foot_velocities[i] =
+                        {
+                            last_twist_cmd.lin[0] - last_twist_cmd.ang[2] * foot_base_positions[i][1], 
+                            last_twist_cmd.lin[1] + last_twist_cmd.ang[2] * foot_base_positions[i][0]
+                        };
                         
-                        if (vel < epsilon) foot_velocities[i] = Eigen::Vector2d::Zero();
+                        double max_velocity = 0.0;
 
-                        else max_velocity = std::max(vel, max_velocity);
+                        // find vector of max velocity
+                        for(size_t i = 0; i < 4; i++)
+                        {
+                            foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
+
+                            double vel = foot_velocities[i].norm();
+                            
+                            if (vel < 1e-5) foot_velocities[i] = Eigen::Vector2d::Zero();
+
+                            else max_velocity = std::max(vel, max_velocity);
+                        }
+
+                        double MAX_VELOCITY = std::min(max_step_length / last_T_st, max_step_speed); 
+
+                        // Check if the maximum of the velocities is bigger than the absolute maximum
+                        if (max_velocity > MAX_VELOCITY) for (size_t i = 0; i < 4; i++) foot_velocities[i] *= MAX_VELOCITY / max_velocity;
                     }
 
-                    double MAX_VELOCITY = std::min(max_step_length / last_T_st, max_step_speed); 
-
-                    // Check if the maximum of the velocities is bigger than the absolute maximum
-                    if (max_velocity > MAX_VELOCITY) for (size_t i = 0; i < 4; i++) foot_velocities[i] *= MAX_VELOCITY / max_velocity;
+                    for (uint32_t i = 0; i < 4; i++) trajectories[i].init(
+                        last_T_st, last_T_sw, 
+                        stance_amplitude,
+                        T_0_in_swing_relative * last_T_sw, 
+                        T_1_in_swing_relative * last_T_sw,
+                        step_height, jerk_times_duration_to_the_3 / (gait_duration*gait_duration*gait_duration),
+                        foot_velocities[i]
+                    );
                 }
-
-                for (uint32_t i = 0; i < 4; i++) trajectories[i].init(
-                    last_T_st, last_T_sw, 
-                    stance_amplitude,
-                    T_0_in_swing_relative * last_T_sw, 
-                    T_1_in_swing_relative * last_T_sw,
-                    step_height, jerk_times_duration_to_the_3 / (gait_duration*gait_duration*gait_duration),
-                    foot_velocities[i]
-                );
+                else for(size_t i = 0; i < 4; i++) foot_positions_msg[i].tf.so3() = Sophus::SO3d();
             }
 
             for(size_t i = 0; i < 4; i++)
             {
-                trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
+                if (last_T_sw > 0.0) trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
+                else
+                {
+                    trajectory_states[i].pos.setZero();
+                    trajectory_states[i].vel.setZero();
+                    trajectory_states[i].acc.setZero();
+                }
 
                 trajectory_states[i].pos += foot_base_positions[i];
 

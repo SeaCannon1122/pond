@@ -69,7 +69,7 @@ class cfg:
             "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64"}  
         },
         ###### ground_forces ######
-        {   "direction" : "POND_TO_ROS", "rate" : 10,
+        {   "direction" : "POND_TO_ROS",
 
             "pond" : {"channel" : "ground_forces",                "type" : "std::vector<Eigen::Vector3d>"},
             "ros"  : {"topic"   : "ground_forces",                "type" : "geometry_msgs::msg::PoseArray"}  

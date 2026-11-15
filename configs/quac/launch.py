@@ -1,4 +1,4 @@
-import subprocess, os
+import subprocess, os, sys
 
 from pond import Manager
 from launch_modules.arm import *
@@ -21,6 +21,9 @@ def compile_urdf(mesh_prefix: str, destination: str):
         )
 
 def main():
+    build_type = "release" if "-release" in sys.argv else "debug"
+    os.environ["POND_BUNDLE_PATH"] = f"/home/christopher/pond/build/{build_type}/pond_bundles"
+
     NATIVE_DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
     ROS_DESCRIPTION_PATH = config_prefix + "build/robot_ros.urdf"
 

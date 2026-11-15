@@ -1,4 +1,4 @@
-import subprocess, os
+import subprocess, os, sys
 
 from pond import Manager
 from launch_modules.mujoco import *
@@ -17,7 +17,9 @@ def compile_urdf(destination: str):
         )
 
 def main():
-
+    build_type = "release" if "-release" in sys.argv else "debug"
+    os.environ["POND_BUNDLE_PATH"] = f"/home/christopher/pond/build/{build_type}/pond_bundles"
+    
     DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
     compile_urdf(DESCRIPTION_PATH)   
 
@@ -37,7 +39,7 @@ def main():
     mujoco_sim = True
     #mujoco_sim = False
 
-    mpc_mode = False
+    mpc_mode = True
 
     if mujoco_sim:
         mujoco(pm, mpc_mode)

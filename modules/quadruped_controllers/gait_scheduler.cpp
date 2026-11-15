@@ -81,7 +81,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
             if (twist_usable) twist_cmd = twist_cmd_received;
             else
             {
-                twist_cmd.lin[0] = 0.1;
+                twist_cmd.lin[0] = 0.0;
                 twist_cmd.lin[1] = 0.0;
                 twist_cmd.ang[2] = 0.0;
             }
@@ -91,52 +91,41 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
             cmd_mutex.unlock();
 
             // calculate periods
+            for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
 
-            if (twist_usable)
+            if (twist_usable) switch (gait_type.load())
             {
-                for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
+                case TROT: {
+                    partial_durations[0] = duration/2.0;
+                    partial_durations[1] = duration/2.0;
 
-                switch (gait_type.load())
-                {
-                    case TROT: {
-                        partial_durations[0] = duration/2.0;
-                        partial_durations[1] = duration/2.0;
+                    periods[1] += duration/2.0;
+                    periods[2] += duration/2.0;
+                } break;
+                case WALK: {
+                    partial_durations[0] = 3*duration/4.0;
+                    partial_durations[1] = duration/4.0;
 
-                        periods[1] += duration/2.0;
-                        periods[2] += duration/2.0;
-                    } break;
-                    case WALK: {
-                        partial_durations[0] = 3*duration/4.0;
-                        partial_durations[1] = duration/4.0;
-
-                        periods[1] += 3.0*duration/4.0;
-                        periods[2] += duration/2.0;
-                        periods[3] += duration/4.0;
-                    } break;
-                    case AMBLE: {
-                        periods[2] += duration/2.0;
-                        periods[3] += duration/2.0;
-                    } break;
-                }
-
-                for (uint32_t i = 0; i < 4; i++)
-                {
-                    periods[i] = fmod(periods[i], duration);
-                    phases[i] = (periods[i] < partial_durations[0]);
-                }
+                    periods[1] += 3.0*duration/4.0;
+                    periods[2] += duration/2.0;
+                    periods[3] += duration/4.0;
+                } break;
+                case AMBLE: {
+                    periods[2] += duration/2.0;
+                    periods[3] += duration/2.0;
+                } break;
             }
             else
             {
-                partial_durations[0] = 1.0;
-                partial_durations[1] = 1.0;
-
-                for (uint32_t i = 0; i < 4; i++)
-                {
-                    periods[i] = 0.5;
-                    phases[i] = true;
-                }
+                partial_durations[0] = duration;
+                partial_durations[1] = 0.0;
             }
 
+            for (uint32_t i = 0; i < 4; i++)
+            {
+                periods[i] = fmod(periods[i], duration);
+                phases[i] = (periods[i] < partial_durations[0]);
+            }
         }
     );
 
