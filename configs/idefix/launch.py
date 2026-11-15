@@ -7,39 +7,21 @@ from launch_modules.walk import *
 
 config_prefix = os.getenv("POND_IDEFIX_CONFIG_PATH", "")
 
-def compile_urdf(destination: str):
-    
-    with open(destination, "w") as f:
-        subprocess.run(
-            ["xacro", config_prefix + "description/Robodog.urdf.xacro"],
-            stdout=f,
-            check=True,
-        )
-
 def main():
     build_type = "release" if "-release" in sys.argv else "debug"
     os.environ["POND_BUNDLE_PATH"] = f"/home/christopher/pond/build/{build_type}/pond_bundles"
-    
-    DESCRIPTION_PATH = config_prefix + "build/robot.urdf"
-    compile_urdf(DESCRIPTION_PATH)   
 
-    pm = Manager(True, False)
+    with open(config_prefix + "build/robot.urdf", "w") as f:
+        subprocess.run(["xacro", config_prefix + "description/Robodog.urdf.xacro"], stdout=f, check=True)
+
+    pm = Manager(False, False)
 
     pm.set_thread_frame_time("robot_state_thread", 1.0)
-    pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : DESCRIPTION_PATH})
-
-    #dummy_cam(pm, "camera_front", 1280, 720, 30, True, ip)
-    #camera_front(pm, 1280, 720, 30, True, ip)
-    #dummy_cam(pm, "camera_back", 1280, 720, 30, True, ip)
-    #camera_back(pm, 1280, 720, 30, "color_stereo", True, ip)
-    #dummy_cam(pm, "camera_gripper", 1280, 720, 30, True, ip)
-    #camera_gripper(pm, 1280, 720, 30, "color_stereo", True, ip)
-    # lidar(pm)
+    pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : config_prefix + "build/robot.urdf"})
 
     mujoco_sim = True
-    #mujoco_sim = False
 
-    mpc_mode = True
+    mpc_mode = (True if "-mpc" in sys.argv else False)
 
     if mujoco_sim:
         mujoco(pm, mpc_mode)
@@ -49,7 +31,6 @@ def main():
     else:
         walk_position(pm, False, not mujoco_sim)
     
-
     ros2_bridge(pm)
 
     try:

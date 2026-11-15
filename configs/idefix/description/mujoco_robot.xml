@@ -103,6 +103,4 @@
     </body>
   </worldbody>
 
-  <include file="mujoco_torque_actuators.xml"/>
-
 </mujoco>
