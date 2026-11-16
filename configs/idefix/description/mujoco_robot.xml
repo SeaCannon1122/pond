@@ -30,8 +30,10 @@
 
     <light directional="true" pos="0 0 3" dir="0 0 -1" ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8"/>
 
-    <body name="chassis" pos="0 0 0.2">
-      <freejoint/>
+    <body name="base_link" pos="0 0 0.182">
+      <freejoint/> 
+
+      <!--<joint name="chassis_z" type="slide" axis="0 0 1"/>--> 
 
       <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="5.0" diaginertia="0.0048 0.00403333 0.00403333"/>
 

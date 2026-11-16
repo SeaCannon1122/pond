@@ -1,11 +1,16 @@
+#include "pond/h/module.h"
+#include "pond/hpp/dds.hpp"
+#include <cmath>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
+#include <pond_data_types/geometry_types.hpp>
 #include <thread>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>
 #include <simulate/simulate.h>
 #include <simulate/array_safety.h>
+#include <vector>
 
 namespace mj  = ::mujoco;
 namespace mju = ::mujoco::sample_util;
@@ -18,6 +23,13 @@ struct actuator
   int aid, jid, ctrl_adr;
   double cmd_pos = 0, cmd_vel = 0, cmd_torque = 0, fb_pos = 0, fb_vel = 0, fb_torque = 0;
   bool cmd_is_pos = false, cmd_is_vel = false, cmd_is_torque = false;
+};
+
+struct link_state_distributor
+{
+  int link_id;
+  pond::DistributorTyped<FrameState> d;
+  FrameState frame;
 };
 
 struct actuator_group
@@ -43,6 +55,7 @@ private:
   double syncCPU = 0.0;
   mjtNum syncSim = 0;
   int last_run = -1;
+  mjtNum last_time = 0;
 
   std::unique_ptr<mj::Simulate> sim;
 
@@ -51,6 +64,7 @@ private:
   std::optional<std::string> plugin_dir;
 
   std::vector<actuator_group> actuators_groups;
+  std::vector<link_state_distributor> link_state_distributors;
   std::mutex interface_mutex;
   double last_update_time = 0;
 
@@ -99,6 +113,25 @@ private:
     sim_created.store(true);
     sim->RenderLoop();
   }
+
+  void set_initial_joint_states()
+  {
+    auto initial_state_space = parameterSpace("initial_joint_states");
+    uint32_t initial_state_list_length = initial_state_space.listLength("name");
+
+    for (uint32_t i = 0; i < initial_state_list_length; i++)
+    {
+      auto name = initial_state_space.parameterAtIndex(i, "name").asString().get("");
+
+      int joint_id = mj_name2id(m, mjOBJ_JOINT, name.c_str());
+      if (joint_id == -1) {POND_LOG("Could not set initial state for joint '%s'", name.c_str()); continue;}
+
+      if (auto pos = initial_state_space.parameterAtIndex(i, "pos").asDouble().getStrict({}, false))
+        d->qpos[m->jnt_qposadr[joint_id]] = *pos;
+    }
+
+    mj_forward(m, d);
+  }
 };
 
 POND_MODULE_CPP_DECLARE(Mujoco, "mujoco", "mujoco pond binding")
@@ -129,7 +162,26 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
   if (!spec || !m) return POND_ERROR;
   if (!(d = mj_makeData(m))) { mj_deleteModel(m); POND_LOG_RETURN_ERROR("Failed to create model data"); }
 
-  mj_forward(m, d);
+  set_initial_joint_states();
+
+  auto link_state_distributors_names = parameter("link_state_distributors").asStringArray().get({});
+  
+  for (auto& name : link_state_distributors_names)
+  {
+    link_state_distributor lsd;
+    lsd.frame.stamp.frame_id = name;
+    
+    if ((lsd.link_id = mj_name2id(m, mjOBJ_BODY, name.c_str())) == -1)
+    {
+      mj_deleteModel(m);
+      for (auto& l: link_state_distributors) l.d.destroy();
+      POND_LOG_RETURN_ERROR("Link '%s' does not exist", name.c_str());
+    }
+
+    lsd.d = createDistributorTyped<FrameState>({name+"_frame_state"});
+
+    link_state_distributors.push_back(lsd);
+  }
 
   auto space = parameterSpace("actuator_groups");
   actuators_groups.resize(space.listLength("names"));
@@ -153,8 +205,8 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       
       if ((actuators_groups[gi].actuators[i].aid = mj_name2id(m, mjOBJ_ACTUATOR, names[i].c_str())) == -1)
       {
-        mj_deleteModel(m);
-        POND_LOG_RETURN_ERROR("Did not find actuator %s", names[i].c_str());
+        POND_LOG("Did not find actuator %s", names[i].c_str());
+        goto failiure;
       }
 
       actuators_groups[gi].actuators[i].jid = m->actuator_trnid[2 * actuators_groups[gi].actuators[i].aid];
@@ -162,8 +214,8 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       int ctrl_num = m->actuator_ctrlnum[actuators_groups[gi].actuators[i].aid];
       if (ctrl_num != 1)
       {
-        mj_deleteModel(m);
-        POND_LOG_RETURN_ERROR("actuator %s has %d control interfaces", names[i].c_str(), ctrl_num);
+        POND_LOG("actuator %s has %d control interfaces", names[i].c_str(), ctrl_num);
+        goto failiure;
       }
 
       actuators_groups[gi].actuators[i].cmd_is_pos = (types[i] == "position");
@@ -173,8 +225,8 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
       if (!actuators_groups[gi].actuators[i].cmd_is_pos && !actuators_groups[gi].actuators[i].cmd_is_vel && !actuators_groups[gi].actuators[i].cmd_is_torque)
       {
-        mj_deleteModel(m);
-        POND_LOG_RETURN_ERROR("Actuator type '%s' for actuator %s not implemented", types[i].c_str(), names[i].c_str());
+        POND_LOG("Actuator type '%s' for actuator %s not implemented", types[i].c_str(), names[i].c_str());
+        goto failiure;
       }
     } 
 
@@ -200,7 +252,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
     actuators_groups[gi].command_callback = createCallback<MotorCommand*>(cmd_info, [this, gi](MotorCommand*** commands) {
 
       for (uint32_t i = 0; i < actuators_groups[gi].actuators.size(); i++) if (*commands[i] == NULL)
-            POND_LOG_RETURN("%s is NULL", (actuators_groups[gi].command_stage_name + "/" + actuators_groups[gi].actuators[i].name + "_command").c_str());
+        POND_LOG_RETURN("%s is NULL", (actuators_groups[gi].command_stage_name + "/" + actuators_groups[gi].actuators[i].name + "_command").c_str());
 
       std::lock_guard<std::mutex> lock(interface_mutex);
 
@@ -211,7 +263,17 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
         if (commands[i][0]->torque) actuators_groups[gi].actuators[i].cmd_torque = *commands[i][0]->torque;
       }
     });
-  }   
+
+    continue;
+  failiure:
+    mj_deleteModel(m);
+    for (uint32_t i = 0; i < gi; i++)
+    {
+      actuators_groups[i].command_callback.destroy();
+      actuators_groups[i].feedback_callback.destroy();
+    }
+    return POND_ERROR;
+  }
 
   gui_thread = std::thread(&Mujoco::sim_thread_func, this);
   while (!sim_created.load()) pond::sleep(0.001);
@@ -225,6 +287,8 @@ void Mujoco::onShutdown()
 {
   sim->exitrequest.store(1);
   gui_thread.join();
+
+  for (auto& lsd : link_state_distributors) lsd.d.destroy();
 
   for (auto& group : actuators_groups)
   {
@@ -245,6 +309,9 @@ void Mujoco::onFrame()
 
   // lock the sim mutex
   const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
+
+  if (d->time < last_time) set_initial_joint_states();
+  last_time = d->time;
 
   // reset timers on transition between running and paused
   if (sim->run != last_run)
@@ -352,6 +419,35 @@ void Mujoco::onFrame()
     mj_forward(m, d);
     if (sim->pause_update) { mju_copy(d->qacc_warmstart, d->qacc, m->nv); }
     sim->speed_changed = true;
+  }
+
+  double time_after_frame = pond::get_time(), hw_time_after_frame = pond::get_monotonic_time();
+
+  for (auto& lsd : link_state_distributors)
+  {
+    lsd.frame.pose = Sophus::SE3d(
+      Eigen::Quaterniond(
+        d->xquat[4 * lsd.link_id],
+        d->xquat[4 * lsd.link_id + 1],
+        d->xquat[4 * lsd.link_id + 2],
+        d->xquat[4 * lsd.link_id + 3]
+      ),
+      Eigen::Vector3d(
+        d->xpos[3 * lsd.link_id],
+        d->xpos[3 * lsd.link_id + 1],
+        d->xpos[3 * lsd.link_id + 2]
+      )
+    );
+
+    double vel[6];
+    mj_objectVelocity(m, d, mjOBJ_BODY, lsd.link_id, vel, 0);
+
+    lsd.frame.lin_vel = Eigen::Vector3d(std::isfinite(vel[0]) ? vel[0] : 0.0, std::isfinite(vel[1]) ? vel[1] : 0.0, std::isfinite(vel[2]) ? vel[2] : 0.0);
+    lsd.frame.ang_vel = Eigen::Vector3d(std::isfinite(vel[3]) ? vel[3] : 0.0, std::isfinite(vel[4]) ? vel[4] : 0.0, std::isfinite(vel[5]) ? vel[5] : 0.0);
+
+    lsd.frame.stamp.time = time_after_frame; lsd.frame.stamp.hw_time = hw_time_after_frame;
+
+    lsd.d.distribute(&lsd.frame);
   }
 
   {

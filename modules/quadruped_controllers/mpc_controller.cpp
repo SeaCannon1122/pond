@@ -1,11 +1,9 @@
-#include "pond/h/module.h"
-#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
+#include <pond_data_types/geometry_types.hpp>
 
 #include <qpOASES.hpp>
-#include <qpOASES/Types.hpp>
 
 using Vector12 = Eigen::Vector<double, 12>;
 using Vector13 = Eigen::Vector<double, 13>;
@@ -24,25 +22,26 @@ public:
     virtual void onFrame() override;
 
 private:
-    pond::Callback update_callback;
+    pond::Callback update_callback, frame_state_callback;
     pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
     std::vector<Eigen::Vector3d> forces;
 
-    TwistCommand twist_cmd_rec, last_twist_cmd{.lin = Eigen::Vector3d(-99999, 0, 0)};
+    TwistCommand twist_cmd_rec;
     std::array<double, 2> partial_durations_rec = {1.0, 0.0};
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
-    std::mutex mutex;
+    FrameState reference_link_state_rec;
+    std::mutex cmd_mutex, state_mutex;
 
     std::vector<std::string> foot_link_names; std::string reference_link;
 
-    bool debug_log;
+    bool debug_log; double target_height;
     // Robot parameters (constant, static)
     double robot_mass, robot_mu; // robot mass, Friction coefficient
     std::vector<double> robot_f_range; // Minimum / Maximum vertical force
     Eigen::Matrix3d robot_I_body_; // Inertia tensor diagonal [Ixx, Iyy, Izz], Cheetah 3 typical: [0.5, 0.8, 0.3]
 
     // MPC parameters (constant for chosen gait)
-    double mpc_alpha_, mpc_dt_, mpc_N_, mpc_max_iter_; // α for R = α·I (Paper Eq. 28), Time step Δt (0.03-0.05s), Horizon length (10-16), Maximum QP iterations
+    double mpc_alpha_, mpc_dt_; uint32_t mpc_N_, mpc_max_iter_; // α for R = α·I (Paper Eq. 28), Time step Δt (0.03-0.05s), Horizon length (10-16), Maximum QP iterations
 
     // Q and R matrix diagonals
     Vector13 mpc_Q_diag_; Vector12 mpc_R_diag_; // State weighting (13x13, diagonal) Force weighting (12x12, R = α·I)
@@ -74,6 +73,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 
     reference_link = *reference_link_o; foot_link_names = *foot_link_names_o;
 
+    target_height = parameter("target_height").asDouble().get(0.25);
     debug_log = parameter("debug_log").asBool().get(false);
     robot_mass = parameter("robot.mass").asDouble().get(5);
     robot_mu = parameter("robot.mu").asDouble().get(0.6); // Friction coefficient μ - typically 0.6 for rubber feet
@@ -139,7 +139,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
             if (*twist_cmd_in == NULL) POND_LOG_RETURN("update_mpc/twist_command is NULL");
             if (*pose_tf_in == NULL) POND_LOG_RETURN("update_mpc/robot_pose is NULL");
 
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(cmd_mutex);
 
             for (uint32_t i = 0; i < 2; i++) partial_durations_rec[i] = partial_durations_in[0][0][i];
             for (uint32_t i = 0; i < 4; i++) periods_rec[i] = periods_in[0][0][i];
@@ -147,6 +147,11 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
             twist_cmd_rec = **twist_cmd_in;
         }
     );
+
+    frame_state_callback = createCallback<FrameState>({reference_link+"_frame_state"}, [this](FrameState* state_in) {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        reference_link_state_rec = *state_in;
+    });
 
     return POND_SUCCESS;
 }
@@ -161,33 +166,41 @@ void MPCController::onFrame()
 {
     double time_now = pond::get_time();
 
-    mutex.lock();
+    cmd_mutex.lock();
 
     auto twist_cmd = twist_cmd_rec;
     double gait_duration = partial_durations_rec[0] + partial_durations_rec[1];
     double stance_duration = partial_durations_rec[0];
     auto gait_periods = periods_rec;
 
-    mutex.unlock();
+    cmd_mutex.unlock();
 
-    bool new_twist = ((twist_cmd.lin - last_twist_cmd.lin).norm() + (twist_cmd.ang - last_twist_cmd.ang).norm() > 0.001);
-    if (new_twist) last_twist_cmd = twist_cmd;
+    state_mutex.lock();
+    FrameState ref_state = reference_link_state_rec;
+    state_mutex.unlock();
+
+    if (ref_state.stamp.time == 0) return;
+
+    GetFrameTransformRequest tf_request;
+    std::array<Eigen::Vector3d, 4> r_i_body;
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        if (!tfGetTransform(foot_link_names[i], reference_link, 0, tf_request)) return;
+        r_i_body[i] = tf_request.tf.translation();
+    }
 
     try {
         double start_time = pond::get_monotonic_time();
 
-        if (new_twist)
-        {
-            A_c.setZero();
-            A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(twist_cmd.ang[2] * mpc_dt_ * (double)mpc_N_ / 2.0).matrix().transpose();
-            A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
-            A_c(11,12) = -1.0; 
+        A_c.setZero();
+        A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(twist_cmd.ang[2] * mpc_dt_ * (double)mpc_N_ / 2.0).matrix().transpose();
+        A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
+        A_c(11,12) = -1.0; 
 
-            A_hat = Matrix13::Identity() + mpc_dt_*A_c + 0.5*mpc_dt_*mpc_dt_*A_c*A_c;
+        A_hat = Matrix13::Identity() + mpc_dt_*A_c + 0.5*mpc_dt_*mpc_dt_*A_c*A_c;
 
-            A_powers[0] = Matrix13::Identity();
-            for (uint32_t n = 0; n < mpc_N_; n++) A_powers[n+1] = A_powers[n] * A_hat;
-        }
+        A_powers[0] = Matrix13::Identity();
+        for (uint32_t n = 0; n < mpc_N_; n++) A_powers[n+1] = A_powers[n] * A_hat;
         
         double yaw_integrated = 0;
         Eigen::Vector3d pos_integrated = Eigen::Vector3d::Zero();
@@ -195,14 +208,6 @@ void MPCController::onFrame()
         for (uint32_t n = 0; n < mpc_N_; n++)
         {
             // Compute B_hat
-            GetFrameTransformRequest tf_request;
-            std::array<Eigen::Vector3d, 4> r_i_body;
-            for (uint32_t i = 0; i < 4; i++)
-            {
-                if (!tfGetTransform(foot_link_names[i], reference_link, 0, tf_request)) return;
-                r_i_body[i] = tf_request.tf.translation();
-            }
-            
             auto yaw_rot = Sophus::SO3d::rotZ(yaw_integrated);
 
             std::array<Eigen::Vector3d, 4> r_i_world;
@@ -234,13 +239,12 @@ void MPCController::onFrame()
 
             auto rotated_cmd_lin = Sophus::SO3d::rotZ(yaw_integrated) * twist_cmd.lin;
 
-            // Build reference
             x_ref_sequence[n] = Vector13{
-                0.0, 0.0, yaw_integrated, // rotation
-                pos_integrated[0], pos_integrated[1], 0.4, // position
-                0.0, 0.0, twist_cmd.ang[2], //  ang vel
-                rotated_cmd_lin[0], rotated_cmd_lin[1], 0.0, // lin vel
-                G_ACCEL // gravitational acceleration
+                0.0, 0.0, yaw_integrated,
+                pos_integrated[0], pos_integrated[1], target_height,
+                0.0, 0.0, twist_cmd.ang[2],
+                rotated_cmd_lin[0], rotated_cmd_lin[1], 0.0,
+                G_ACCEL
             };
         }
 
@@ -251,9 +255,9 @@ void MPCController::onFrame()
 
         Vector13 x_current{
             0.0, 0.0, 0.0, // rotation
-            0.0, 0.0, 0.4, // position
-            0.0, 0.0, 0.0, //  ang vel
-            0, 0, 0.0, // lin vel
+            0.0, 0.0, ref_state.pose.translation().z(), // position
+            ref_state.ang_vel[0], ref_state.ang_vel[1], ref_state.ang_vel[2], //  ang vel
+            ref_state.lin_vel[0], ref_state.lin_vel[1], ref_state.lin_vel[2], // lin vel
             G_ACCEL // gravitational acceleration
         };
 
@@ -366,20 +370,9 @@ void MPCController::onFrame()
 
         // KORREKTER INIT-AUFRUF mit allen 14 Parametern
         qpOASES::returnValue status = qp_solver.init(
-            H.data(),             // Hessian matrix
-            g.data(),             // Gradient vector
-            A.data(),             // Constraint matrix
-            lb.data(),            // Lower bounds (variables)
-            ub.data(),            // Upper bounds (variables)
-            lbA.data(),           // Lower bounds (constraints)
-            ubA.data(),           // Upper bounds (constraints)
-            nWSR,                 // Max iterations
-            nullptr,              // CPU time
-            nullptr,              // xOpt (initial primal solution)
-            nullptr,              // yOpt (initial dual solution)
-            nullptr,              // guessedBounds
-            nullptr,              // guessedConstraints
-            nullptr               // R (Cholesky factor)
+            H.data(), g.data(), A.data(),
+            lb.data(), ub.data(), lbA.data(), ubA.data(), nWSR,
+            NULL, NULL, NULL, NULL, NULL, NULL
         );
         
         if (status == qpOASES::SUCCESSFUL_RETURN || status == qpOASES::RET_MAX_NWSR_REACHED)

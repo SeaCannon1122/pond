@@ -22,7 +22,7 @@ class cfg:
         "joint_names" : joint_names,
         "reference_link" : "base_link",
 
-        "foot_base_offset" : [0.015, 0.025, -0.181],
+        "foot_base_offset" : [0.015, 0.025, -0.17],
 
         "step_height" : 0.035,
         "max_step_length" : 1.0,
@@ -41,7 +41,7 @@ class cfg:
         "reference_link" : "base_link",
         "max_swing_torque" : 8.0,
         "natural_frequency" : 180.0,
-        "oob_spring_frequency" : 20.0
+        "oob_spring_frequency" : 100.0
     }
 
     frame_dt = 0.0002
@@ -49,12 +49,13 @@ class cfg:
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
-        "debug_log": False,
+        "target_height" : 0.18,
+        "debug_log": True,
         "robot": {
-            "mass": 7.0,
+            "mass": 5.6,
             "mu": 0.6,
             "f_range": [0.0, 300.0],
-            "I_body": [0.5, 0.8, 0.3],
+            "I_body": [0.00775875, 0.02178375, 0.024855],
         },
         "mpc": {
             "dt": 0.03,

@@ -15,6 +15,8 @@ def mujoco(pm: Manager, torque_mode: bool):
             f_dst.write(f_src.read().replace("</mujoco>", "  <include file=\"mujoco_"+ctrl_type+"_actuators.xml\"/>\n</mujoco>"))
             shutil.copy(config_prefix + "description/mujoco_"+ctrl_type+"_actuators.xml", config_prefix + "build/mujoco_"+ctrl_type+"_actuators.xml")
 
+    initial_leg_state = [0.2, 0.5, -1.0]
+
     pm.load_module(
         "simulator", "mujoco/mujoco", "simulation_thread",
         {
@@ -26,6 +28,14 @@ def mujoco(pm: Manager, torque_mode: bool):
                     "feedback_stage_name" : walk.cfg.feedback_stage,
                     "command_stage_name" : walk.cfg.command_stage
                 },
+            ],
+            "link_state_distributors" : ["base_link"],
+            "initial_joint_states": [
+                {
+                    "name": walk.cfg.joint_names[3 * leg_i + joint_i],
+                    "pos": (-1.0 if leg_i % 2 and joint_i == 0 else 1.0) * initial_leg_state[joint_i]
+                }
+                for leg_i in range(4) for joint_i in range(3)
             ]
         },
     )
