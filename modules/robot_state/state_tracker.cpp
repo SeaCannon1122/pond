@@ -202,25 +202,34 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         Link* link = links_map[l.second->name];
 
         link->name = l.second->name;
-        link->mass = l.second->inertial->mass;
+        if (l.second->inertial)
+        {
+            link->mass = l.second->inertial->mass;
 
-        link->inertia <<    l.second->inertial->ixx, l.second->inertial->ixy, l.second->inertial->ixz,
-                            l.second->inertial->ixy, l.second->inertial->iyy, l.second->inertial->iyz,
-                            l.second->inertial->ixz, l.second->inertial->iyz, l.second->inertial->izz;
+            link->inertia <<    l.second->inertial->ixx, l.second->inertial->ixy, l.second->inertial->ixz,
+                                l.second->inertial->ixy, l.second->inertial->iyy, l.second->inertial->iyz,
+                                l.second->inertial->ixz, l.second->inertial->iyz, l.second->inertial->izz;
 
-        link->inertia_tf = Sophus::SE3d(
-            Eigen::Quaterniond(
-                l.second->inertial->origin.rotation.w,
-                l.second->inertial->origin.rotation.x,
-                l.second->inertial->origin.rotation.y,
-                l.second->inertial->origin.rotation.z
-            ),
-            Eigen::Vector3d(
-                l.second->inertial->origin.position.x,
-                l.second->inertial->origin.position.y,
-                l.second->inertial->origin.position.z
-            )
-        );
+            link->inertia_tf = Sophus::SE3d(
+                Eigen::Quaterniond(
+                    l.second->inertial->origin.rotation.w,
+                    l.second->inertial->origin.rotation.x,
+                    l.second->inertial->origin.rotation.y,
+                    l.second->inertial->origin.rotation.z
+                ),
+                Eigen::Vector3d(
+                    l.second->inertial->origin.position.x,
+                    l.second->inertial->origin.position.y,
+                    l.second->inertial->origin.position.z
+                )
+            );
+        }
+        else
+        {
+            link->mass = 0;
+            link->inertia = Eigen::Matrix3d::Zero();
+        }
+        
         link->child_links.resize(l.second->child_joints.size());
         
         for (uint32_t i = 0; i < link->child_links.size(); i++)

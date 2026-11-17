@@ -7,7 +7,7 @@
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": [ "configs/quac/launch.py"],
+            "args": [ "configs/quac/launch.py", "-docker"],
 
             "cwd": "${workspaceFolder}",
 
