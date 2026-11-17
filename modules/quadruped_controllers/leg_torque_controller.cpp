@@ -40,7 +40,7 @@ public:
     virtual void onShutdownTF() override;
 private:
 
-    void calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity);
+    bool calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity);
 
     pond::Callback force_callback, stage_callback;
     pond::DistributorTyped<std::vector<double>> torque_distributor;
@@ -52,7 +52,7 @@ private:
 
     leg_config configs[4];
 
-    double natural_frequency, oob_spring_frequency, max_swing_torque;
+    double natural_frequency, oob_spring_frequency, max_swing_torque, determinant_threshold;
 
     std::array<Eigen::Vector3d, 4> last_oob_free_joint_positions;
 
@@ -65,6 +65,7 @@ POND_MODULE_CPP_DECLARE(LegTorqueController, "leg_torque_controller", "torque co
 
 pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 {
+    determinant_threshold = parameter("determinant_threshold").asDouble().get(1e-9);
     natural_frequency = parameter("natural_frequency").asDouble().get(180.0);
     oob_spring_frequency = parameter("oob_spring_frequency").asDouble().get(2.0);
     max_swing_torque = parameter("max_swing_torque").asDouble().get(1.0);
@@ -167,32 +168,29 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
             leg_dynamics dynamics, dynamics_actual;
 
             uint32_t oob = 0;
+            // if (!calculate_leg_dynamics(i, dynamics_actual, joint_pos_actual, joint_vel, Eigen::Vector3d(0, 0, -9.81)))
+            // {
+            //     for (uint32_t j = 0; j < 3; j++)
+            //     {
+            //         if (configs[i].links[j].joint_min > joint_pos[j])
+            //         {
+            //             oob |= 1<<j;
+            //             joint_pos[j] = configs[i].links[j].joint_min;
+            //         }
+            //         else if (configs[i].links[j].joint_max < joint_pos[j])
+            //         {
+            //             oob |= 1<<j;
+            //             joint_pos[j] = configs[i].links[j].joint_max;
+            //         }
+            //     }
 
-            for (uint32_t j = 0; j < 3; j++)
-            {
-                if (configs[i].links[j].joint_min > joint_pos[j])
-                {
-                    oob |= 1<<j;
-                    joint_pos[j] = configs[i].links[j].joint_min;
-                }
-                else if (configs[i].links[j].joint_max < joint_pos[j])
-                {
-                    oob |= 1<<j;
-                    joint_pos[j] = configs[i].links[j].joint_max;
-                }
-            }
+            //     if (gait_phases[0][0][i]) for (uint32_t j = 0; j < 3; j++)
+            //     {
+            //         joint_pos[j] = last_oob_free_joint_positions[i][j];
+            //         oob |= 1<<j;
+            //     }
 
-            if (oob)
-            {
-                if (gait_phases[0][0][i]) for (uint32_t j = 0; j < 3; j++)
-                {
-                    joint_pos[j] = last_oob_free_joint_positions[i][j];
-                    oob |= 1<<j;
-                }
-                
-                calculate_leg_dynamics(i, dynamics_actual, joint_pos_actual, joint_vel, Eigen::Vector3d(0, 0, -9.81));
-            }
-            else last_oob_free_joint_positions[i] = joint_pos;
+            // } else last_oob_free_joint_positions[i] = joint_pos;
 
             calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81));
             
@@ -262,7 +260,7 @@ void LegTorqueController::onShutdownTF()
     poses_distributor.destroy();
 }
 
-void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)
+bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)
 {
     // 1. Forward Kinematics & Transforms
     Sophus::SO3d R[3];
@@ -360,4 +358,6 @@ void LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
     Eigen::Matrix3d lambda_inverse = dynamics.jacobian * dynamics.m.inverse() * dynamics.jacobian.transpose();
 
     dynamics.lambda = lambda_inverse.inverse();
+
+    return (dynamics.jacobian.determinant() > determinant_threshold);
 }

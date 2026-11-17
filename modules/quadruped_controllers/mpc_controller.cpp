@@ -1,3 +1,4 @@
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
@@ -29,7 +30,7 @@ private:
     TwistCommand twist_cmd_rec;
     std::array<double, 2> partial_durations_rec = {1.0, 0.0};
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
-    FrameState reference_link_state_rec;
+    FrameState current_link_state_rec;
     std::mutex cmd_mutex, state_mutex;
 
     std::vector<std::string> foot_link_names; std::string reference_link;
@@ -150,7 +151,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 
     frame_state_callback = createCallback<FrameState>({reference_link+"_frame_state"}, [this](FrameState* state_in) {
         std::lock_guard<std::mutex> lock(state_mutex);
-        reference_link_state_rec = *state_in;
+        current_link_state_rec = *state_in;
     });
 
     return POND_SUCCESS;
@@ -176,24 +177,31 @@ void MPCController::onFrame()
     cmd_mutex.unlock();
 
     state_mutex.lock();
-    FrameState ref_state = reference_link_state_rec;
+    FrameState current_state = current_link_state_rec;
     state_mutex.unlock();
 
-    if (ref_state.stamp.time == 0) return;
+    if (current_state.stamp.time == 0) return;
+
+    Eigen::Matrix3d current_rotation = current_state.pose.so3().matrix();
+    Eigen::Vector3d current_angles = { // roll pitch yaw
+        std::atan2(current_rotation(2,1), current_rotation(2,2)),
+        -std::asin(std::clamp(current_rotation(2,0), -1.0, 1.0)),
+        std::atan2(current_rotation(1,0), current_rotation(0,0))
+    };
 
     GetFrameTransformRequest tf_request;
-    std::array<Eigen::Vector3d, 4> r_i_body;
+    std::array<Eigen::Vector3d, 4> foot_r_world;
     for (uint32_t i = 0; i < 4; i++)
     {
         if (!tfGetTransform(foot_link_names[i], reference_link, 0, tf_request)) return;
-        r_i_body[i] = tf_request.tf.translation();
+        foot_r_world[i] = current_rotation * tf_request.tf.translation();
     }
 
     try {
         double start_time = pond::get_monotonic_time();
 
         A_c.setZero();
-        A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(twist_cmd.ang[2] * mpc_dt_ * (double)mpc_N_ / 2.0).matrix().transpose();
+        A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(current_angles[2] + twist_cmd.ang[2] * mpc_dt_ * (double)mpc_N_ / 2.0).matrix().transpose();
         A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
         A_c(11,12) = -1.0; 
 
@@ -202,25 +210,24 @@ void MPCController::onFrame()
         A_powers[0] = Matrix13::Identity();
         for (uint32_t n = 0; n < mpc_N_; n++) A_powers[n+1] = A_powers[n] * A_hat;
         
-        double yaw_integrated = 0;
+        double yaw_integrated = current_angles[2];
+        auto yaw_integrated_rot = Sophus::SO3d::rotZ(yaw_integrated);
+        auto rotated_cmd_lin = yaw_integrated_rot * twist_cmd.lin;
         Eigen::Vector3d pos_integrated = Eigen::Vector3d::Zero();
         
         for (uint32_t n = 0; n < mpc_N_; n++)
         {
-            // Compute B_hat
-            auto yaw_rot = Sophus::SO3d::rotZ(yaw_integrated);
-
-            std::array<Eigen::Vector3d, 4> r_i_world;
-            for (int leg = 0; leg < 4; leg++) r_i_world[leg] = yaw_rot * r_i_body[leg];
+            Eigen::Vector3d delta_pos = rotated_cmd_lin * mpc_dt_;
 
             // calculate B_c
             B_c.setZero();
 
-            Eigen::Matrix3d I_hat_inv = (yaw_rot.matrix() * robot_I_body_ * yaw_rot.matrix().transpose()).inverse();
+            Eigen::Matrix3d I_hat_inv = (yaw_integrated_rot.matrix() * robot_I_body_ * yaw_integrated_rot.matrix().transpose()).inverse();
 
             for (uint32_t i = 0; i < 4; i++)
             {
-                const Eigen::Vector3d& r = r_i_world[i];
+                auto& r = foot_r_world[i];
+
                 Eigen::Matrix3d r_cross;
                 r_cross <<    0, -r[2],  r[1],
                            r[2],     0, -r[0],
@@ -229,15 +236,16 @@ void MPCController::onFrame()
                 B_c.block<3,3>(6, 3*i) = I_hat_inv * r_cross;
                 B_c.block<3,3>(9, 3*i).setIdentity();
                 B_c.block<3,3>(9, 3*i) /= robot_mass;
+
+                r -= delta_pos;
             }
             
-            B_hat_sequence[n] = mpc_dt_*B_c + 0.5*mpc_dt_*mpc_dt_*A_c*B_c;
-            
-            // integrate timestep
             yaw_integrated += twist_cmd.ang[2] * mpc_dt_;
-            pos_integrated += yaw_rot * twist_cmd.lin * mpc_dt_;
+            pos_integrated += delta_pos;
+            yaw_integrated_rot = Sophus::SO3d::rotZ(yaw_integrated);
+            rotated_cmd_lin = yaw_integrated_rot * twist_cmd.lin;
 
-            auto rotated_cmd_lin = Sophus::SO3d::rotZ(yaw_integrated) * twist_cmd.lin;
+            B_hat_sequence[n] = mpc_dt_*B_c + 0.5*mpc_dt_*mpc_dt_*A_c*B_c;
 
             x_ref_sequence[n] = Vector13{
                 0.0, 0.0, yaw_integrated,
@@ -254,10 +262,10 @@ void MPCController::onFrame()
             B_qp.block<state_dim, input_dim>(state_dim * n, input_dim * j) = A_powers[n-j] * B_hat_sequence[j];
 
         Vector13 x_current{
-            0.0, 0.0, 0.0, // rotation
-            0.0, 0.0, ref_state.pose.translation().z(), // position
-            ref_state.ang_vel[0], ref_state.ang_vel[1], ref_state.ang_vel[2], //  ang vel
-            ref_state.lin_vel[0], ref_state.lin_vel[1], ref_state.lin_vel[2], // lin vel
+            current_angles[0], current_angles[1], current_angles[2], // rotation
+            0.0, 0.0, current_state.pose.translation().z(), // position
+            current_state.ang_vel[0], current_state.ang_vel[1], current_state.ang_vel[2], //  ang vel
+            current_state.lin_vel[0], current_state.lin_vel[1], current_state.lin_vel[2], // lin vel
             G_ACCEL // gravitational acceleration
         };
 
