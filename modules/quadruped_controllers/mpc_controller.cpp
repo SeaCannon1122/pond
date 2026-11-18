@@ -1,3 +1,5 @@
+#include "pond_data_types/transform_types.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
@@ -28,6 +30,7 @@ private:
     std::vector<Eigen::Vector3d> forces;
 
     TwistCommand twist_cmd_rec;
+    FrameTransform pose_cmd_rec;
     std::array<double, 2> partial_durations_rec = {1.0, 0.0};
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
     TrajectoryPoint current_trajectory_point_rec;
@@ -39,7 +42,7 @@ private:
 
     double robot_mass, robot_mu;
     std::vector<double> robot_f_range;
-    Eigen::Matrix3d robot_I_body_;
+    Eigen::Matrix3d robot_I_body;
 
     double mpc_alpha, mpc_dt; uint32_t mpc_N, mpc_max_iter;
 
@@ -66,20 +69,23 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 
     reference_link = *reference_link_o; foot_link_names = *foot_link_names_o;
 
-    target_height = parameter("target_height").asDouble().get(0.25);
-    debug_log = parameter("debug_log").asBool().get(false);
-    robot_mass = parameter("robot.mass").asDouble().get(5);
-    robot_mu = parameter("robot.mu").asDouble().get(0.6); // Friction coefficient μ - typically 0.6 for rubber feet
+    target_height = parameter("target_height").asDouble()     .get(0.25);
+    debug_log     = parameter("debug_log")    .asBool()       .get(false);
+    robot_mass    = parameter("robot.mass")   .asDouble()     .get(5);
+    robot_mu      = parameter("robot.mu")     .asDouble()     .get(0.6);
     robot_f_range = parameter("robot.f_range").asDoubleArray().get({0.0, 300.0}, 2, 2);
 
     auto I_body_vec = parameter("robot.I_body").asDoubleArray().get({0.5, 0.8, 0.3}, 3, 3);
-    robot_I_body_ = Eigen::Matrix3d::Zero();
-    for (int i = 0; i < 3; ++i) robot_I_body_(i, i) = I_body_vec[i];
+    robot_I_body = Eigen::Map<Eigen::Vector3d>(I_body_vec.data()).asDiagonal();
 
-    mpc_dt = parameter("mpc.dt").asDouble().get(0.03);
-    mpc_N = parameter("mpc.N").asInt().get(12);
-    mpc_max_iter = parameter("mpc.max_iter").asInt().get(100);
-    mpc_alpha = parameter("mpc.alpha").asDouble().get(0.0001);     // α for R = α·I (Paper Equation 28) - Force weighting
+    mpc_dt       = parameter("mpc.dt")      .asDouble().get(0.03);
+    mpc_N        = parameter("mpc.N")       .asInt()   .get(12);
+    mpc_max_iter = parameter("mpc.max_iter").asInt()   .get(100);
+    mpc_alpha    = parameter("mpc.alpha")   .asDouble().get(0.0001);
+
+    // Q-Matrix diagonal weights Θ(3), P(3), ω(3), v(3), g(1)
+    auto Q_weights_vec = parameter("mpc.Q_weights").asDoubleArray().get({0.25, 0.25, 10.0, 2.0, 2.0, 50.0, 0.0, 0.0, 0.3, 0.2, 0.2, 0.1, 0.0}, 13, 13);
+    Q_diag = Eigen::Map<Vector13>(Q_weights_vec.data()).replicate(mpc_N, 1);
 
     nV = input_dim * mpc_N;
     uint32_t max_nC = 4*6*mpc_N;
@@ -97,23 +103,17 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
     A.resize(max_nC, nV);
     lbA.resize(max_nC); ubA.resize(max_nC); lb.resize(nV); ub.resize(nV);
         
-    // Q-Matrix diagonal weights (13 states: Θ(3), P(3), ω(3), v(3), g(1))
-    auto Q_weights_vec = parameter("mpc.Q_weights").asDoubleArray().getStrict(13, 13);
-    if (!Q_weights_vec) return POND_ERROR;
-
-    Q_diag = Eigen::Map<Vector13>(Q_weights_vec->data()).replicate(mpc_N, 1);
-
     forces.resize(4);
     force_distributor = createDistributorTyped<std::vector<Eigen::Vector3d>>({"ground_forces"});
 
     update_callback = createCallback<std::vector<double>*, std::vector<double>*, TwistCommand*, FrameTransform*>(
-        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/twist_command", "update_mpc/robot_pose"},
+        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/cmd_vel", "update_mpc/cmd_pose"},
         [this](std::vector<double>** periods_in, std::vector<double>** partial_durations_in, TwistCommand** twist_cmd_in, FrameTransform** pose_tf_in)
         {
             if (*periods_in == NULL)            POND_LOG_RETURN("update_mpc/gait_periods is NULL");
             if (*partial_durations_in == NULL)  POND_LOG_RETURN("update_mpc/partial_gait_durations is NULL");
-            if (*twist_cmd_in == NULL)          POND_LOG_RETURN("update_mpc/twist_command is NULL");
-            if (*pose_tf_in == NULL)            POND_LOG_RETURN("update_mpc/robot_pose is NULL");
+            if (*twist_cmd_in == NULL)          POND_LOG_RETURN("update_mpc/cmd_vel is NULL");
+            if (*pose_tf_in == NULL)            POND_LOG_RETURN("update_mpc/cmd_pose is NULL");
 
             std::lock_guard<std::mutex> lock(cmd_mutex);
 
@@ -121,6 +121,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
             for (uint32_t i = 0; i < 4; i++) periods_rec[i] = periods_in[0][0][i];
 
             twist_cmd_rec = **twist_cmd_in;
+            pose_cmd_rec = **pose_tf_in;
         }
     );
 
@@ -146,6 +147,7 @@ void MPCController::onFrame()
     cmd_mutex.lock();
 
     auto twist_cmd = twist_cmd_rec;
+    auto pose_cmd = pose_cmd_rec;
     double gait_duration = partial_durations_rec[0] + partial_durations_rec[1];
     double stance_duration = partial_durations_rec[0];
     auto gait_periods = periods_rec;
@@ -163,6 +165,13 @@ void MPCController::onFrame()
         std::atan2(current_rotation(2,1), current_rotation(2,2)),
         -std::asin(std::clamp(current_rotation(2,0), -1.0, 1.0)),
         std::atan2(current_rotation(1,0), current_rotation(0,0))
+    };
+
+    Eigen::Matrix3d pose_cmd_rotation = pose_cmd.tf.so3().matrix();
+    Eigen::Vector3d pose_cmd_angles = { // roll pitch yaw
+        std::atan2(pose_cmd_rotation(2,1), pose_cmd_rotation(2,2)),
+        -std::asin(std::clamp(pose_cmd_rotation(2,0), -1.0, 1.0)),
+        std::atan2(pose_cmd_rotation(1,0), pose_cmd_rotation(0,0))
     };
 
     GetFrameTransformRequest tf_request;
@@ -196,7 +205,7 @@ void MPCController::onFrame()
 
         Matrix13x12 B_c = Matrix13x12::Zero();
 
-        Eigen::Matrix3d I_hat_inv = (yaw_integrated_rot.matrix() * robot_I_body_ * yaw_integrated_rot.matrix().transpose()).inverse();
+        Eigen::Matrix3d I_hat_inv = (yaw_integrated_rot.matrix() * robot_I_body * yaw_integrated_rot.matrix().transpose()).inverse();
 
         for (uint32_t i = 0; i < 4; i++)
         {
@@ -218,13 +227,12 @@ void MPCController::onFrame()
 
         B_hat_sequence[n] = mpc_dt*B_c + 0.5*mpc_dt*mpc_dt*A_c*B_c;
 
-        x_ref_sequence[n] = Vector13{
-            0.0, 0.0, yaw_integrated,
+        x_ref_sequence[n] <<
+            pose_cmd_angles[0], pose_cmd_angles[1], yaw_integrated,
             pos_integrated[0], pos_integrated[1], target_height,
-            0.0, 0.0, twist_cmd.ang[2],
+            twist_cmd.ang,
             rotated_cmd_lin[0], rotated_cmd_lin[1], 0.0,
-            G_ACCEL
-        };
+            G_ACCEL;
     }
 
     Vector13 x_current; x_current << current_angles, 0, 0, current_state.pose.translation().z(), current_state.ang_vel, current_state.lin_vel, G_ACCEL;

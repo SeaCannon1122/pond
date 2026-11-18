@@ -51,7 +51,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
         twist_cmd_received = *cmd;
     });
 
-    pose_callback = createCallback<FrameTransform>({"robot_pose"}, [this](FrameTransform* tf) {
+    pose_callback = createCallback<FrameTransform>({"cmd_pose"}, [this](FrameTransform* tf) {
         std::lock_guard<std::mutex> lock(cmd_mutex);
         pose_tf_received = *tf;
     });
@@ -61,7 +61,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
     partial_durations.resize(2);
 
     schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<bool>*, TwistCommand*, FrameTransform*>(
-        {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/twist_command", "schedule_gaits/robot_pose"},
+        {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/cmd_vel", "schedule_gaits/cmd_pose"},
         [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TwistCommand** twist_cmd_out, FrameTransform** pose_tf_out)
         {
             *periods_out = &periods;

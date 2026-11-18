@@ -10,6 +10,8 @@ add_library(quadruped_controllers-pond_bundle SHARED
     motor_joint_updater.cpp
     leg_torque_controller.cpp
     mpc_controller.cpp
+    command_controller.cpp
+    foot_contact_controller.cpp
 )
 
 target_link_libraries(quadruped_controllers-pond_bundle qpOASES)

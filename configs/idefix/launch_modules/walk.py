@@ -53,7 +53,7 @@ class cfg:
         "debug_log": True,
         "robot": {
             "mass": 5.6,
-            "mu": 0.6,
+            "mu": 1.3, # Friction coefficient μ - typically 0.6 for rubber feet
             "f_range": [0.0, 300.0],
             "I_body": [0.00775875, 0.02178375, 0.024855],
         },
@@ -61,7 +61,7 @@ class cfg:
             "dt": 0.03,
             "N": 12,
             "max_iter": 100,
-            "alpha": 1e-6,
+            "alpha": 1e-6, # α for R = α·I (Paper Equation 28) - Force weighting
             "Q_weights": [
                 0.25, 0.25, 10.0, # roll pitch yaw 
                 2.0, 2.0, 50.0,   # x y z
@@ -112,7 +112,7 @@ def walk_mpc(pm: Manager):
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
 
             "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
         }
@@ -160,7 +160,7 @@ def walk_position(pm: Manager, real: bool = True, fake: bool = False):
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "twist_command", "robot_pose", "target_trajectory_states"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
 
             "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
         }

@@ -36,6 +36,18 @@ class cfg:
             "pond" : {"channel" : "cmd_vel",                    "type" : "TwistCommand"},
             "ros"  : {"topic"   : "cmd_vel_stamped",            "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
         },
+        ######### cmd_pose #########
+        {   "direction" : "ROS_TO_POND",
+
+            "pond" : {"channel" : "cmd_pose",                    "type" : "FrameTransform"},
+            "ros"  : {"topic"   : "cmd_pose",                    "type" : "geometry_msgs::msg::PoseStamped",   "qos.depth" : 1, "qos.reliable" : False}  
+        },
+        ###### gait_duration ######
+        {   "direction" : "ROS_TO_POND",
+
+            "pond" : {"channel" : "cmd_height",                  "type" : "double"},
+            "ros"  : {"topic"   : "cmd_height",                  "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
+        },
         ######## gait_type ########
         {   "direction" : "ROS_TO_POND",
 

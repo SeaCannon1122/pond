@@ -94,8 +94,8 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         {
             "evaluate_trajectories/gait_periods",
             "evaluate_trajectories/partial_gait_durations",
-            "evaluate_trajectories/twist_command",
-            "evaluate_trajectories/robot_pose",
+            "evaluate_trajectories/cmd_vel",
+            "evaluate_trajectories/cmd_pose",
             "evaluate_trajectories/target_trajectory_states",
         },
         [this](
@@ -108,8 +108,8 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         {
             if (*periods_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_periods is NULL");
             if (*partial_durations_in == NULL) POND_LOG_RETURN("evaluate_trajectories/partial_gait_durations is NULL");
-            if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_trajectories/twist_command is NULL");
-            if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_trajectories/robot_pose is NULL");
+            if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_trajectories/cmd_vel is NULL");
+            if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_trajectories/cmd_pose is NULL");
 
             *target_trajectory_states_out = &trajectory_states;
 
