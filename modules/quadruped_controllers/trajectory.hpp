@@ -105,7 +105,7 @@ public:
         return true;
     }
 
-    void get_state(double t, TrajectoryState& point)
+    void get_state(double t, TrajectoryPoint& point)
     {
         // Normalize time to a single gait cycle [0.0, 1.0]
         t = std::fmod(t, T_st + T_sw);
@@ -113,27 +113,27 @@ public:
         // Select the appropriate gait phase based on the duty cycle
         if (t <= T_st)
         {
-            point.pos = stance_function.eval_d<0>(t);
-            point.vel = stance_function.eval_d<1>(t);
-            point.acc = stance_function.eval_d<2>(t);
+            point.pose.translation() = stance_function.eval_d<0>(t);
+            point.lin_vel = stance_function.eval_d<1>(t);
+            point.lin_acc = stance_function.eval_d<2>(t);
         }
         else if(t < T_st + T_sw/2.0)
         {
-            point.pos = swing_I_function.eval_d<0>(t - T_st);
-            point.vel = swing_I_function.eval_d<1>(t - T_st);
-            point.acc = swing_I_function.eval_d<2>(t - T_st);
+            point.pose.translation() = swing_I_function.eval_d<0>(t - T_st);
+            point.lin_vel = swing_I_function.eval_d<1>(t - T_st);
+            point.lin_acc = swing_I_function.eval_d<2>(t - T_st);
         }
         else
         {
-            point.pos = swing_II_function.eval_d<0>(t - T_st);
-            point.vel = swing_II_function.eval_d<1>(t - T_st);
-            point.acc = swing_II_function.eval_d<2>(t - T_st);
+            point.pose.translation() = swing_II_function.eval_d<0>(t - T_st);
+            point.lin_vel = swing_II_function.eval_d<1>(t - T_st);
+            point.lin_acc = swing_II_function.eval_d<2>(t - T_st);
         }
 
         // Transform local trajectory state into the global movement direction
-        point.pos = v_rot_mat * point.pos;
-        point.vel = v_rot_mat * point.vel;
-        point.acc = v_rot_mat * point.acc;
+        point.pose.translation() = v_rot_mat * point.pose.translation();
+        point.lin_vel = v_rot_mat * point.lin_vel;
+        point.lin_acc = v_rot_mat * point.lin_acc;
     }
 
     trajectory_function_3d stance_function;

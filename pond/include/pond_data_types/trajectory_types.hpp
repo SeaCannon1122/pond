@@ -1,9 +1,12 @@
 #pragma once
 
-#include <eigen3/Eigen/src/Core/Matrix.h>
-struct TrajectoryState
+#include "stamp.hpp"
+#include <sophus/se3.hpp>
+struct TrajectoryPoint
 {
-    Eigen::Vector3d pos;
-    Eigen::Vector3d vel;
-    Eigen::Vector3d acc;
+    Stamp stamp;
+
+    Sophus::SE3d pose;
+    Eigen::Vector3d lin_vel{0,0,0}, ang_vel{0,0,0};
+    Eigen::Vector3d lin_acc{0,0,0}, ang_acc{0,0,0};
 };

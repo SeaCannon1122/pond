@@ -137,14 +137,14 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
     for (uint32_t i = 0; i < 12; i++) info.channel<MotorFeedback*>("calculate_torque/" + motor_names[i] + "_feedback");
 
     info.channel<std::vector<bool>*>("calculate_torque/gait_phases");
-    info.channel<std::vector<TrajectoryState>*>("calculate_torque/target_trajectory_states");
+    info.channel<std::vector<TrajectoryPoint>*>("calculate_torque/target_trajectory_states");
 
     stage_callback = createCallback<void>(info, [this](void** data) {
 
         MotorCommand*** commands = (MotorCommand***)data;
         MotorFeedback*** feedbacks = (MotorFeedback***)&data[12];
         std::vector<bool>** gait_phases = (std::vector<bool>**)data[24];
-        std::vector<TrajectoryState>** ref_states = (std::vector<TrajectoryState>**)data[25];
+        std::vector<TrajectoryPoint>** ref_states = (std::vector<TrajectoryPoint>**)data[25];
 
         if (*gait_phases == NULL) POND_LOG_RETURN("calculate_torque/gait_phases is NULL");
         if (*ref_states == NULL) POND_LOG_RETURN("calculate_torque/target_trajectory_states is NULL");
@@ -204,11 +204,11 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
                     Kd(i, i) = 2.0 * natural_frequency * dynamics.lambda(i, i);
                 }
 
-                Eigen::Vector3d pos_error = ref_states[0][0][i].pos - dynamics.p_foot, vel_error = ref_states[0][0][i].vel - dynamics.v_foot;
+                Eigen::Vector3d pos_error = ref_states[0][0][i].pose.translation() - dynamics.p_foot, vel_error = ref_states[0][0][i].lin_vel - dynamics.v_foot;
 
                 torque = dynamics.jacobian.transpose() * (
                     Kp * pos_error + Kd * vel_error +
-                    dynamics.lambda * (ref_states[0][0][i].acc - dynamics.jacobian_dot * joint_vel)
+                    dynamics.lambda * (ref_states[0][0][i].lin_acc - dynamics.jacobian_dot * joint_vel)
                 ) + dynamics.c_qdot + dynamics.g;
 
                 for (uint32_t j = 0; j < 3; j++) torque[j] = std::clamp(torque[j], -max_swing_torque, max_swing_torque);

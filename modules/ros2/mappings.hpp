@@ -60,7 +60,8 @@ void tf2_msgs_msg_TFMessage__to__std_vector_FrameTransform(std::vector<FrameTran
 
 void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg::Pose2D& ros);
 
-void std_vector_TrajectoryState__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryState>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros);
+void TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const TrajectoryPoint& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros);
+void std_vector_TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryPoint>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros);
 
 void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros);
 void geometry_msgs_msg_TwistStamped__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::TwistStamped& ros);

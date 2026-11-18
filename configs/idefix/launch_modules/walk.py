@@ -61,21 +61,13 @@ class cfg:
             "dt": 0.03,
             "N": 12,
             "max_iter": 100,
-            "alpha": 0.0001,
+            "alpha": 1e-6,
             "Q_weights": [
-                0.8,  # φ (roll) - always 0 in reference
-                0.8,  # θ (pitch) - always 0 in reference
-                0.5,  # ψ (yaw) - important
-                1.0,  # x position [m]
-                1.0,  # y position [m]
-                10.0, # z position [m] - VERY important for height control!
-                0.05, # ω_x (roll rate) [rad/s] - always 0 in reference
-                0.05, # ω_y (pitch rate) [rad/s] - always 0 in reference
-                0.02, # ω_z (yaw rate) [rad/s] - important
-                0.1,  # v_x (x velocity) [m/s] - important
-                0.1,  # v_y (y velocity) [m/s] - important
-                1.0,  # v_z (z velocity) [m/s] - always 0 in reference
-                0.0   # g (gravity state) - constant
+                0.25, 0.25, 10.0, # roll pitch yaw 
+                2.0, 2.0, 50.0,   # x y z
+                0.0, 0.0, 0.3,    # roll- pitch- yaw- velocity
+                0.2, 0.2,  0.1,   # x- y- z- velocity
+                0.0 # g (gravity state) - constant
             ]
         }
     }

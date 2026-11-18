@@ -1,16 +1,13 @@
-#include "pond/h/module.h"
-#include "pond/hpp/dds.hpp"
 #include <cmath>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
-#include <pond_data_types/geometry_types.hpp>
+#include <pond_data_types/trajectory_types.hpp>
 #include <thread>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>
 #include <simulate/simulate.h>
 #include <simulate/array_safety.h>
-#include <vector>
 
 namespace mj  = ::mujoco;
 namespace mju = ::mujoco::sample_util;
@@ -28,8 +25,8 @@ struct actuator
 struct link_state_distributor
 {
   int link_id;
-  pond::DistributorTyped<FrameState> d;
-  FrameState frame;
+  pond::DistributorTyped<TrajectoryPoint> d;
+  TrajectoryPoint frame;
 };
 
 struct actuator_group
@@ -178,7 +175,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
       POND_LOG_RETURN_ERROR("Link '%s' does not exist", name.c_str());
     }
 
-    lsd.d = createDistributorTyped<FrameState>({name+"_frame_state"});
+    lsd.d = createDistributorTyped<TrajectoryPoint>({name+"_trajectory_point"});
 
     link_state_distributors.push_back(lsd);
   }
@@ -442,8 +439,8 @@ void Mujoco::onFrame()
     double vel[6];
     mj_objectVelocity(m, d, mjOBJ_BODY, lsd.link_id, vel, 0);
 
-    lsd.frame.lin_vel = Eigen::Vector3d(std::isfinite(vel[0]) ? vel[0] : 0.0, std::isfinite(vel[1]) ? vel[1] : 0.0, std::isfinite(vel[2]) ? vel[2] : 0.0);
-    lsd.frame.ang_vel = Eigen::Vector3d(std::isfinite(vel[3]) ? vel[3] : 0.0, std::isfinite(vel[4]) ? vel[4] : 0.0, std::isfinite(vel[5]) ? vel[5] : 0.0);
+    lsd.frame.ang_vel = Eigen::Vector3d(std::isfinite(vel[0]) ? vel[0] : 0.0, std::isfinite(vel[1]) ? vel[1] : 0.0, std::isfinite(vel[2]) ? vel[2] : 0.0);
+    lsd.frame.lin_vel = Eigen::Vector3d(std::isfinite(vel[3]) ? vel[3] : 0.0, std::isfinite(vel[4]) ? vel[4] : 0.0, std::isfinite(vel[5]) ? vel[5] : 0.0);
 
     lsd.frame.stamp.time = time_after_frame; lsd.frame.stamp.hw_time = hw_time_after_frame;
 

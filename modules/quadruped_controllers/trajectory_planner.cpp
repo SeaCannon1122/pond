@@ -28,7 +28,7 @@ private:
 
     std::array<DynamicTrajectory, 4> trajectories;
 
-    std::vector<TrajectoryState> trajectory_states;
+    std::vector<TrajectoryPoint> trajectory_states;
     TwistCommand last_twist_cmd{{}, {0.1, 0, 0}, {0, 0, 0}};
     double last_T_sw = -1, last_T_st = -1;
 
@@ -89,7 +89,7 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         std::vector<double>*, 
         TwistCommand*, 
         FrameTransform*,
-        std::vector<TrajectoryState>*
+        std::vector<TrajectoryPoint>*
     >(
         {
             "evaluate_trajectories/gait_periods",
@@ -103,7 +103,7 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
             std::vector<double>** partial_durations_in,
             TwistCommand** twist_cmd_in,
             FrameTransform** pose_tf_in,
-            std::vector<TrajectoryState>** target_trajectory_states_out
+            std::vector<TrajectoryPoint>** target_trajectory_states_out
         )
         {
             if (*periods_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_periods is NULL");
@@ -173,14 +173,14 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
                 if (last_T_sw > 0.0) trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
                 else
                 {
-                    trajectory_states[i].pos.setZero();
-                    trajectory_states[i].vel.setZero();
-                    trajectory_states[i].acc.setZero();
+                    trajectory_states[i].pose.translation().setZero();
+                    trajectory_states[i].lin_vel.setZero();
+                    trajectory_states[i].lin_acc.setZero();
                 }
 
-                trajectory_states[i].pos += foot_base_positions[i];
+                trajectory_states[i].pose.translation() += foot_base_positions[i];
 
-                foot_positions_msg[i].tf.translation() = trajectory_states[i].pos;
+                foot_positions_msg[i].tf.translation() = trajectory_states[i].pose.translation();
             }
 
             foot_position_distributor.distribute(&foot_positions_msg);

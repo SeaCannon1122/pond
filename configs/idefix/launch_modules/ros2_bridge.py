@@ -89,8 +89,13 @@ class cfg:
         ###### gait_duration ######
         {   "direction" : "POND_TO_ROS", "rate" : int(0.05 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "target_trajectory_states/out", "type" : "std::vector<TrajectoryState>"},
+            "pond" : {"channel" : "target_trajectory_states/out", "type" : "std::vector<TrajectoryPoint>"},
             "ros"  : {"topic"   : "target_trajectory_states",     "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+        },
+        {   "direction" : "POND_TO_ROS",
+        
+            "pond" : {"channel" : "base_link_trajectory_point",   "type" : "TrajectoryPoint"},
+            "ros"  : {"topic"   : "base_link_trajectory_point",   "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
         ###### target_torques ######
         {   "direction" : "POND_TO_ROS", "rate" : 10,

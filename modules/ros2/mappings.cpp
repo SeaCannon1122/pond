@@ -171,24 +171,61 @@ void geometry_msgs_msg_Pose2D__to__Pose2D(Pose2D& pond, const geometry_msgs::msg
     pond.theta = ros.theta;
 }
 
-void std_vector_TrajectoryState__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryState>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros)
+void std_vector_TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const std::vector<TrajectoryPoint>& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros)
 {
     ros.transforms.resize(pond.size()); ros.velocities.resize(pond.size()); ros.accelerations.resize(pond.size());
 
     for (uint32_t i = 0; i < pond.size(); i++)
     {
-        ros.transforms[i].translation.x = pond[i].pos.x();
-        ros.transforms[i].translation.y = pond[i].pos.y();
-        ros.transforms[i].translation.z = pond[i].pos.z();
+        ros.transforms[i].translation.x = pond[i].pose.translation().x();
+        ros.transforms[i].translation.y = pond[i].pose.translation().y();
+        ros.transforms[i].translation.z = pond[i].pose.translation().z();
+        ros.transforms[i].rotation.w = pond[i].pose.so3().unit_quaternion().w();
+        ros.transforms[i].rotation.x = pond[i].pose.so3().unit_quaternion().x();
+        ros.transforms[i].rotation.y = pond[i].pose.so3().unit_quaternion().y();
+        ros.transforms[i].rotation.z = pond[i].pose.so3().unit_quaternion().z();
 
-        ros.velocities[i].linear.x = pond[i].vel.x();
-        ros.velocities[i].linear.y = pond[i].vel.y();
-        ros.velocities[i].linear.z = pond[i].vel.z();
+        ros.velocities[i].linear.x = pond[i].lin_vel.x();
+        ros.velocities[i].linear.y = pond[i].lin_vel.y();
+        ros.velocities[i].linear.z = pond[i].lin_vel.z();
+        ros.velocities[i].angular.x = pond[i].ang_vel.x();
+        ros.velocities[i].angular.y = pond[i].ang_vel.y();
+        ros.velocities[i].angular.z = pond[i].ang_vel.z();
 
-        ros.accelerations[i].linear.x = pond[i].acc.x();
-        ros.accelerations[i].linear.y = pond[i].acc.y();
-        ros.accelerations[i].linear.z = pond[i].acc.z();
+        ros.accelerations[i].linear.x = pond[i].lin_acc.x();
+        ros.accelerations[i].linear.y = pond[i].lin_acc.y();
+        ros.accelerations[i].linear.z = pond[i].lin_acc.z();
+        ros.accelerations[i].angular.x = pond[i].ang_acc.x();
+        ros.accelerations[i].angular.y = pond[i].ang_acc.y();
+        ros.accelerations[i].angular.z = pond[i].ang_acc.z();
     }
+}
+
+void TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint(const TrajectoryPoint& pond, trajectory_msgs::msg::MultiDOFJointTrajectoryPoint& ros)
+{
+    ros.transforms.resize(1); ros.velocities.resize(1); ros.accelerations.resize(1);
+
+    ros.transforms[0].translation.x = pond.pose.translation().x();
+    ros.transforms[0].translation.y = pond.pose.translation().y();
+    ros.transforms[0].translation.z = pond.pose.translation().z();
+    ros.transforms[0].rotation.w = pond.pose.so3().unit_quaternion().w();
+    ros.transforms[0].rotation.x = pond.pose.so3().unit_quaternion().x();
+    ros.transforms[0].rotation.y = pond.pose.so3().unit_quaternion().y();
+    ros.transforms[0].rotation.z = pond.pose.so3().unit_quaternion().z();
+
+    ros.velocities[0].linear.x = pond.lin_vel.x();
+    ros.velocities[0].linear.y = pond.lin_vel.y();
+    ros.velocities[0].linear.z = pond.lin_vel.z();
+    ros.velocities[0].angular.x = pond.ang_vel.x();
+    ros.velocities[0].angular.y = pond.ang_vel.y();
+    ros.velocities[0].angular.z = pond.ang_vel.z();
+
+    ros.accelerations[0].linear.x = pond.lin_acc.x();
+    ros.accelerations[0].linear.y = pond.lin_acc.y();
+    ros.accelerations[0].linear.z = pond.lin_acc.z();
+    ros.accelerations[0].angular.x = pond.ang_acc.x();
+    ros.accelerations[0].angular.y = pond.ang_acc.y();
+    ros.accelerations[0].angular.z = pond.ang_acc.z();
 }
 
 void geometry_msgs_msg_Twist__to__TwistCommand(TwistCommand& pond, const geometry_msgs::msg::Twist& ros)
