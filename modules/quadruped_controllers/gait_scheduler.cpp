@@ -1,7 +1,6 @@
-#include "pond_data_types/transform_types.hpp"
-#include <mutex>
 #include <pond/pond.hpp>
 #include <pond_data_types/command_types.hpp>
+#include <pond_data_types/transform_types.hpp>
 
 enum GaitType
 {
@@ -18,22 +17,15 @@ public:
 private:
     std::atomic<int> gait_type{TROT};
     std::atomic<double> gait_duration{1.5};
-    pond::Callback gait_type_callback, gait_duration_callback, schedule_callback, twist_callback, pose_callback;
+    pond::Callback gait_type_callback, gait_duration_callback, schedule_callback;
 
     std::vector<double> periods, partial_durations; std::vector<bool> phases;
-    TwistCommand twist_cmd, twist_cmd_received;
-    FrameTransform pose_tf, pose_tf_received;
-    std::mutex cmd_mutex;
-
-    double cmd_timeout;
 };
 
 POND_MODULE_CPP_DECLARE(GaitScheduler, "gait_scheduler", "scheduling different gates like trot, walk etc.")
 
 pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
 {
-    cmd_timeout = parameter("timeout").asDouble().get(0.5);
-
     gait_type_callback = createCallback<std::string>({"gait_type"}, 
         [this](std::string* type_string){
             if (*type_string == "trot") gait_type.store(TROT); 
@@ -46,54 +38,27 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
         [this](double* duration) {gait_duration.store(*duration);}
     );
 
-    twist_callback = createCallback<TwistCommand>({"cmd_vel"}, [this](TwistCommand* cmd) {
-        std::lock_guard<std::mutex> lock(cmd_mutex);
-        twist_cmd_received = *cmd;
-    });
-
-    pose_callback = createCallback<FrameTransform>({"cmd_pose"}, [this](FrameTransform* tf) {
-        std::lock_guard<std::mutex> lock(cmd_mutex);
-        pose_tf_received = *tf;
-    });
-
     phases.resize(4);
     periods.resize(4);
     partial_durations.resize(2);
 
     schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<bool>*, TwistCommand*, FrameTransform*>(
         {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/cmd_vel", "schedule_gaits/cmd_pose"},
-        [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TwistCommand** twist_cmd_out, FrameTransform** pose_tf_out)
+        [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TwistCommand** twist_cmd_in, FrameTransform** pose_cmd_in)
         {
+            if (*twist_cmd_in == NULL) POND_LOG_RETURN("schedule_gaits/cmd_vel is NULL");
+            if (*pose_cmd_in == NULL) POND_LOG_RETURN("schedule_gaits/cmd_pose is NULL");
+
             *periods_out = &periods;
             *phases_out = &phases;
             *partial_durations_out = &partial_durations;
-            *twist_cmd_out = &twist_cmd;
-            *pose_tf_out = &pose_tf;
 
             double duration = gait_duration.load();
             double time_now = pond::get_time();
 
-            // get input
+            bool walk = (std::abs(twist_cmd_in[0]->lin[0]) > 0.001 || std::abs(twist_cmd_in[0]->lin[1]) > 0.001 || std::abs(twist_cmd_in[0]->ang[2]) > 0.001);
 
-            cmd_mutex.lock();
-
-            bool twist_usable = (std::abs(twist_cmd_received.lin[0]) > 0.001 | std::abs(twist_cmd_received.lin[1]) > 0.001 | std::abs(twist_cmd_received.ang[2]) > 0.001) && twist_cmd_received.stamp.time + cmd_timeout > time_now;
-            if (twist_usable) twist_cmd = twist_cmd_received;
-            else
-            {
-                twist_cmd.lin[0] = 0.0;
-                twist_cmd.lin[1] = 0.0;
-                twist_cmd.ang[2] = 0.0;
-            }
-
-            if (pose_tf_received.stamp.time + cmd_timeout > time_now) pose_tf = pose_tf_received;
-            
-            cmd_mutex.unlock();
-
-            // calculate periods
-            for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
-
-            if (twist_usable) switch (gait_type.load())
+            if (walk) switch (gait_type.load())
             {
                 case TROT: {
                     partial_durations[0] = duration/2.0;
@@ -135,8 +100,6 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
 void GaitScheduler::onShutdown()
 {
     schedule_callback.destroy();
-    twist_callback.destroy();
-    pose_callback.destroy();
     gait_type_callback.destroy();
     gait_duration_callback.destroy();
 }

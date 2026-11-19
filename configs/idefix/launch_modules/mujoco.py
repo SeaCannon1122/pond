@@ -25,8 +25,8 @@ def mujoco(pm: Manager, torque_mode: bool):
                 {
                     "names" : walk.cfg.motor_names, 
                     "types" : 12*[ctrl_type],
-                    "feedback_stage_name" : walk.cfg.feedback_stage,
-                    "command_stage_name" : walk.cfg.command_stage
+                    "feedback_stage_name" : walk.cfg.hw_feedback_stage,
+                    "command_stage_name" : walk.cfg.hw_command_stage
                 },
             ],
             "link_state_distributors" : ["base_link"],

@@ -1,5 +1,3 @@
-#include "pond_data_types/transform_types.hpp"
-#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
@@ -38,7 +36,7 @@ private:
 
     std::vector<std::string> foot_link_names; std::string reference_link;
 
-    bool debug_log; double target_height;
+    bool debug_log;
 
     double robot_mass, robot_mu;
     std::vector<double> robot_f_range;
@@ -53,8 +51,8 @@ private:
     std::vector<Vector13> x_ref_sequence;
     std::vector<Matrix13x12> B_hat_sequence;
 
-    MatrixXdRM H, B_qp, A;
-    Eigen::VectorXd g, solution, errors, Q_diag, lbA, ubA, lb, ub;
+    MatrixXdRM H, B_qp, A, Q;
+    Eigen::VectorXd g, solution, errors, lbA, ubA, lb, ub;
 
     std::vector<std::array<bool, 4>> foot_contacts;
 };
@@ -69,7 +67,6 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 
     reference_link = *reference_link_o; foot_link_names = *foot_link_names_o;
 
-    target_height = parameter("target_height").asDouble()     .get(0.25);
     debug_log     = parameter("debug_log")    .asBool()       .get(false);
     robot_mass    = parameter("robot.mass")   .asDouble()     .get(5);
     robot_mu      = parameter("robot.mu")     .asDouble()     .get(0.6);
@@ -85,7 +82,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 
     // Q-Matrix diagonal weights Θ(3), P(3), ω(3), v(3), g(1)
     auto Q_weights_vec = parameter("mpc.Q_weights").asDoubleArray().get({0.25, 0.25, 10.0, 2.0, 2.0, 50.0, 0.0, 0.0, 0.3, 0.2, 0.2, 0.1, 0.0}, 13, 13);
-    Q_diag = Eigen::Map<Vector13>(Q_weights_vec.data()).replicate(mpc_N, 1);
+    Q = Eigen::Map<Vector13>(Q_weights_vec.data()).replicate(mpc_N, 1).asDiagonal();
 
     nV = input_dim * mpc_N;
     uint32_t max_nC = 4*6*mpc_N;
@@ -158,21 +155,17 @@ void MPCController::onFrame()
     TrajectoryPoint current_state = current_trajectory_point_rec;
     state_mutex.unlock();
 
-    if (current_state.stamp.time == 0) return;
+    if (current_state.stamp.time == 0 || twist_cmd.stamp.time == 0) return;
 
     Eigen::Matrix3d current_rotation = current_state.pose.so3().matrix();
     Eigen::Vector3d current_angles = { // roll pitch yaw
         std::atan2(current_rotation(2,1), current_rotation(2,2)),
         -std::asin(std::clamp(current_rotation(2,0), -1.0, 1.0)),
-        std::atan2(current_rotation(1,0), current_rotation(0,0))
+        0
     };
 
     Eigen::Matrix3d pose_cmd_rotation = pose_cmd.tf.so3().matrix();
-    Eigen::Vector3d pose_cmd_angles = { // roll pitch yaw
-        std::atan2(pose_cmd_rotation(2,1), pose_cmd_rotation(2,2)),
-        -std::asin(std::clamp(pose_cmd_rotation(2,0), -1.0, 1.0)),
-        std::atan2(pose_cmd_rotation(1,0), pose_cmd_rotation(0,0))
-    };
+    Eigen::Vector3d pose_cmd_angles = pose_cmd_rotation.eulerAngles(2, 1, 0).reverse();
 
     GetFrameTransformRequest tf_request;
     std::array<Eigen::Vector3d, 4> foot_r_world;
@@ -185,7 +178,7 @@ void MPCController::onFrame()
     double start_time = pond::get_monotonic_time();
 
     Matrix13 A_c = Matrix13::Zero();
-    A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(current_angles[2] + twist_cmd.ang[2] * mpc_dt * (double)mpc_N / 2.0).matrix().transpose();
+    A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(twist_cmd.ang[2] * mpc_dt * (double)mpc_N / 2.0).matrix().transpose();
     A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
     A_c(11,12) = -1.0; 
 
@@ -194,7 +187,7 @@ void MPCController::onFrame()
     A_powers[0] = Matrix13::Identity();
     for (uint32_t n = 0; n < mpc_N; n++) A_powers[n+1] = A_powers[n] * A_hat;
     
-    double yaw_integrated = current_angles[2];
+    double yaw_integrated = 0;
     auto yaw_integrated_rot = Sophus::SO3d::rotZ(yaw_integrated);
     auto rotated_cmd_lin = yaw_integrated_rot * twist_cmd.lin;
     Eigen::Vector3d pos_integrated = Eigen::Vector3d::Zero();
@@ -229,13 +222,13 @@ void MPCController::onFrame()
 
         x_ref_sequence[n] <<
             pose_cmd_angles[0], pose_cmd_angles[1], yaw_integrated,
-            pos_integrated[0], pos_integrated[1], target_height,
+            pos_integrated[0], pos_integrated[1], pose_cmd.tf.translation().z(),
             twist_cmd.ang,
             rotated_cmd_lin[0], rotated_cmd_lin[1], 0.0,
             G_ACCEL;
     }
 
-    Vector13 x_current; x_current << current_angles, 0, 0, current_state.pose.translation().z(), current_state.ang_vel, current_state.lin_vel, G_ACCEL;
+    Vector13 x_current; x_current << current_angles[0], current_angles[1], 0, 0, 0, current_state.pose.translation().z(), current_state.ang_vel, current_state.lin_vel, G_ACCEL;
 
     B_qp.setZero();
     for (uint32_t n = 0; n < mpc_N; n++) for (uint32_t j = 0; j <= n; j++)
@@ -244,11 +237,11 @@ void MPCController::onFrame()
     for (uint32_t n = 0; n < mpc_N; n++) errors.segment<state_dim>(state_dim * n) = A_powers[n + 1] * x_current - x_ref_sequence[n];
 
     H.setZero();
-    H.selfadjointView<Eigen::Lower>().rankUpdate((Q_diag.cwiseSqrt().asDiagonal() * B_qp).transpose(), 2.0);
+    H.selfadjointView<Eigen::Lower>().rankUpdate((Q.cwiseSqrt() * B_qp).transpose(), 2.0);
     H.triangularView<Eigen::StrictlyUpper>() = H.triangularView<Eigen::StrictlyLower>().transpose();
     H.diagonal().array() += 2.0 * mpc_alpha;
 
-    g.noalias() = 2.0 * B_qp.transpose() * Q_diag.cwiseProduct(errors);
+    g.noalias() = 2.0 * B_qp.transpose() * Q * errors;
 
     uint32_t nC = 0;
 

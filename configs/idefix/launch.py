@@ -20,18 +20,12 @@ def main():
     pm.set_thread_frame_time("robot_state_thread", 1.0)
     pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : config_prefix + "build/robot.urdf"})
 
-    mujoco_sim = True
-
     mpc_mode = (True if "-mpc" in sys.argv else False)
 
-    if mujoco_sim:
-        mujoco(pm, mpc_mode)
+    mujoco(pm, mpc_mode)
 
-    if mpc_mode:
-        walk_mpc(pm)
-    else:
-        walk_position(pm, False, not mujoco_sim)
-    
+    walk(pm, mpc_mode, False)
+
     ros2_bridge(pm)
 
     try:

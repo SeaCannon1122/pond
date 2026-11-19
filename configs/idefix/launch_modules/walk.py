@@ -4,6 +4,8 @@ class cfg:
     
     thread_name = "walk_thread"
 
+    foot_link_names = ["FL_paw", "FR_paw", "BL_paw", "BR_paw"]
+
     joint_names = [
         "FL", "FL_leg", "FL_foot",
         "FR", "FR_leg", "FR_foot",
@@ -12,11 +14,18 @@ class cfg:
     ]
 
     motor_names = [joint + "_motor" for joint in joint_names]
+    
+    hw_feedback_stage = "read_servo_feedback"
+    hw_command_stage = "write_servo_commands"
 
-    foot_link_names = ["FL_paw", "FR_paw", "BL_paw", "BR_paw"]
+    cmd_params = {
+        "timeout": 0.5,
+        "stage_name": "feed_commands",
 
-    feedback_stage = "read_servo_feedback"
-    command_stage = "write_servo_commands"
+        "bounds.velocity": [0.2, 0.2, 0.3],
+        "bounds.height": [0.04, 0.3, 0.18],
+        "bounds.orientation": [0.8, 0.6, 0.3]
+    }
 
     trajectory_params = {
         "joint_names" : joint_names,
@@ -49,7 +58,6 @@ class cfg:
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
-        "target_height" : 0.18,
         "debug_log": True,
         "robot": {
             "mass": 5.6,
@@ -72,11 +80,14 @@ class cfg:
         }
     }
 
-def walk_mpc(pm: Manager):
+def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
     pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
 
-    pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
+    if mpc_mode:
+        pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
+
+    pm.load_module("command_controller", "quadruped_controllers/command_controller", cfg.thread_name, cfg.cmd_params)
 
     pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
@@ -89,79 +100,35 @@ def walk_mpc(pm: Manager):
         },
     )
 
-    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name)
     
     pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
 
-    pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
+    if mpc_mode:
+        pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
+    else:
+        pm.load_module("leg_kinematics_controller", "quadruped_controllers/leg_kinematics_controller", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module(
         "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
         {
             "frame_time_log" : False,
 
-            "stage_names" : [
-                "read_servo_feedback",
-                "update_joint_states",
-                "schedule_gaits",
-                "update_mpc",
-                "evaluate_trajectories",
-                "calculate_torque",
-                "write_servo_commands",
-            ],
+            "stage_names" : 
+                ["feed_commands"] +
+                ["read_servo_feedback"] +
+                ["update_joint_states"] +
+                ["schedule_gaits"] +
+               (["update_mpc"] if mpc_mode else []) + 
+                ["evaluate_trajectories"] +
+               (["calculate_torque"] if mpc_mode else ["calculate_joint_angles"]) +
+                ["write_servo_commands"],
+
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
                 ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
-        }
-    )
-
-def walk_position(pm: Manager, real: bool = True, fake: bool = False):
-        
-    pm.set_thread_frame_time(cfg.thread_name, 0.01)
-
-    # controllers
-    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params)
-
-    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"timeout" : 0.5})
-
-    pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
-
-    pm.load_module("leg_kinematics_controller", "quadruped_controllers/leg_kinematics_controller", cfg.thread_name, cfg.kinematics_params)
-        
-    # hardware
-    if real:
-        pass
-
-    # mock hardware
-    if fake:
-        pm.load_module(
-            "dummy_servos", "utility/dummy_motor", cfg.thread_name,
-            
-            {"mode" : "position", "max_speed" : 10.0, "motor_names": cfg.motor_names, "feedback_stage_name" : cfg.feedback_stage, "command_stage_name" : cfg.command_stage},
-        )
-
-    # control flow manager
-    pm.load_module(
-        "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
-        {
-            "frame_time_log" : False,
-
-            "stage_names" : [
-                "read_servo_feedback",
-                "update_joint_states",
-                "schedule_gaits",
-                "evaluate_trajectories",
-                "calculate_joint_angles",
-                "write_servo_commands",
-            ],
-            "data_ids" :
-                [motor+"_command" for motor in cfg.motor_names] +
-                [motor+"_feedback" for motor in cfg.motor_names] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
-
-            "data_out" : (len(cfg.motor_names) * 2)*[False] + [True, True, True, False, False, True]
+            "data_out" : (len(cfg.motor_names)*2)*[False] + [True, True, True, False, False, True]
         }
     )

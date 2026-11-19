@@ -326,7 +326,7 @@ void PondManager::thread_function(pond_internal::Thread* thread)
             {
                 log("[" + thread->name + "] Shutting down module '" + thread->modules[i]->name + "' ...");
                 thread->modules[i]->module_api.on_shutdown(&thread->modules[i]->native_api);
-                log("[" + thread->name + "] Shut down module '" + thread->modules[i]->name + "'");
+                log("[" + thread->name + "] Shut     down module '" + thread->modules[i]->name + "'");
                 cleanup_module(thread->modules[i].get());
                 
                 {
