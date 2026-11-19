@@ -102,7 +102,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
 
     pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name)
     
-    pm.load_module("trajectory_planner", "quadruped_controllers/trajectory_planner", cfg.thread_name, cfg.trajectory_params)
+    pm.load_module("swing_trajectory_controller", "quadruped_controllers/swing_trajectory_controller", cfg.thread_name, cfg.trajectory_params)
 
     if mpc_mode:
         pm.load_module("leg_torque_controller", "quadruped_controllers/leg_torque_controller", cfg.thread_name, cfg.kinematics_params)
@@ -120,7 +120,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
                 ["update_joint_states"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
-                ["evaluate_trajectories"] +
+                ["evaluate_swing_trajectories"] +
                (["calculate_torque"] if mpc_mode else ["calculate_joint_angles"]) +
                 ["write_servo_commands"],
 

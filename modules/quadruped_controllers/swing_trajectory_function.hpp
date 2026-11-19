@@ -1,5 +1,3 @@
-#include <array>
-#include <stdint.h>
 #include <Eigen/Eigen>
 
 template<uint32_t order>
@@ -23,7 +21,7 @@ struct eq_point
     double t_, res_;
 };
 
-class trajectory_function
+class swing_trajectory_function
 {
 public:
 
@@ -109,12 +107,12 @@ public:
     }
 };
 
-struct trajectory_function_3d
+struct swing_trajectory_function_3d
 {
     template<uint32_t order>
     Eigen::Vector3d eval_d(double t) { return {f_x.eval_d<order>(t), f_y.eval_d<order>(t), f_z.eval_d<order>(t)};}
 
-    trajectory_function f_x;
-    trajectory_function f_y;
-    trajectory_function f_z;
+    swing_trajectory_function f_x;
+    swing_trajectory_function f_y;
+    swing_trajectory_function f_z;
 };

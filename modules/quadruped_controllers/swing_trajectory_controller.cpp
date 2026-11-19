@@ -6,9 +6,9 @@
 
 #include "pond/hpp/dds.hpp"
 #include "pond_data_types/transform_types.hpp"
-#include "trajectory.hpp"
+#include "swing_trajectory.hpp"
 
-class TrajectoryPlanner : public pond::ModuleBaseTF
+class SwingTrajectoryController : public pond::ModuleBaseTF
 {
 public:
     virtual pond_result onStartupTF(const std::vector<void*>& args) override;
@@ -26,7 +26,7 @@ private:
     double stance_amplitude;
     double T_0_in_swing_relative, T_1_in_swing_relative;
 
-    std::array<DynamicTrajectory, 4> trajectories;
+    std::array<SwingTrajectory, 4> trajectories;
 
     std::vector<TrajectoryPoint> trajectory_states;
     TwistCommand last_twist_cmd{{}, {0.1, 0, 0}, {0, 0, 0}};
@@ -35,9 +35,9 @@ private:
     pond::Callback stage_callback;
 };
 
-POND_MODULE_CPP_DECLARE(TrajectoryPlanner, "trajectory_planner", "calculating and evaluating the feet trajectories")
+POND_MODULE_CPP_DECLARE(SwingTrajectoryController, "swing_trajectory_controller", "calculating and evaluating the foot-swing-trajectories")
 
-pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
+pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& args)
 {
     step_height         = parameter("step_height")      .asDouble().get(0.08);
     max_step_length     = parameter("max_step_length")  .asDouble().get(1.0);
@@ -92,11 +92,11 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
         std::vector<TrajectoryPoint>*
     >(
         {
-            "evaluate_trajectories/gait_periods",
-            "evaluate_trajectories/partial_gait_durations",
-            "evaluate_trajectories/cmd_vel",
-            "evaluate_trajectories/cmd_pose",
-            "evaluate_trajectories/target_trajectory_states",
+            "evaluate_swing_trajectories/gait_periods",
+            "evaluate_swing_trajectories/partial_gait_durations",
+            "evaluate_swing_trajectories/cmd_vel",
+            "evaluate_swing_trajectories/cmd_pose",
+            "evaluate_swing_trajectories/target_trajectory_states",
         },
         [this](
             std::vector<double>** periods_in,
@@ -106,10 +106,10 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
             std::vector<TrajectoryPoint>** target_trajectory_states_out
         )
         {
-            if (*periods_in == NULL) POND_LOG_RETURN("evaluate_trajectories/gait_periods is NULL");
-            if (*partial_durations_in == NULL) POND_LOG_RETURN("evaluate_trajectories/partial_gait_durations is NULL");
-            if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_trajectories/cmd_vel is NULL");
-            if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_trajectories/cmd_pose is NULL");
+            if (*periods_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/gait_periods is NULL");
+            if (*partial_durations_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/partial_gait_durations is NULL");
+            if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/cmd_vel is NULL");
+            if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/cmd_pose is NULL");
 
             *target_trajectory_states_out = &trajectory_states;
 
@@ -191,7 +191,7 @@ pond_result TrajectoryPlanner::onStartupTF(const std::vector<void*>& args)
     return POND_SUCCESS;
 }
 
-void TrajectoryPlanner::onShutdownTF()
+void SwingTrajectoryController::onShutdownTF()
 {
     stage_callback.destroy();
     foot_position_distributor.destroy();

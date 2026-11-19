@@ -1,8 +1,8 @@
-#include "trajectory_function.hpp"
+#include "swing_trajectory_function.hpp"
 
 #include <pond_data_types/trajectory_types.hpp>
 
-class DynamicTrajectory
+class SwingTrajectory
 {    
 public: 
     double T_sw, T_st, T_0, T_1;
@@ -136,7 +136,7 @@ public:
         point.lin_acc = v_rot_mat * point.lin_acc;
     }
 
-    trajectory_function_3d stance_function;
-    trajectory_function_3d swing_I_function;
-    trajectory_function_3d swing_II_function;
+    swing_trajectory_function_3d stance_function;
+    swing_trajectory_function_3d swing_I_function;
+    swing_trajectory_function_3d swing_II_function;
 };
