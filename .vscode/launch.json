@@ -39,7 +39,7 @@
             "request": "launch",
 
             "program": "/usr/bin/python3",
-            "args": ["configs/idefix/launch.py", "-docker", "-mpc"],
+            "args": ["configs/idefix/launch.py", "-docker"],
 
             "cwd": "${workspaceFolder}",
 

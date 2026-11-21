@@ -1,3 +1,4 @@
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/motor_types.hpp>
@@ -15,8 +16,7 @@ private:
     
     double half_length, half_width;
 
-    std::vector<JointState> joint_states;
-    std::vector<MotorCommand> commands;
+    std::array<Eigen::Vector3d, 4> target_positions;
 
     pond::Callback stage_callback;
 };
@@ -26,14 +26,9 @@ POND_MODULE_CPP_DECLARE(LegKinematicsController, "leg_kinematics_controller", "c
 pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
 {
     auto joint_names = parameter("joint_names").asStringArray().getStrict(12, 12);
-    auto motor_names = parameter("motor_names").asStringArray().getStrict(12, 12);
     auto foot_link_names = parameter("foot_link_names").asStringArray().getStrict(4, 4);
     auto reference_link = parameter("reference_link").asString().getStrict();
-    if (!joint_names || !motor_names || !foot_link_names || !reference_link) return POND_ERROR;
-
-    commands.resize(12);
-    joint_states.resize(12);
-    for (uint32_t i = 0; i < 12; i++) joint_states[i].joint_name = joint_names->at(i);
+    if (!joint_names || !foot_link_names || !reference_link) return POND_ERROR;
 
     GetJointInfoRequest joint_requests[3];
     GetFrameTransformRequest tf_requests[4];
@@ -54,18 +49,12 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
     half_length = total.translation().x();
     half_width = total.translation().y();
 
-    pond::ChannelsInfo info;
-    info.channel<std::vector<TrajectoryPoint>*>("calculate_joint_angles/target_trajectory_states");
-    
-    for (uint32_t i = 0; i < 12; i++) info.channel<MotorCommand*>("calculate_joint_angles/" + motor_names->at(i) + "_command");
-
-    stage_callback = createCallback<void>(info, [this](void** data)
+    stage_callback = createCallback<std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*>(
+        {"calculate_joint_angles/target_trajectory_states", "calculate_joint_angles/joint_target_positions"},
+        [this](std::vector<TrajectoryPoint>** trajectory_states_in, std::array<Eigen::Vector3d, 4>** joint_target_positions_out)
         {
-            std::vector<TrajectoryPoint>** trajectory_states_in = (std::vector<TrajectoryPoint>**)data[0];
-            MotorCommand*** commands_out = (MotorCommand***)&data[1];
-
             if (*trajectory_states_in == NULL) POND_LOG_RETURN("calculate_joint_angles/target_trajectory_states is NULL");
-            for (uint32_t i = 0; i < 12; i++) *commands_out[i] = &commands[i];
+            *joint_target_positions_out = &target_positions;
 
             auto law_of_cosines = +[](double l1, double l2, double b, double* theta) -> bool
             {
@@ -109,9 +98,7 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
 
                 if (i%2) hip_angle *= -1;
 
-                commands[3*i+0].pos = hip_angle;
-                commands[3*i+1].pos = shoulder_angle;
-                commands[3*i+2].pos = knee_angle;
+                target_positions[i] = Eigen::Vector3d(hip_angle, shoulder_angle, knee_angle);
             }
         }
     );

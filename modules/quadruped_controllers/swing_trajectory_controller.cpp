@@ -29,8 +29,6 @@ private:
     std::array<SwingTrajectory, 4> trajectories;
 
     std::vector<TrajectoryPoint> trajectory_states;
-    TwistCommand last_twist_cmd{{}, {0.1, 0, 0}, {0, 0, 0}};
-    double last_T_sw = -1, last_T_st = -1;
 
     pond::Callback stage_callback;
 };
@@ -113,64 +111,56 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
 
             *target_trajectory_states_out = &trajectory_states;
 
-            if (
-                twist_cmd_in[0]->lin[0] != last_twist_cmd.lin[0] || 
-                twist_cmd_in[0]->lin[1] != last_twist_cmd.lin[1] || 
-                twist_cmd_in[0]->ang[2] != last_twist_cmd.ang[0] ||
-                last_T_st != partial_durations_in[0][0][0] ||
-                last_T_sw != partial_durations_in[0][0][1]
-            )
+            TwistCommand twist_cmd = **twist_cmd_in;
+            double T_st = partial_durations_in[0][0][0], T_sw = partial_durations_in[0][0][1];
+            double gait_duration = T_st + T_sw;
+            
+            if (T_sw > 0.0)
             {
-                last_twist_cmd = **twist_cmd_in;
-                last_T_st = partial_durations_in[0][0][0];
-                last_T_sw = partial_durations_in[0][0][1];
-                double gait_duration = last_T_st + last_T_sw;
-
-                if (last_T_sw > 0.0)
+                std::array<Eigen::Vector2d, 4> foot_velocities;
                 {
-                    std::array<Eigen::Vector2d, 4> foot_velocities;
+                    for (uint32_t i = 0; i < 4; i++) foot_velocities[i] =
                     {
-                        for (uint32_t i = 0; i < 4; i++) foot_velocities[i] =
-                        {
-                            last_twist_cmd.lin[0] - last_twist_cmd.ang[2] * foot_base_positions[i][1], 
-                            last_twist_cmd.lin[1] + last_twist_cmd.ang[2] * foot_base_positions[i][0]
-                        };
+                        twist_cmd.lin[0] - twist_cmd.ang[2] * foot_base_positions[i][1], 
+                        twist_cmd.lin[1] + twist_cmd.ang[2] * foot_base_positions[i][0]
+                    };
+                    
+                    double max_velocity = 0.0;
+
+                    // find vector of max velocity
+                    for(size_t i = 0; i < 4; i++)
+                    {
+                        foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
+
+                        double vel = foot_velocities[i].norm();
                         
-                        double max_velocity = 0.0;
+                        if (vel < 1e-5) foot_velocities[i] = Eigen::Vector2d::Zero();
 
-                        // find vector of max velocity
-                        for(size_t i = 0; i < 4; i++)
-                        {
-                            foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
-
-                            double vel = foot_velocities[i].norm();
-                            
-                            if (vel < 1e-5) foot_velocities[i] = Eigen::Vector2d::Zero();
-
-                            else max_velocity = std::max(vel, max_velocity);
-                        }
-
-                        double MAX_VELOCITY = std::min(max_step_length / last_T_st, max_step_speed); 
-
-                        // Check if the maximum of the velocities is bigger than the absolute maximum
-                        if (max_velocity > MAX_VELOCITY) for (size_t i = 0; i < 4; i++) foot_velocities[i] *= MAX_VELOCITY / max_velocity;
+                        else max_velocity = std::max(vel, max_velocity);
                     }
 
-                    for (uint32_t i = 0; i < 4; i++) trajectories[i].init(
-                        last_T_st, last_T_sw, 
-                        stance_amplitude,
-                        T_0_in_swing_relative * last_T_sw, 
-                        T_1_in_swing_relative * last_T_sw,
-                        step_height, jerk_times_duration_to_the_3 / (gait_duration*gait_duration*gait_duration),
-                        foot_velocities[i]
-                    );
+                    double MAX_VELOCITY = std::min(max_step_length / T_st, max_step_speed); 
+
+                    // Check if the maximum of the velocities is bigger than the absolute maximum
+                    if (max_velocity > MAX_VELOCITY) for (size_t i = 0; i < 4; i++) foot_velocities[i] *= MAX_VELOCITY / max_velocity;
                 }
-                else for(size_t i = 0; i < 4; i++) foot_positions_msg[i].tf.so3() = Sophus::SO3d();
+
+                for (uint32_t i = 0; i < 4; i++) trajectories[i].init(
+                    T_st, T_sw, 
+                    stance_amplitude,
+                    T_0_in_swing_relative * T_sw, 
+                    T_1_in_swing_relative * T_sw,
+                    step_height, jerk_times_duration_to_the_3 / (gait_duration*gait_duration*gait_duration),
+                    foot_velocities[i]
+                );
             }
+            else for(size_t i = 0; i < 4; i++) foot_positions_msg[i].tf.so3() = Sophus::SO3d();
+
+            double time_now = pond::get_time();
 
             for(size_t i = 0; i < 4; i++)
             {
-                if (last_T_sw > 0.0) trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
+                if (T_sw > 0.0) trajectories[i].get_state(periods_in[0][0][i], trajectory_states[i]);
                 else
                 {
                     trajectory_states[i].pose.translation().setZero();
@@ -181,6 +171,8 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
                 trajectory_states[i].pose.translation() += foot_base_positions[i];
 
                 foot_positions_msg[i].tf.translation() = trajectory_states[i].pose.translation();
+
+                foot_positions_msg[i].stamp.hw_time = foot_positions_msg[i].stamp.time = time_now;
             }
 
             foot_position_distributor.distribute(&foot_positions_msg);

@@ -1,11 +1,7 @@
-#include <Eigen/src/Core/Matrix.h>
-#include <algorithm>
-#include <cmath>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
-#include <vector>
 
 struct link_data
 {
@@ -44,9 +40,7 @@ private:
 
     pond::Callback force_callback, stage_callback;
     pond::DistributorTyped<std::vector<double>> torque_distributor;
-    pond::DistributorTyped<std::vector<FrameTransform>> poses_distributor;
     std::vector<double> distributed_torques;
-    std::vector<FrameTransform> distributed_poses;
     std::vector<Eigen::Vector3d> forces_buf;
     std::mutex mutex;
 
@@ -54,11 +48,7 @@ private:
 
     double natural_frequency, oob_spring_frequency, max_swing_torque, determinant_threshold;
 
-    std::array<Eigen::Vector3d, 4> last_oob_free_joint_positions;
-
-    std::vector<std::string> motor_names;
-    std::vector<MotorCommand> motor_commands;
-    std::vector<JointState> joint_states;
+    std::array<Eigen::Vector3d, 4> last_oob_free_joint_positions, target_torques;
 };
 
 POND_MODULE_CPP_DECLARE(LegTorqueController, "leg_torque_controller", "torque control block")
@@ -74,14 +64,9 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
     forces_buf.resize(4, Eigen::Vector3d::Zero());
     distributed_torques.resize(12);
-    distributed_poses.resize(4, {.stamp = {.frame_id = reference_link}});
 
     auto joint_names = parameter("joint_names").asStringArray().getStrict(12, 12); if (!joint_names) return POND_ERROR;
-    auto motor_names_o = parameter("motor_names").asStringArray().getStrict(12, 12); if (!motor_names_o) return POND_ERROR;
     auto foot_link_names = parameter("foot_link_names").asStringArray().getStrict(4, 4); if (!foot_link_names) return POND_ERROR;
-    
-    motor_names = *motor_names_o;
-
     
     for (uint32_t l = 0; l < 4; l++)
     {
@@ -122,48 +107,26 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
     }
 
     torque_distributor = createDistributorTyped<std::vector<double>>({"target_torques"});
-    poses_distributor = createDistributorTyped<std::vector<FrameTransform>>({"foot_poses"});
 
-    joint_states.resize(12); motor_commands.resize(12);
-
-    pond::ChannelsInfo info;
-    for (uint32_t i = 0; i < 12; i++)
-    {
-        joint_states[i].joint_name = joint_names->at(i);
-        motor_names[i] = motor_names_o->at(i);
-        info.channel<MotorCommand*>("calculate_torque/" + motor_names[i] + "_command");
-    }
-
-    for (uint32_t i = 0; i < 12; i++) info.channel<MotorFeedback*>("calculate_torque/" + motor_names[i] + "_feedback");
-
-    info.channel<std::vector<bool>*>("calculate_torque/gait_phases");
-    info.channel<std::vector<TrajectoryPoint>*>("calculate_torque/target_trajectory_states");
-
-    stage_callback = createCallback<void>(info, [this](void** data) {
-
-        MotorCommand*** commands = (MotorCommand***)data;
-        MotorFeedback*** feedbacks = (MotorFeedback***)&data[12];
-        std::vector<bool>** gait_phases = (std::vector<bool>**)data[24];
-        std::vector<TrajectoryPoint>** ref_states = (std::vector<TrajectoryPoint>**)data[25];
+    stage_callback = createCallback<std::vector<bool>*, std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*>({
+            "calculate_torque/gait_phases", "calculate_torque/target_trajectory_states", "calculate_torque/joint_positions", "calculate_torque/joint_velocities", "calculate_torque/joint_target_torques"
+        }, [this](std::vector<bool>** gait_phases, std::vector<TrajectoryPoint>** ref_states, std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, std::array<Eigen::Vector3d, 4>** joint_target_torques_out) {
 
         if (*gait_phases == NULL) POND_LOG_RETURN("calculate_torque/gait_phases is NULL");
         if (*ref_states == NULL) POND_LOG_RETURN("calculate_torque/target_trajectory_states is NULL");
-        for (uint32_t i = 0; i < 12; i++) if (*feedbacks[i] == NULL) POND_LOG_RETURN("%s is NULL", ("calculate_torque/" + motor_names[i] + "_feedback").c_str());
-        for (uint32_t i = 0; i < 12; i++) if (!feedbacks[i][0]->pos) POND_LOG_RETURN("%s does not provide position feedback", motor_names[i].c_str());
-        for (uint32_t i = 0; i < 12; i++) if (!feedbacks[i][0]->vel) POND_LOG_RETURN("%s does not provide velocity feedback", motor_names[i].c_str());
-        for (uint32_t i = 0; i < 12; i++) *commands[i] = &motor_commands[i];
-        
+        if (*joint_positions_in == NULL) POND_LOG_RETURN("calculate_torque/joint_positions is NULL");
+        if (*joint_velocities_in == NULL) POND_LOG_RETURN("calculate_torque/joint_velocities is NULL");
+
+        *joint_target_torques_out = &target_torques;
+
         mutex.lock();
         std::vector<Eigen::Vector3d> forces = forces_buf;
         mutex.unlock();
 
         for (uint32_t i = 0; i < 4; i++)
         {
-            Eigen::Vector3d joint_pos_actual = {*feedbacks[3*i+0][0]->pos, *feedbacks[3*i+1][0]->pos, *feedbacks[3*i+2][0]->pos};
-            Eigen::Vector3d joint_vel = {*feedbacks[3*i+0][0]->vel, *feedbacks[3*i+1][0]->vel, *feedbacks[3*i+2][0]->vel};
-            Eigen::Vector3d torque = Eigen::Vector3d::Zero();
-            
-            Eigen::Vector3d joint_pos = joint_pos_actual;
+            Eigen::Vector3d joint_pos_actual = joint_positions_in[0][0][i], joint_vel = joint_velocities_in[0][0][i];
+            Eigen::Vector3d joint_pos = joint_pos_actual, torque = Eigen::Vector3d::Zero();
 
             leg_dynamics dynamics, dynamics_actual;
 
@@ -226,22 +189,14 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
                 else torque[j] = std::clamp(torque[j], -configs[i].links[j].effort_max, configs[i].links[j].effort_max);
             }
 
-            motor_commands[3*i+0].torque = torque[0];
-            motor_commands[3*i+1].torque = torque[1];
-            motor_commands[3*i+2].torque = torque[2];
+            target_torques[i] = torque;
 
             distributed_torques[3*i+0] = torque[0];
             distributed_torques[3*i+1] = torque[1];
             distributed_torques[3*i+2] = torque[2];
-
-            double vel_angle = (std::abs(dynamics.v_foot[0]) > 0.01 || std::abs(dynamics.v_foot[1]) > 0.01 ? atan2(dynamics.v_foot[1] , dynamics.v_foot[0]) : 0);
-
-            distributed_poses[i].stamp.time = pond::get_time();
-            distributed_poses[i].tf = Sophus::SE3d(Sophus::SO3d::rotZ(vel_angle), dynamics.p_foot);
         }
 
         torque_distributor.distribute(&distributed_torques);
-        poses_distributor.distribute(&distributed_poses);
     });
 
     force_callback = createCallback<std::vector<Eigen::Vector3d>>({"ground_forces"}, [this](std::vector<Eigen::Vector3d>* forces_in) {
@@ -257,7 +212,6 @@ void LegTorqueController::onShutdownTF()
     stage_callback.destroy();
     force_callback.destroy();
     torque_distributor.destroy();
-    poses_distributor.destroy();
 }
 
 bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)

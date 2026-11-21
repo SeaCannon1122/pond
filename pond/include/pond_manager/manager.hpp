@@ -18,7 +18,7 @@
 #define MAX_THREAD_FRAME_TIME 10.0
 
 #ifndef MAX_SLOT_COUNT
-#define MAX_SLOT_COUNT 32
+#define MAX_SLOT_COUNT 256
 #endif
 
 typedef struct PondManager PondManager;

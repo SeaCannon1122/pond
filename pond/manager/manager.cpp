@@ -274,9 +274,15 @@ void PondManager::thread_function(pond_internal::Thread* thread)
             double ft = thread->frame_time.load();
             double remaining = ft - (this_time - thread->last_time);
 
-            if (remaining > 0.0005)
+            if (remaining > 0.0)
             {
-                std::this_thread::sleep_for(std::chrono::duration<double>(remaining));
+                double sleep_time = remaining - 50*1e-6; // sleep latency, TODO: make it dynamic based on system
+                if (sleep_time > 0.0)
+                {
+                    timespec ts{(__time_t)sleep_time, (__syscall_slong_t)(sleep_time * 1000000000) % 1000000000};
+                    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, &ts) == EINTR);
+                }
+
                 thread->last_time += ft; 
             }
             else thread->last_time = this_time;
@@ -289,7 +295,7 @@ void PondManager::thread_function(pond_internal::Thread* thread)
             log("[" + thread->name + "] Starting module '" + thread->load_request.module->name + "' ...");
             if (thread->load_request.module->module_api.on_startup(&thread->load_request.module->native_api, thread->load_request.module->args.size(), thread->load_request.module->args.data()) == POND_SUCCESS)
             {
-                log("[" + thread->name + "] Started module '" + thread->load_request.module->name + "'");
+                log("[" + thread->name + "] Started  module '" + thread->load_request.module->name + "'");
                 thread->modules.insert(thread->load_request.module);
                 std::lock_guard<std::mutex> lock(module_discovery.module_mutex);
                 thread->load_request.module->discovery_id = module_discovery.modules.insert(thread->load_request.module);

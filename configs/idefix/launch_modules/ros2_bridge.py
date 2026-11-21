@@ -74,12 +74,6 @@ class cfg:
             "pond" : {"channel" : "partial_gait_durations/out", "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "partial_gait_durations",     "type" : "std_msgs::msg::Float64MultiArray"}  
         },
-        ###### gait_duration ######
-        {   "direction" : "ROS_TO_POND",
-
-            "pond" : {"channel" : "force",              "type" : "double"},
-            "ros"  : {"topic"   : "force",              "type" : "std_msgs::msg::Float64"}  
-        },
         ###### ground_forces ######
         {   "direction" : "POND_TO_ROS",
 
@@ -87,30 +81,19 @@ class cfg:
             "ros"  : {"topic"   : "ground_forces",                "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### foot_target_poses ######
-        {   "direction" : "POND_TO_ROS", "rate" : 10,
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "foot_target_poses",            "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "foot_target_poses",            "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### foot_poses ######
-        {   "direction" : "POND_TO_ROS", "rate" : 10,
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "foot_poses",                   "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "foot_poses",                   "type" : "geometry_msgs::msg::PoseArray"}  
         },
-        ###### gait_duration ######
-        {   "direction" : "POND_TO_ROS", "rate" : int(0.05 / walk.cfg.frame_dt),
-
-            "pond" : {"channel" : "target_trajectory_states/out", "type" : "std::vector<TrajectoryPoint>"},
-            "ros"  : {"topic"   : "target_trajectory_states",     "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
-        },
-        {   "direction" : "POND_TO_ROS",
-        
-            "pond" : {"channel" : "base_link_trajectory_point",   "type" : "TrajectoryPoint"},
-            "ros"  : {"topic"   : "base_link_trajectory_point",   "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
-        },
         ###### target_torques ######
-        {   "direction" : "POND_TO_ROS", "rate" : 10,
+        {   "direction" : "POND_TO_ROS", # "rate" : int(0.005 / walk.cfg.frame_dt),
 
             "pond" : {"channel" : "target_torques",              "type" : "std::vector<double>"},
             "ros"  : {"topic"   : "target_torques",              "type" : "std_msgs::msg::Float64MultiArray"}  

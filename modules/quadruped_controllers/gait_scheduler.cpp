@@ -54,7 +54,9 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
             *partial_durations_out = &partial_durations;
 
             double duration = gait_duration.load();
-            double time_now = pond::get_time();
+            double time_now = pond::get_monotonic_time();
+
+            for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
 
             bool walk = (std::abs(twist_cmd_in[0]->lin[0]) > 0.001 || std::abs(twist_cmd_in[0]->lin[1]) > 0.001 || std::abs(twist_cmd_in[0]->ang[2]) > 0.001);
 

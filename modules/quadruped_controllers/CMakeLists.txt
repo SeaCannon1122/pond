@@ -7,7 +7,7 @@ add_library(quadruped_controllers-pond_bundle SHARED
     gait_scheduler.cpp
     swing_trajectory_controller.cpp
     leg_kinematics_controller.cpp
-    motor_joint_updater.cpp
+    motor_abstractor.cpp
     leg_torque_controller.cpp
     mpc_controller.cpp
     command_controller.cpp

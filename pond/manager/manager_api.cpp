@@ -181,10 +181,10 @@ int32_t PondManager::api_create_distributor(pond_internal::ModuleContext* ctx, p
         channel_array_string.reserve(1000);
         for (uint32_t i = 0; i < d->slot_count; i++)
         {
-            channel_array_string.append(", ");
+            channel_array_string.append(", \n    ");
             channel_array_string.append(d->slots[i].channel);
         }
-        ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Distributing on channels { %s }", &(channel_array_string.c_str()[2]));
+        ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Distributing on channels {%s\n}", &(channel_array_string.c_str()[2]));
     }
 
     {
@@ -196,10 +196,10 @@ int32_t PondManager::api_create_distributor(pond_internal::ModuleContext* ctx, p
                 channel_array_string.reserve(1000);
                 for (uint32_t i = 0; i < r->slot_count; i++)
                 {
-                    channel_array_string.append(", ");
+                    channel_array_string.append(", \n    ");
                     channel_array_string.append(r->slots[i].channel);
                 }
-                ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Connected to callback on module '%s' on channels { %s }", r->module_name.c_str(), &(channel_array_string.c_str()[2]));
+                ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Connected to callback on module '%s' on channels {%s\n}", r->module_name.c_str(), &(channel_array_string.c_str()[2]));
             }
     }
 
@@ -279,10 +279,10 @@ int32_t PondManager::api_create_callback(pond_internal::ModuleContext* ctx, pond
         channel_array_string.reserve(1000);
         for (uint32_t i = 0; i < r->slot_count; i++)
         {
-            channel_array_string.append(", ");
+            channel_array_string.append(", \n    ");
             channel_array_string.append(r->slots[i].channel);
         }
-        ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Receiving on channels { %s }", &(channel_array_string.c_str()[2]));
+        ctx->module->native_api.log(ctx->module->native_api.ctx, (uint8_t*)"Receiving on channels {%s\n}", &(channel_array_string.c_str()[2]));
     }
 
     {

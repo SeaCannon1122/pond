@@ -1,13 +1,13 @@
 #pragma once
 
 #include <pond/pond.h>
+#include <pond_manager/manager.hpp>
 
 #include <string>
 #include <vector>
 #include <array>
 #include <typeinfo>
 #include <memory>
-#include <functional>
 
 namespace pond
 {
@@ -20,7 +20,7 @@ namespace pond
     friend class Distributor;
     friend class Callback;
     public:
-        ChannelsInfo() {infos.reserve(16);info_strings.reserve(16);}
+        ChannelsInfo() {infos.reserve(MAX_SLOT_COUNT);info_strings.reserve(MAX_SLOT_COUNT);}
 
         template<typename T>
         ChannelsInfo& channel(const std::string& name)

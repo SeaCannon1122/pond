@@ -58,7 +58,7 @@ class cfg:
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
         "reference_link" : "base_link",
-        "debug_log": True,
+        "debug_log": False,
         "robot": {
             "mass": 5.6,
             "mu": 1.3, # Friction coefficient μ - typically 0.6 for rubber feet
@@ -85,11 +85,11 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
 
     if mpc_mode:
-        pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
+        pass#pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
 
     pm.load_module("command_controller", "quadruped_controllers/command_controller", cfg.thread_name, cfg.cmd_params)
 
-    pm.load_module("motor_joint_updater", "quadruped_controllers/motor_joint_updater", cfg.thread_name, cfg.kinematics_params, {"set_robot_joints" : "set_robot_joints_high_rate"})
+    pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
     pm.load_module(
         "robot_joint_rate_reducer", "utility/channel_filter", cfg.thread_name,
@@ -109,6 +109,8 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     else:
         pm.load_module("leg_kinematics_controller", "quadruped_controllers/leg_kinematics_controller", cfg.thread_name, cfg.kinematics_params)
 
+    #return
+
     pm.load_module(
         "walk_cfm", "utility/control_flow_manager", cfg.thread_name,
         {
@@ -117,18 +119,20 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
             "stage_names" : 
                 ["feed_commands"] +
                 ["read_servo_feedback"] +
-                ["update_joint_states"] +
+                ["convert_from_motor_feedback"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
                 ["evaluate_swing_trajectories"] +
                (["calculate_torque"] if mpc_mode else ["calculate_joint_angles"]) +
+                ["convert_to_motor_commands"] +
                 ["write_servo_commands"],
 
             "data_ids" :
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
+                ["joint_positions", "joint_velocities", "joint_target_torques" if mpc_mode else "joint_target_positions"] +
                 ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
 
-            "data_out" : (len(cfg.motor_names)*2)*[False] + [True, True, True, False, False, True]
+            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True]
         }
     )
