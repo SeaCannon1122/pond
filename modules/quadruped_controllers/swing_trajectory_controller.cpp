@@ -1,11 +1,7 @@
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 #include <pond_data_types/command_types.hpp>
-#include <sophus/se3.hpp>
-#include <sophus/so3.hpp>
 
-#include "pond/hpp/dds.hpp"
-#include "pond_data_types/transform_types.hpp"
 #include "swing_trajectory.hpp"
 
 class SwingTrajectoryController : public pond::ModuleBaseTF
@@ -15,8 +11,6 @@ public:
     virtual void onShutdownTF() override;
 private:
     std::array<Eigen::Vector3d, 4> foot_base_positions;
-    std::vector<FrameTransform> foot_positions_msg;
-    pond::DistributorTyped<std::vector<FrameTransform>> foot_position_distributor;
 
     double step_height;
     double max_step_length;
@@ -46,41 +40,16 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
     T_0_in_swing_relative           = parameter("T_0_in_swing_relative")        .asDouble().get(0.25);
     T_1_in_swing_relative        = parameter("T_1_in_swing_relative")     .asDouble().get(0.75);
 
-    auto joint_names = parameter("joint_names").asStringArray().getStrict(12, 12);
-    auto reference_link = parameter("reference_link").asString().getStrict();
-    if (!joint_names || !reference_link) return POND_ERROR;
-
     auto foot_base_offset_vec        = parameter("foot_base_offset").asDoubleArray().get({0.015, 0.025, -0.181}, 3, 3);
-
-    GetJointInfoRequest joint_requests[2];
-    GetFrameTransformRequest tf_requests[2];
-    
-    if (!tfGetJointInfo(joint_names->at(0), joint_requests[0])) return POND_ERROR;
-    if (!tfGetJointInfo(joint_names->at(1), joint_requests[1])) return POND_ERROR;
-    
-    if (!tfGetTransform(joint_requests[0].parent_link_name, *reference_link, 0, tf_requests[0])) return POND_ERROR;
-    if (!tfGetTransform(joint_requests[1].parent_link_name, joint_requests[0].child_link_name, 0, tf_requests[1])) return POND_ERROR;
-    
-    Sophus::SE3d total = tf_requests[0].tf * joint_requests[0].tf;
-
-    Eigen::Vector3d foot_base_pos_dims(
-        foot_base_offset_vec[0] + total.translation().x(),
-        foot_base_offset_vec[1] + total.translation().y() + (tf_requests[1].tf * joint_requests[1].tf).translation().norm(),
-        foot_base_offset_vec[2]
-    );
 
     for (uint32_t i = 0; i < 4; i++)
     {
-        foot_base_positions[i] = foot_base_pos_dims;
-        if (i/2) foot_base_positions[i][0] *= -1;
-        if (i%2) foot_base_positions[i][1] *= -1;
+        foot_base_positions[i][0] = foot_base_offset_vec[0] * (i/2 ? -1.0 : 1.0);
+        foot_base_positions[i][1] = foot_base_offset_vec[1] * (i%2 ? -1.0 : 1.0);
+        foot_base_positions[i][2] = foot_base_offset_vec[2];
     }
 
     trajectory_states.resize(4);
-    foot_positions_msg.resize(4);
-    for (uint32_t i = 0; i < 4; i++) foot_positions_msg[i].stamp.frame_id = *reference_link;
-    
-    foot_position_distributor = createDistributorTyped<std::vector<FrameTransform>>({"foot_target_poses"});
 
     stage_callback = createCallback<
         std::vector<double>*, 
@@ -130,8 +99,6 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
                     // find vector of max velocity
                     for(size_t i = 0; i < 4; i++)
                     {
-                        foot_positions_msg[i].tf.so3() = Sophus::SO3d::rotZ(atan2(foot_velocities[i][1], foot_velocities[i][0]));
-
                         double vel = foot_velocities[i].norm();
                         
                         if (vel < 1e-5) foot_velocities[i] = Eigen::Vector2d::Zero();
@@ -154,7 +121,6 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
                     foot_velocities[i]
                 );
             }
-            else for(size_t i = 0; i < 4; i++) foot_positions_msg[i].tf.so3() = Sophus::SO3d();
 
             double time_now = pond::get_time();
 
@@ -169,13 +135,7 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
                 }
 
                 trajectory_states[i].pose.translation() += foot_base_positions[i];
-
-                foot_positions_msg[i].tf.translation() = trajectory_states[i].pose.translation();
-
-                foot_positions_msg[i].stamp.hw_time = foot_positions_msg[i].stamp.time = time_now;
             }
-
-            foot_position_distributor.distribute(&foot_positions_msg);
         }
         
     );
@@ -186,5 +146,4 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
 void SwingTrajectoryController::onShutdownTF()
 {
     stage_callback.destroy();
-    foot_position_distributor.destroy();
 }

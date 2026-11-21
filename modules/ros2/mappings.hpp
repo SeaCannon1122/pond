@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sensor_msgs/msg/joint_state.hpp"
 #include "trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp"
 #include <Eigen/src/Core/Matrix.h>
 #include <rclcpp/rclcpp.hpp>
@@ -33,6 +34,8 @@
 #include <pond_data_types/laser_scan_types.hpp>
 #include <pond_data_types/robot_state_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
+#include <pond_data_types/motor_types.hpp>
+#include <vector>
 
 void ImuData__to__sensor_msgs_msg_Imu(const ImuData& pond, sensor_msgs::msg::Imu& ros);
 
@@ -86,3 +89,6 @@ void double__to__std_msgs_msg_Float64(const double& pond, std_msgs::msg::Float64
 
 void std_msgs_msg_Float64MultiArray__to__std_vector_double(std::vector<double>& pond, const std_msgs::msg::Float64MultiArray& ros);
 void std_vector_double__to__std_msgs_msg_Float64MultiArray(const std::vector<double>& pond, std_msgs::msg::Float64MultiArray& ros);
+
+void std_vector_MotorCommand__to__sensor_msgs_msg_JointState(const std::vector<MotorCommand>& pond, sensor_msgs::msg::JointState& ros);
+void std_vector_MotorFeedback__to__sensor_msgs_msg_JointState(const std::vector<MotorFeedback>& pond, sensor_msgs::msg::JointState& ros);

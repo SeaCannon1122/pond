@@ -28,10 +28,9 @@ class cfg:
     }
 
     trajectory_params = {
-        "joint_names" : joint_names,
-        "reference_link" : "base_link",
+        "base_link_name" : "base_link",
 
-        "foot_base_offset" : [0.015, 0.025, -0.17],
+        "foot_base_offset" : [0.15, 0.12, -0.17],
 
         "step_height" : 0.035,
         "max_step_length" : 1.0,
@@ -47,7 +46,7 @@ class cfg:
         "joint_names" : joint_names,
         "motor_names" : motor_names,
         "foot_link_names" : foot_link_names,
-        "reference_link" : "base_link",
+        "base_link_name" : "base_link",
         "max_swing_torque" : 8.0,
         "natural_frequency" : 180.0,
         "oob_spring_frequency" : 100.0
@@ -57,7 +56,7 @@ class cfg:
 
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
-        "reference_link" : "base_link",
+        "base_link_name" : "base_link",
         "debug_log": False,
         "robot": {
             "mass": 5.6,
@@ -90,6 +89,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     pm.load_module("command_controller", "quadruped_controllers/command_controller", cfg.thread_name, cfg.cmd_params)
 
     pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
+    pm.load_module("debug_distributor", "quadruped_controllers/debug_distributor", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module(
         "robot_joint_rate_reducer", "utility/channel_filter", cfg.thread_name,
@@ -119,12 +119,14 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
             "stage_names" : 
                 ["feed_commands"] +
                 ["read_servo_feedback"] +
+                ["distribute_debug_motor_feedback"] +
                 ["convert_from_motor_feedback"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
                 ["evaluate_swing_trajectories"] +
                (["calculate_torque"] if mpc_mode else ["calculate_joint_angles"]) +
                 ["convert_to_motor_commands"] +
+                ["distribute_debug_motor_commands"] +
                 ["write_servo_commands"],
 
             "data_ids" :

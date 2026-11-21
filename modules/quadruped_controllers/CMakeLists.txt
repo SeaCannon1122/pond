@@ -8,6 +8,7 @@ add_library(quadruped_controllers-pond_bundle SHARED
     swing_trajectory_controller.cpp
     leg_kinematics_controller.cpp
     motor_abstractor.cpp
+    debug_distributor.cpp
     leg_torque_controller.cpp
     mpc_controller.cpp
     command_controller.cpp

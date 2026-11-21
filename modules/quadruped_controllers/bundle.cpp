@@ -1,11 +1,10 @@
-#include "pond/h/module.h"
 #include <pond/pond.hpp>
-#include <pond/hpp/module_base_tf.hpp>
 
 EXTERN_POND_MODULE(GaitScheduler);
 EXTERN_POND_MODULE(SwingTrajectoryController);
 EXTERN_POND_MODULE(LegKinematicsController);
 EXTERN_POND_MODULE(MotorAbstractor);
+EXTERN_POND_MODULE(DebugDistributor);
 EXTERN_POND_MODULE(LegTorqueController);
 EXTERN_POND_MODULE(MPCController);
 EXTERN_POND_MODULE(CommandController);
@@ -18,6 +17,7 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(SwingTrajectoryController),
     POND_MODULE(LegKinematicsController),
     POND_MODULE(MotorAbstractor),
+    POND_MODULE(DebugDistributor),
     POND_MODULE(LegTorqueController),
     POND_MODULE(MPCController),
     POND_MODULE(CommandController),

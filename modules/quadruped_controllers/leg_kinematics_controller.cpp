@@ -1,8 +1,9 @@
-#include <Eigen/src/Core/Matrix.h>
+#include <algorithm>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
-#include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
+
+#include "quadruped_robot_config.hpp"
 
 class LegKinematicsController : public pond::ModuleBaseTF
 {
@@ -10,11 +11,7 @@ public:
     virtual pond_result onStartupTF(const std::vector<void*>& args) override;
     virtual void onShutdownTF() override;
 private:
-    double limb_length_hip_to_shoulder;
-    double limb_length_thigh;
-    double limb_length_shin;
-    
-    double half_length, half_width;
+    QuadrupedRobotConfig cfg;
 
     std::array<Eigen::Vector3d, 4> target_positions;
 
@@ -25,29 +22,7 @@ POND_MODULE_CPP_DECLARE(LegKinematicsController, "leg_kinematics_controller", "c
 
 pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
 {
-    auto joint_names = parameter("joint_names").asStringArray().getStrict(12, 12);
-    auto foot_link_names = parameter("foot_link_names").asStringArray().getStrict(4, 4);
-    auto reference_link = parameter("reference_link").asString().getStrict();
-    if (!joint_names || !foot_link_names || !reference_link) return POND_ERROR;
-
-    GetJointInfoRequest joint_requests[3];
-    GetFrameTransformRequest tf_requests[4];
-
-    for (uint32_t i = 0; i < 3; i++) if (!tfGetJointInfo(joint_names->at(i), joint_requests[i])) return POND_ERROR;
-    
-    if (!tfGetTransform(joint_requests[1].parent_link_name, joint_requests[0].child_link_name, 0, tf_requests[0])) return POND_ERROR;
-    if (!tfGetTransform(joint_requests[2].parent_link_name, joint_requests[1].child_link_name, 0, tf_requests[1])) return POND_ERROR;
-    if (!tfGetTransform(foot_link_names->at(0), joint_requests[2].child_link_name, 0, tf_requests[2])) return POND_ERROR;
-
-    limb_length_hip_to_shoulder =   (tf_requests[0].tf * joint_requests[1].tf).translation().norm();
-    limb_length_thigh =             (tf_requests[1].tf * joint_requests[2].tf).translation().norm();
-    limb_length_shin =              (tf_requests[2].tf).translation().norm();
-
-    if (!tfGetTransform(joint_requests[0].parent_link_name, *reference_link, 0, tf_requests[3])) return POND_ERROR;
-    Sophus::SE3d total = tf_requests[3].tf * joint_requests[0].tf;
-
-    half_length = total.translation().x();
-    half_width = total.translation().y();
+    if (!cfg.init(*this)) return POND_ERROR;
 
     stage_callback = createCallback<std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*>(
         {"calculate_joint_angles/target_trajectory_states", "calculate_joint_angles/joint_target_positions"},
@@ -68,37 +43,37 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
 
             for(size_t i = 0; i < 4; i++)
             {
-                double x = trajectory_states_in[0][0][i].pose.translation().x() - (i < 2 ? half_length: -half_length);
-                double y = trajectory_states_in[0][0][i].pose.translation().y() - (i % 2 == 0 ? half_width : -half_width);
-                double z = trajectory_states_in[0][0][i].pose.translation().z();
+                Eigen::Vector3d target = trajectory_states_in[0][0][i].pose.translation() - cfg.legs[i].origin_pos;
 
-                if (i % 2 != 0) y = -y;
-                if (z > 0) x*= -1;
+                double limb_length_hip_to_shoulder = std::abs(cfg.legs[i].segments[0].offset.y() + cfg.legs[i].segments[1].offset.y() + cfg.legs[i].segments[2].offset.y());
+                double limb_length_thigh = std::abs(cfg.legs[i].segments[1].offset.z());
+                double limb_length_shin = std::abs(cfg.legs[i].segments[2].offset.z());
+
+                if (i%2) target.y() *= -1;
 
                 double knee_angle, shoulder_angle, hip_angle;
 
-                double shoulder_to_foot_sq = z * z + y * y - limb_length_hip_to_shoulder * limb_length_hip_to_shoulder;
+                double shoulder_to_foot_sq = target.z() * target.z() + target.y() * target.y() - limb_length_hip_to_shoulder * limb_length_hip_to_shoulder;
                 if (shoulder_to_foot_sq < 0) continue;
                 double shoulder_to_foot = std::sqrt(shoulder_to_foot_sq);
 
-                hip_angle = std::atan2(y, std::abs(z)) + std::atan2(shoulder_to_foot, limb_length_hip_to_shoulder);
+                hip_angle = std::atan2(target.y(), -target.z()) + std::atan2(shoulder_to_foot, limb_length_hip_to_shoulder);
 
-                double distance = std::sqrt(x * x + shoulder_to_foot * shoulder_to_foot);
+                double distance = std::sqrt(target.x() * target.x() + shoulder_to_foot * shoulder_to_foot);
 
                 if (!law_of_cosines(limb_length_thigh, limb_length_shin, distance, &knee_angle)) continue;
                 if (!law_of_cosines(limb_length_thigh, distance, limb_length_shin, &shoulder_angle)) continue;
 
-                shoulder_angle -= std::atan2(x, shoulder_to_foot);
-                if(z>0) shoulder_angle += M_PI;
+                shoulder_angle -= std::atan2(target.x(), shoulder_to_foot);
 
                 // Adjust angle from triangle perspective to robot perspective
                 hip_angle -= M_PI_2;
-                if (z>0) hip_angle *= -1;
                 knee_angle -= M_PI;
 
                 if (i%2) hip_angle *= -1;
 
                 target_positions[i] = Eigen::Vector3d(hip_angle, shoulder_angle, knee_angle);
+                for (uint32_t j = 0; j < 3; j++) target_positions[i][j] = std::clamp(target_positions[i][j], cfg.legs[i].segments[j].joint_min, cfg.legs[i].segments[j].joint_max);
             }
         }
     );

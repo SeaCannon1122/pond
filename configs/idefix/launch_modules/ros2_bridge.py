@@ -7,96 +7,96 @@ class cfg:
         #### robot_description ####
         {   "direction" : "POND_TO_ROS",
 
-            "pond" : {"channel" : "robot_description",          "type" : "std::string"},
-            "ros"  : {"topic"   : "robot_description",          "type" : "std_msgs::msg::String",   "qos.depth" : 1, "qos.volatile" : False}  
+            "pond" : {"channel" : "robot_description",      "type" : "std::string"},
+            "ros"  : {"topic"   : "robot_description",      "type" : "std_msgs::msg::String",   "qos.depth" : 1, "qos.volatile" : False}  
         },
         ############ tf ###########
         {   "direction" : "POND_TO_ROS",
 
-            "pond" : {"channel" : "tf",                         "type" : "std::vector<FrameTransform>"},
-            "ros"  : {"topic"   : "tf",                         "type" : "tf2_msgs::msg::TFMessage"}  
+            "pond" : {"channel" : "tf",                     "type" : "std::vector<FrameTransform>"},
+            "ros"  : {"topic"   : "tf",                     "type" : "tf2_msgs::msg::TFMessage"}  
         },
         ######## tf_static ########
         {   "direction" : "POND_TO_ROS",
 
-            "pond" : {"channel" : "tf_static",                  "type" : "std::vector<FrameTransform>"},
-            "ros"  : {"topic"   : "tf_static",                  "type" : "tf2_msgs::msg::TFMessage",   "qos.depth" : 1, "qos.volatile" : False}  
-        },
-        ####### joint_states ######
-        {   "direction" : "POND_TO_ROS",
-
-            "pond" : {"channel" : "set_robot_joints",           "type" : "std::vector<JointState>"},
-            "ros"  : {"topic"   : "joint_states",               "type" : "sensor_msgs::msg::JointState"}  
+            "pond" : {"channel" : "tf_static",              "type" : "std::vector<FrameTransform>"},
+            "ros"  : {"topic"   : "tf_static",              "type" : "tf2_msgs::msg::TFMessage",   "qos.depth" : 1, "qos.volatile" : False}  
         },
     ]
     cmd_bridges = [
         ######### cmd_vel #########
         {   "direction" : "ROS_TO_POND",
 
-            "pond" : {"channel" : "cmd_vel",                    "type" : "TwistCommand"},
-            "ros"  : {"topic"   : "cmd_vel_stamped",            "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
+            "pond" : {"channel" : "cmd_vel",                "type" : "TwistCommand"},
+            "ros"  : {"topic"   : "cmd_vel_stamped",        "type" : "geometry_msgs::msg::TwistStamped",   "qos.depth" : 1, "qos.reliable" : False}  
         },
         ######### cmd_pose #########
         {   "direction" : "ROS_TO_POND",
 
-            "pond" : {"channel" : "cmd_pose",                    "type" : "FrameTransform"},
-            "ros"  : {"topic"   : "cmd_pose",                    "type" : "geometry_msgs::msg::PoseStamped",   "qos.depth" : 1, "qos.reliable" : False}  
+            "pond" : {"channel" : "cmd_pose",               "type" : "FrameTransform"},
+            "ros"  : {"topic"   : "cmd_pose",               "type" : "geometry_msgs::msg::PoseStamped",   "qos.depth" : 1, "qos.reliable" : False}  
         },
         ###### gait_duration ######
         {   "direction" : "ROS_TO_POND",
 
-            "pond" : {"channel" : "cmd_height",                  "type" : "double"},
-            "ros"  : {"topic"   : "cmd_height",                  "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
+            "pond" : {"channel" : "cmd_height",             "type" : "double"},
+            "ros"  : {"topic"   : "cmd_height",             "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
         },
         ######## gait_type ########
         {   "direction" : "ROS_TO_POND",
 
-            "pond" : {"channel" : "gait_type",                  "type" : "std::string"},
-            "ros"  : {"topic"   : "gait_mode",                  "type" : "std_msgs::msg::String",   "qos.depth" : 1, "qos.reliable" : False}  
+            "pond" : {"channel" : "gait_type",              "type" : "std::string"},
+            "ros"  : {"topic"   : "gait_mode",              "type" : "std_msgs::msg::String",   "qos.depth" : 1, "qos.reliable" : False}  
         },
         ###### gait_duration ######
         {   "direction" : "ROS_TO_POND",
 
-            "pond" : {"channel" : "gait_duration",              "type" : "double"},
-            "ros"  : {"topic"   : "gait_duration",              "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
+            "pond" : {"channel" : "gait_duration",          "type" : "double"},
+            "ros"  : {"topic"   : "gait_duration",          "type" : "std_msgs::msg::Float64",   "qos.depth" : 1, "qos.reliable" : False}  
         },
     ]
     debug_bridges = [
         ########## gaits ##########
         {   "direction" : "POND_TO_ROS", "rate" : int(0.1 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "gait_periods/out",           "type" : "std::vector<double>"},
-            "ros"  : {"topic"   : "gait_periods",               "type" : "std_msgs::msg::Float64MultiArray"}  
+            "pond" : {"channel" : "gait_periods/out",               "type" : "std::vector<double>"},
+            "ros"  : {"topic"   : "debug/gait_periods",             "type" : "std_msgs::msg::Float64MultiArray"}  
         },
         #### stance and swing duration ####
         {   "direction" : "POND_TO_ROS", "rate" : int(0.2 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "partial_gait_durations/out", "type" : "std::vector<double>"},
-            "ros"  : {"topic"   : "partial_gait_durations",     "type" : "std_msgs::msg::Float64MultiArray"}  
+            "pond" : {"channel" : "partial_gait_durations/out",     "type" : "std::vector<double>"},
+            "ros"  : {"topic"   : "debug/partial_gait_durations",   "type" : "std_msgs::msg::Float64MultiArray"}  
         },
         ###### ground_forces ######
         {   "direction" : "POND_TO_ROS",
 
-            "pond" : {"channel" : "ground_forces",                "type" : "std::vector<Eigen::Vector3d>"},
-            "ros"  : {"topic"   : "ground_forces",                "type" : "geometry_msgs::msg::PoseArray"}  
-        },
-        ###### foot_target_poses ######
-        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
-
-            "pond" : {"channel" : "foot_target_poses",            "type" : "std::vector<FrameTransform>"},
-            "ros"  : {"topic"   : "foot_target_poses",            "type" : "geometry_msgs::msg::PoseArray"}  
+            "pond" : {"channel" : "ground_forces",                  "type" : "std::vector<Eigen::Vector3d>"},
+            "ros"  : {"topic"   : "debug/ground_forces",            "type" : "geometry_msgs::msg::PoseArray"}  
         },
         ###### foot_poses ######
         {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "foot_poses",                   "type" : "std::vector<FrameTransform>"},
-            "ros"  : {"topic"   : "foot_poses",                   "type" : "geometry_msgs::msg::PoseArray"}  
+            "pond" : {"channel" : "debug/foot_poses",               "type" : "std::vector<FrameTransform>"},
+            "ros"  : {"topic"   : "debug/foot_poses",               "type" : "geometry_msgs::msg::PoseArray"}  
         },
-        ###### target_torques ######
-        {   "direction" : "POND_TO_ROS", # "rate" : int(0.005 / walk.cfg.frame_dt),
+        ###### target_trajectory_states ######
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "target_torques",              "type" : "std::vector<double>"},
-            "ros"  : {"topic"   : "target_torques",              "type" : "std_msgs::msg::Float64MultiArray"}  
+            "pond" : {"channel" : "target_trajectory_states/out",   "type" :  "std::vector<TrajectoryPoint>"},
+            "ros"  : {"topic"   : "debug/target_trajectory_states", "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+        },
+        ###### motor_feedbacks ######
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
+
+            "pond" : {"channel" : "debug/motor_feedbacks",          "type" : "std::vector<MotorFeedback>"},
+            "ros"  : {"topic"   : "debug/motor_feedbacks",          "type" : "sensor_msgs::msg::JointState"}  
+        },
+        ###### motor_commands ######
+        {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
+
+            "pond" : {"channel" : "debug/motor_commands",           "type" : "std::vector<MotorCommand>"},
+            "ros"  : {"topic"   : "debug/motor_commands",           "type" : "sensor_msgs::msg::JointState"}  
         },
     ]
 

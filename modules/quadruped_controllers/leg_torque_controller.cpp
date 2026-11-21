@@ -3,20 +3,7 @@
 #include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
 
-struct link_data
-{
-    Eigen::Vector3d next_offset;
-    double mass;
-    Eigen::Vector3d com;
-    Eigen::Matrix3d inertia;
-    double joint_min, joint_max, effort_max;
-};
-
-struct leg_config
-{
-    Eigen::Vector3d origin_pos;
-    link_data links[3];
-};
+#include "quadruped_robot_config.hpp"
 
 struct leg_dynamics
 {
@@ -39,12 +26,10 @@ private:
     bool calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity);
 
     pond::Callback force_callback, stage_callback;
-    pond::DistributorTyped<std::vector<double>> torque_distributor;
-    std::vector<double> distributed_torques;
     std::vector<Eigen::Vector3d> forces_buf;
     std::mutex mutex;
 
-    leg_config configs[4];
+    QuadrupedRobotConfig cfg;
 
     double natural_frequency, oob_spring_frequency, max_swing_torque, determinant_threshold;
 
@@ -60,53 +45,10 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
     oob_spring_frequency = parameter("oob_spring_frequency").asDouble().get(2.0);
     max_swing_torque = parameter("max_swing_torque").asDouble().get(1.0);
 
-    auto reference_link = parameter("reference_link").asString().get("base_link");
-
     forces_buf.resize(4, Eigen::Vector3d::Zero());
-    distributed_torques.resize(12);
 
-    auto joint_names = parameter("joint_names").asStringArray().getStrict(12, 12); if (!joint_names) return POND_ERROR;
-    auto foot_link_names = parameter("foot_link_names").asStringArray().getStrict(4, 4); if (!foot_link_names) return POND_ERROR;
-    
-    for (uint32_t l = 0; l < 4; l++)
-    {
-        GetJointInfoRequest joint_requests[3];
-        GetFrameTransformRequest tf_requests[4];
-
-        for (uint32_t i = 0; i < 3; i++)
-        {
-            if (!tfGetJointInfo(joint_names->at(3*l+i), joint_requests[i])) return POND_ERROR;
-            if (!joint_requests[i].min_angle || !joint_requests[i].max_angle || !joint_requests[i].max_effort) POND_LOG_RETURN_ERROR("No joint position limits set for %s", joint_requests[i].joint_name.c_str());
-        
-            configs[l].links[i].joint_min = *joint_requests[i].min_angle;
-            configs[l].links[i].joint_max = *joint_requests[i].max_angle;
-            configs[l].links[i].effort_max = *joint_requests[i].max_effort;
-        }
-
-        if (!tfGetTransform(joint_requests[1].parent_link_name, joint_requests[0].child_link_name, 0, tf_requests[0])) return POND_ERROR;
-        if (!tfGetTransform(joint_requests[2].parent_link_name, joint_requests[1].child_link_name, 0, tf_requests[1])) return POND_ERROR;
-        if (!tfGetTransform(foot_link_names->at(l), joint_requests[2].child_link_name, 0, tf_requests[2])) return POND_ERROR;
-
-        configs[l].links[0].next_offset = (tf_requests[0].tf * joint_requests[1].tf).translation();
-        configs[l].links[1].next_offset = (tf_requests[1].tf * joint_requests[2].tf).translation();
-        configs[l].links[2].next_offset = (tf_requests[2].tf).translation();
-
-        if (!tfGetTransform(joint_requests[0].parent_link_name, reference_link, 0, tf_requests[3])) return POND_ERROR;
-        configs[l].origin_pos = tf_requests[3].tf * joint_requests[0].tf * Eigen::Vector3d::Zero();
-
-        GetLinkInfoRequest link_requests[3];
-        for (uint32_t i = 0; i < 3; i++)
-        {
-            if (!tfGetLinkInfo(joint_requests[i].child_link_name, link_requests[i])) return POND_ERROR;
-            configs[l].links[i].mass = link_requests[i].mass;
-            configs[l].links[i].com = link_requests[i].inertia_tf.translation();
-            configs[l].links[i].inertia = link_requests[i].inertia;
-        }
-
-        last_oob_free_joint_positions[l] = Eigen::Vector3d(0, 0, configs[l].links[2].joint_max); 
-    }
-
-    torque_distributor = createDistributorTyped<std::vector<double>>({"target_torques"});
+    if (!cfg.init(*this)) return POND_ERROR;
+    for (uint32_t l = 0; l < 4; l++) last_oob_free_joint_positions[l] = Eigen::Vector3d(0, 0, cfg.legs[l].segments[2].joint_max); 
 
     stage_callback = createCallback<std::vector<bool>*, std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*>({
             "calculate_torque/gait_phases", "calculate_torque/target_trajectory_states", "calculate_torque/joint_positions", "calculate_torque/joint_velocities", "calculate_torque/joint_target_torques"
@@ -157,7 +99,7 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
             calculate_leg_dynamics(i, dynamics, joint_pos, joint_vel, Eigen::Vector3d(0, 0, -9.81));
             
-            if (!gait_phases[0][0][i])
+            if (true)//!gait_phases[0][0][i])
             {
                 Eigen::Matrix3d Kp = Eigen::Matrix3d::Zero(), Kd = Eigen::Matrix3d::Zero();
 
@@ -186,17 +128,11 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
                     + dynamics_actual.c_qdot[j] + dynamics_actual.g[j];
                 
                 if (std::isnan(torque[j])) torque[j] = 0;
-                else torque[j] = std::clamp(torque[j], -configs[i].links[j].effort_max, configs[i].links[j].effort_max);
+                else torque[j] = std::clamp(torque[j], -cfg.legs[i].segments[j].effort_max, cfg.legs[i].segments[j].effort_max);
             }
 
             target_torques[i] = torque;
-
-            distributed_torques[3*i+0] = torque[0];
-            distributed_torques[3*i+1] = torque[1];
-            distributed_torques[3*i+2] = torque[2];
         }
-
-        torque_distributor.distribute(&distributed_torques);
     });
 
     force_callback = createCallback<std::vector<Eigen::Vector3d>>({"ground_forces"}, [this](std::vector<Eigen::Vector3d>* forces_in) {
@@ -211,7 +147,6 @@ void LegTorqueController::onShutdownTF()
 {
     stage_callback.destroy();
     force_callback.destroy();
-    torque_distributor.destroy();
 }
 
 bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)
@@ -220,17 +155,16 @@ bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
     Sophus::SO3d R[3];
     Eigen::Vector3d p[4] = {Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()};
 
-    // Apply side_sign to the lateral hip offset vector
     R[0] = Sophus::SO3d::rotX(q[0]);
-    p[1] = p[0] + R[0] * configs[leg_i].links[0].next_offset;
+    p[1] = p[0] + R[0] * cfg.legs[leg_i].segments[0].offset;
 
     R[1] = R[0] * Sophus::SO3d::rotY(q[1]);
-    p[2] = p[1] + R[1] * configs[leg_i].links[1].next_offset;
+    p[2] = p[1] + R[1] * cfg.legs[leg_i].segments[1].offset;
 
     R[2] = R[1] * Sophus::SO3d::rotY(q[2]);
-    p[3] = p[2] + R[2] * configs[leg_i].links[2].next_offset;
+    p[3] = p[2] + R[2] * cfg.legs[leg_i].segments[2].offset;
 
-    dynamics.p_foot = p[3] + configs[leg_i].origin_pos;
+    dynamics.p_foot = p[3] + cfg.legs[leg_i].origin_pos;
 
     Eigen::Vector3d w[3] = {
                Eigen::Vector3d::UnitX(),
@@ -280,8 +214,8 @@ bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
     for (uint32_t k = 0; k < 3; k++)
     {
         // CoM and Inertia in base frame (parsed directly from URDF)
-        Eigen::Vector3d p_com_k = p[k] + R[k] * configs[leg_i].links[k].com;
-        Eigen::Matrix3d I_base_k = R[k].matrix() * configs[leg_i].links[k].inertia * R[k].matrix().transpose();
+        Eigen::Vector3d p_com_k = p[k] + R[k] * cfg.legs[leg_i].segments[k].com;
+        Eigen::Matrix3d I_base_k = R[k].matrix() * cfg.legs[leg_i].segments[k].inertia * R[k].matrix().transpose();
 
         // Link origin acceleration & CoM acceleration
         Eigen::Vector3d r_link = p[k+1] - p[k];
@@ -299,12 +233,12 @@ bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& d
         }
 
         // Accumulate Mass Matrix & Gravity Vector
-        dynamics.m += configs[leg_i].links[k].mass * Jv_com.transpose() * Jv_com + Jw_com.transpose() * I_base_k * Jw_com;
-        dynamics.g -= Jv_com.transpose() * (configs[leg_i].links[k].mass * gravity);
+        dynamics.m += cfg.legs[leg_i].segments[k].mass * Jv_com.transpose() * Jv_com + Jw_com.transpose() * I_base_k * Jw_com;
+        dynamics.g -= Jv_com.transpose() * (cfg.legs[leg_i].segments[k].mass * gravity);
 
         // Accumulate Coriolis Term (C * q_dot) via Recursive Newton-Euler mapping
         Eigen::Vector3d gyro = omega[k].cross(I_base_k * omega[k]);
-        dynamics.c_qdot += Jv_com.transpose() * (configs[leg_i].links[k].mass * a_com_k) + Jw_com.transpose() * gyro;
+        dynamics.c_qdot += Jv_com.transpose() * (cfg.legs[leg_i].segments[k].mass * a_com_k) + Jw_com.transpose() * gyro;
     }
 
     // 6. Compute Operational Space Inertia Matrix ($\boldsymbol{\Lambda}$)

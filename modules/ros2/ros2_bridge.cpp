@@ -1,5 +1,6 @@
 #include "ros2_bridge.hpp"
 #include "mappings.hpp"
+#include "pond_data_types/motor_types.hpp"
 #include <Eigen/src/Core/Matrix.h>
 
 POND_MODULE_CPP_DECLARE(Ros2Bridge, "bridge", "bridging different message types to ros2")
@@ -65,7 +66,8 @@ pond_result Ros2Bridge::onStartup(const std::vector<void*>& args)
                 IF_POND_TO_ROS(bool,                        std_msgs::msg::Bool,                    bool__to__std_msgs_msg_Bool)
                 IF_POND_TO_ROS(std::vector<TrajectoryPoint>,trajectory_msgs::msg::MultiDOFJointTrajectoryPoint, std_vector_TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint)
                 IF_POND_TO_ROS(TrajectoryPoint,             trajectory_msgs::msg::MultiDOFJointTrajectoryPoint, TrajectoryPoint__to__trajectory_msgs_msg_MultiDOFJointTrajectoryPoint)
-                
+                IF_POND_TO_ROS(std::vector<MotorCommand>,   sensor_msgs::msg::JointState,           std_vector_MotorCommand__to__sensor_msgs_msg_JointState)
+                IF_POND_TO_ROS(std::vector<MotorFeedback>,  sensor_msgs::msg::JointState,           std_vector_MotorFeedback__to__sensor_msgs_msg_JointState)
                 return false;
             }();
 

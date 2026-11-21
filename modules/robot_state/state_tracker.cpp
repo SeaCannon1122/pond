@@ -23,9 +23,9 @@ struct Link
     std::vector<Link*> child_links;
     uint32_t level;
 
-    double mass;
-    Eigen::Matrix3d inertia;
-    Sophus::SE3d inertia_tf;
+    std::optional<double> mass = std::nullopt;
+    std::optional<Eigen::Matrix3d> inertia = std::nullopt;
+    std::optional<Sophus::SE3d> inertia_tf = std::nullopt;
 };
 
 struct Joint
@@ -206,9 +206,9 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
         {
             link->mass = l.second->inertial->mass;
 
-            link->inertia <<    l.second->inertial->ixx, l.second->inertial->ixy, l.second->inertial->ixz,
-                                l.second->inertial->ixy, l.second->inertial->iyy, l.second->inertial->iyz,
-                                l.second->inertial->ixz, l.second->inertial->iyz, l.second->inertial->izz;
+            link->inertia = (Eigen::Matrix3d() << l.second->inertial->ixx, l.second->inertial->ixy, l.second->inertial->ixz,
+                                                  l.second->inertial->ixy, l.second->inertial->iyy, l.second->inertial->iyz,
+                                                  l.second->inertial->ixz, l.second->inertial->iyz, l.second->inertial->izz).finished();
 
             link->inertia_tf = Sophus::SE3d(
                 Eigen::Quaterniond(
@@ -223,11 +223,6 @@ pond_result StateTracker::onStartup(const std::vector<void*>& args)
                     l.second->inertial->origin.position.z
                 )
             );
-        }
-        else
-        {
-            link->mass = 0;
-            link->inertia = Eigen::Matrix3d::Zero();
         }
         
         link->child_links.resize(l.second->child_joints.size());

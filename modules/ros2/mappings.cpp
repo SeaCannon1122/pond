@@ -393,3 +393,39 @@ void std_vector_double__to__std_msgs_msg_Float64MultiArray(const std::vector<dou
 {
     ros.data = pond;
 }
+
+void std_vector_MotorCommand__to__sensor_msgs_msg_JointState(const std::vector<MotorCommand>& pond, sensor_msgs::msg::JointState& ros)
+{
+    if (pond.size() == 0) return;
+
+    ros.name.resize(pond.size(), "__"); ros.position.resize(pond.size(), 0); ros.velocity.resize(pond.size(), 0); ros.effort.resize(pond.size(), 0);
+
+    ros.header.stamp = to_ros_time(pond::get_time());
+    for (uint32_t i = 0; i < pond.size(); i++)
+    {
+        ros.name[i][0] = '0' + i/10;
+        ros.name[i][1] = '0' + i%10;
+
+        if (pond[i].pos) ros.position[i] = *pond[i].pos;
+        if (pond[i].vel) ros.velocity[i] = *pond[i].vel;
+        if (pond[i].torque) ros.effort[i] = *pond[i].torque;
+    }
+}
+
+void std_vector_MotorFeedback__to__sensor_msgs_msg_JointState(const std::vector<MotorFeedback>& pond, sensor_msgs::msg::JointState& ros)
+{
+    if (pond.size() == 0) return;
+
+    ros.name.resize(pond.size(), "__"); ros.position.resize(pond.size(), 0); ros.velocity.resize(pond.size(), 0); ros.effort.resize(pond.size(), 0);
+
+    ros.header.stamp = to_ros_time(pond[0].time);
+    for (uint32_t i = 0; i < pond.size(); i++)
+    {
+        ros.name[i][0] = '0' + i/10;
+        ros.name[i][1] = '0' + i%10;
+
+        if (pond[i].pos) ros.position[i] = *pond[i].pos;
+        if (pond[i].vel) ros.velocity[i] = *pond[i].vel;
+        if (pond[i].torque) ros.effort[i] = *pond[i].torque;
+    }
+}

@@ -34,9 +34,9 @@ struct GetLinkInfoRequest
     std::string link_name;
     bool fulfilled = false;
 
-    double mass;
-    Eigen::Matrix3d inertia;
-    Sophus::SE3d inertia_tf;
+    std::optional<double> mass;
+    std::optional<Eigen::Matrix3d> inertia;
+    std::optional<Sophus::SE3d> inertia_tf;
 };
 
 struct JointState
