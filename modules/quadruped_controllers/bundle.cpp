@@ -8,7 +8,7 @@ EXTERN_POND_MODULE(DebugDistributor);
 EXTERN_POND_MODULE(LegTorqueController);
 EXTERN_POND_MODULE(MPCController);
 EXTERN_POND_MODULE(CommandController);
-EXTERN_POND_MODULE(FootContactController);
+EXTERN_POND_MODULE(FootContactDetector);
 EXTERN_POND_MODULE(RobotTrajectoryPlanner);
 
 POND_BUNDLE_DECLARE(
@@ -21,6 +21,6 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(LegTorqueController),
     POND_MODULE(MPCController),
     POND_MODULE(CommandController),
-    POND_MODULE(FootContactController),
+    POND_MODULE(FootContactDetector),
     POND_MODULE(RobotTrajectoryPlanner)
 )

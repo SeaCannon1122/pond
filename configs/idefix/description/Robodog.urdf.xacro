@@ -67,25 +67,25 @@
   <xacro:box_link name="head"              mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      color="green"/>
   <xacro:box_link name="ass"               mass = "0.1" size_x="0.035" size_y="0.114" size_z="0.075" xyz="0 0 0"      color="green"/>
 
-  <xacro:box_link name="FR_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" color="red"/>
-  <xacro:box_link name="BR_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" color="red"/>
-  <xacro:box_link name="FL_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  color="red"/>
-  <xacro:box_link name="BL_Servo" mass = "0.1" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  color="red"/>
+  <xacro:box_link name="FR_Servo" mass = "0.9" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" color="red"/>
+  <xacro:box_link name="BR_Servo" mass = "0.9" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 -0.01624 0" color="red"/>
+  <xacro:box_link name="FL_Servo" mass = "0.9" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  color="red"/>
+  <xacro:box_link name="BL_Servo" mass = "0.9" size_x="0.0375" size_y="0.0527" size_z="0.0317" xyz="0 0.01624 0"  color="red"/>
 
-  <xacro:box_link name="FR_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
-  <xacro:box_link name="BR_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
-  <xacro:box_link name="FL_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
-  <xacro:box_link name="BL_upper_leg" mass = "0.1" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
+  <xacro:box_link name="FR_upper_leg" mass = "0.2" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
+  <xacro:box_link name="BR_upper_leg" mass = "0.2" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
+  <xacro:box_link name="FL_upper_leg" mass = "0.2" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
+  <xacro:box_link name="BL_upper_leg" mass = "0.2" size_x="0.0297" size_y="0.037" size_z="0.1254" xyz="0 0 -0.05259" color="blue"/>
 
-  <xacro:box_link name="FR_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
-  <xacro:box_link name="BR_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
-  <xacro:box_link name="FL_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
-  <xacro:box_link name="BL_lower_leg" mass = "0.1" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
+  <xacro:box_link name="FR_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
+  <xacro:box_link name="BR_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
+  <xacro:box_link name="FL_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
+  <xacro:box_link name="BL_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
 
-  <xacro:sphere_link name="FR_paw" mass = "0.1" radius="0.015" color="white"/>
-  <xacro:sphere_link name="BR_paw" mass = "0.1" radius="0.015" color="white"/>
-  <xacro:sphere_link name="FL_paw" mass = "0.1" radius="0.015" color="white"/>
-  <xacro:sphere_link name="BL_paw" mass = "0.1" radius="0.015" color="white"/>
+  <xacro:sphere_link name="FR_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:sphere_link name="BR_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:sphere_link name="FL_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:sphere_link name="BL_paw" mass = "0.05" radius="0.015" color="white"/>
 
   <!-- Joints -->
   <xacro:joint_fixed name="joint_body1" xyz="0.1305 0 0" parent="base_link" child="connector_front"/>

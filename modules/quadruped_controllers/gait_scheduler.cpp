@@ -18,6 +18,7 @@ private:
     std::atomic<int> gait_type{TROT};
     std::atomic<double> gait_duration{1.5};
     pond::Callback gait_type_callback, gait_duration_callback, schedule_callback;
+    bool only_swing;
 
     std::vector<double> periods, partial_durations; std::vector<bool> phases;
 };
@@ -26,6 +27,8 @@ POND_MODULE_CPP_DECLARE(GaitScheduler, "gait_scheduler", "scheduling different g
 
 pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
 {
+    only_swing = parameter("only_swing").asBool().get(false);
+
     gait_type_callback = createCallback<std::string>({"gait_type"}, 
         [this](std::string* type_string){
             if (*type_string == "trot") gait_type.store(TROT); 
@@ -91,7 +94,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
             for (uint32_t i = 0; i < 4; i++)
             {
                 periods[i] = fmod(periods[i], duration);
-                phases[i] = (periods[i] < partial_durations[0]);
+                phases[i] = (periods[i] < partial_durations[0] && !only_swing);
             }
         }
     );

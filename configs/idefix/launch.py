@@ -15,7 +15,7 @@ def main():
     with open(config_prefix + "build/robot.urdf", "w") as f:
         subprocess.run(["xacro", config_prefix + "description/Robodog.urdf.xacro"], stdout=f, check=True)
 
-    pm = Manager(True, False)
+    pm = Manager(False, False)
 
     pm.set_thread_frame_time("robot_state_thread", 1.0)
     pm.load_module("robot_state_tracker", "robot_state/state_tracker", "robot_state_thread", {"description_path" : config_prefix + "build/robot.urdf"})

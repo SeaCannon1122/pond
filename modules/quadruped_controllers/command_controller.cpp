@@ -1,10 +1,7 @@
-#include <Eigen/src/Core/Matrix.h>
-#include <algorithm>
-#include <mutex>
 #include <pond/pond.hpp>
 #include <pond_data_types/command_types.hpp>
 #include <pond_data_types/transform_types.hpp>
-#include <vector>
+#include <pond_data_types/trajectory_types.hpp>
 
 class CommandController : public pond::ModuleBase
 {
@@ -13,17 +10,18 @@ public:
     virtual void onShutdown() override;
 private:
 
-    pond::Callback twist_callback, pose_callback, stage_callback;
-    std::mutex cmd_mutex;
+    pond::Callback twist_callback, pose_callback, stage_callback, frame_state_callback;;
+    std::mutex cmd_mutex, state_mutex;
 
     TwistCommand twist_cmd, twist_cmd_rec;
     FrameTransform pose_cmd, pose_cmd_rec;
+    TrajectoryPoint trajectory_point, trajectory_point_rec;
     
     std::vector<double> height_bounds; // z_min z_max z_default
     std::vector<double> orientation_bounds; // roll pitch yaw
     std::vector<double> velocity_bounds; // linx liny angz
     double timeout;
-    std::string stage_name;
+    std::string stage_name, base_link_name;
 };
 
 POND_MODULE_CPP_DECLARE(CommandController, "command_controller", "gathers robot commands")
@@ -32,6 +30,7 @@ pond_result CommandController::onStartup(const std::vector<void*>& args)
 {
     timeout =            parameter("timeout")           .asDouble()     .get(0.5);
     stage_name =         parameter("stage_name")        .asString()     .get("feed_commands");
+    base_link_name =     parameter("base_link_name")    .asString()     .get("base_link");
 
     velocity_bounds =    parameter("bounds.velocity")   .asDoubleArray().get({0.2, 0.2, 0.3}, 3, 3);
     height_bounds =      parameter("bounds.height")     .asDoubleArray().get({0.04, 0.3, 0.18}, 3, 3);
@@ -49,12 +48,18 @@ pond_result CommandController::onStartup(const std::vector<void*>& args)
         pose_cmd_rec = *pose;
     });
 
-    stage_callback = createCallback<TwistCommand*, FrameTransform*>(
-        {stage_name+"/cmd_vel", stage_name+"/cmd_pose"},
-        [this](TwistCommand** twist_cmd_out, FrameTransform** pose_cmd_out)
+    frame_state_callback = createCallback<TrajectoryPoint>({base_link_name+"_trajectory_point"}, [this](TrajectoryPoint* point_in) {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        trajectory_point_rec = *point_in;
+    });
+
+    stage_callback = createCallback<TwistCommand*, FrameTransform*, TrajectoryPoint*>(
+        {stage_name+"/cmd_vel", stage_name+"/cmd_pose", stage_name+"/robot_trajectory_point"},
+        [this](TwistCommand** twist_cmd_out, FrameTransform** pose_cmd_out, TrajectoryPoint** trajectory_point_out)
         {
             *twist_cmd_out = &twist_cmd;
             *pose_cmd_out = &pose_cmd;
+            *trajectory_point_out = &trajectory_point;
 
             double time_now = pond::get_time();
             
@@ -81,6 +86,8 @@ pond_result CommandController::onStartup(const std::vector<void*>& args)
                     Eigen::AngleAxisd(std::clamp(rpy[0], -orientation_bounds[0], orientation_bounds[0]), Eigen::Vector3d::UnitX())
                 ), Eigen::Vector3d(0, 0, std::clamp(pose_cmd_rec.tf.translation().z(), height_bounds[0], height_bounds[1])));
             }
+
+            trajectory_point = trajectory_point_rec;
         }
     );
 
@@ -92,4 +99,5 @@ void CommandController::onShutdown()
     stage_callback.destroy();
     twist_callback.destroy();
     pose_callback.destroy();
+    frame_state_callback.destroy();
 }

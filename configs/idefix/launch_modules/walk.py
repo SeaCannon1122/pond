@@ -30,7 +30,7 @@ class cfg:
     trajectory_params = {
         "base_link_name" : "base_link",
 
-        "foot_base_offset" : [0.15, 0.12, -0.17],
+        "foot_base_offset" : [0.16, 0.15, -0.17], # [0.15, 0.12, -0.17], [0.16, 0.15, -0.17],
 
         "step_height" : 0.035,
         "max_step_length" : 1.0,
@@ -52,14 +52,14 @@ class cfg:
         "oob_spring_frequency" : 100.0
     }
 
-    frame_dt = 0.0002
+    frame_dt = 0.004
 
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
         "base_link_name" : "base_link",
         "debug_log": False,
         "robot": {
-            "mass": 5.6,
+            "mass": 8.0,
             "mu": 1.3, # Friction coefficient μ - typically 0.6 for rubber feet
             "f_range": [0.0, 300.0],
             "I_body": [0.00775875, 0.02178375, 0.024855],
@@ -70,7 +70,7 @@ class cfg:
             "max_iter": 100,
             "alpha": 1e-6, # α for R = α·I (Paper Equation 28) - Force weighting
             "Q_weights": [
-                0.25, 0.25, 10.0, # roll pitch yaw 
+                0.25, 6.5, 10.0, # roll pitch yaw 
                 2.0, 2.0, 50.0,   # x y z
                 0.0, 0.0, 0.3,    # roll- pitch- yaw- velocity
                 0.2, 0.2,  0.1,   # x- y- z- velocity
@@ -84,12 +84,14 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
 
     if mpc_mode:
-        pass#pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
+        pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
 
     pm.load_module("command_controller", "quadruped_controllers/command_controller", cfg.thread_name, cfg.cmd_params)
 
-    pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
     pm.load_module("debug_distributor", "quadruped_controllers/debug_distributor", cfg.thread_name, cfg.kinematics_params)
+    pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
+
+    pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module(
         "robot_joint_rate_reducer", "utility/channel_filter", cfg.thread_name,
@@ -100,7 +102,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
         },
     )
 
-    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name)
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : False})
     
     pm.load_module("swing_trajectory_controller", "quadruped_controllers/swing_trajectory_controller", cfg.thread_name, cfg.trajectory_params)
 
@@ -121,6 +123,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
                 ["read_servo_feedback"] +
                 ["distribute_debug_motor_feedback"] +
                 ["convert_from_motor_feedback"] +
+                ["detect_foot_contacts"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
                 ["evaluate_swing_trajectories"] +
@@ -133,8 +136,8 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
                 ["joint_positions", "joint_velocities", "joint_target_torques" if mpc_mode else "joint_target_positions"] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states", "robot_trajectory_point"],
 
-            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True]
+            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, False]
         }
     )

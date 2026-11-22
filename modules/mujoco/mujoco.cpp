@@ -1,8 +1,6 @@
-#include <cmath>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
-#include <thread>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>

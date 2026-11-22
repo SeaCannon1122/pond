@@ -23,7 +23,7 @@ public:
     virtual void onFrame() override;
 
 private:
-    pond::Callback update_callback, frame_state_callback;
+    pond::Callback update_callback;
     pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
     std::vector<Eigen::Vector3d> forces;
 
@@ -32,9 +32,9 @@ private:
     std::array<double, 2> partial_durations_rec = {1.0, 0.0};
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
     TrajectoryPoint current_trajectory_point_rec;
-    std::mutex cmd_mutex, state_mutex;
+    std::mutex mutex;
 
-    std::vector<std::string> foot_link_names; std::string reference_link;
+    std::vector<std::string> foot_link_names; std::string base_link_name;
 
     bool debug_log;
 
@@ -62,10 +62,10 @@ POND_MODULE_CPP_DECLARE(MPCController, "mpc_controller", "model predictive contr
 pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 {
     auto foot_link_names_o = parameter("foot_link_names").asStringArray().getStrict(4, 4);
-    auto reference_link_o = parameter("reference_link").asString().getStrict();
-    if (!foot_link_names_o || !reference_link_o) return POND_ERROR;
+    base_link_name = parameter("base_link_name").asString().get("base_link");
+    if (!foot_link_names_o) return POND_ERROR;
 
-    reference_link = *reference_link_o; foot_link_names = *foot_link_names_o;
+    foot_link_names = *foot_link_names_o;
 
     debug_log     = parameter("debug_log")    .asBool()       .get(false);
     robot_mass    = parameter("robot.mass")   .asDouble()     .get(5);
@@ -103,29 +103,26 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
     forces.resize(4);
     force_distributor = createDistributorTyped<std::vector<Eigen::Vector3d>>({"ground_forces"});
 
-    update_callback = createCallback<std::vector<double>*, std::vector<double>*, TwistCommand*, FrameTransform*>(
-        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/cmd_vel", "update_mpc/cmd_pose"},
-        [this](std::vector<double>** periods_in, std::vector<double>** partial_durations_in, TwistCommand** twist_cmd_in, FrameTransform** pose_tf_in)
+    update_callback = createCallback<std::vector<double>*, std::vector<double>*, TwistCommand*, FrameTransform*, TrajectoryPoint*>(
+        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/cmd_vel", "update_mpc/cmd_pose", "update_mpc/robot_trajectory_point"},
+        [this](std::vector<double>** periods_in, std::vector<double>** partial_durations_in, TwistCommand** twist_cmd_in, FrameTransform** pose_tf_in, TrajectoryPoint** trajectory_point_in)
         {
             if (*periods_in == NULL)            POND_LOG_RETURN("update_mpc/gait_periods is NULL");
             if (*partial_durations_in == NULL)  POND_LOG_RETURN("update_mpc/partial_gait_durations is NULL");
             if (*twist_cmd_in == NULL)          POND_LOG_RETURN("update_mpc/cmd_vel is NULL");
             if (*pose_tf_in == NULL)            POND_LOG_RETURN("update_mpc/cmd_pose is NULL");
+            if (*trajectory_point_in == NULL)   POND_LOG_RETURN("update_mpc/robot_trajectory_point is NULL");
 
-            std::lock_guard<std::mutex> lock(cmd_mutex);
+            std::lock_guard<std::mutex> lock(mutex);
 
             for (uint32_t i = 0; i < 2; i++) partial_durations_rec[i] = partial_durations_in[0][0][i];
             for (uint32_t i = 0; i < 4; i++) periods_rec[i] = periods_in[0][0][i];
 
             twist_cmd_rec = **twist_cmd_in;
             pose_cmd_rec = **pose_tf_in;
+            current_trajectory_point_rec = **trajectory_point_in;
         }
     );
-
-    frame_state_callback = createCallback<TrajectoryPoint>({reference_link+"_trajectory_point"}, [this](TrajectoryPoint* point_in) {
-        std::lock_guard<std::mutex> lock(state_mutex);
-        current_trajectory_point_rec = *point_in;
-    });
 
     return POND_SUCCESS;
 }
@@ -133,7 +130,6 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 void MPCController::onShutdownTF()
 {
     update_callback.destroy();
-    frame_state_callback.destroy();
     force_distributor.destroy();
 }
 
@@ -141,19 +137,16 @@ void MPCController::onFrame()
 {
     double time_now = pond::get_time();
 
-    cmd_mutex.lock();
+    mutex.lock();
 
     auto twist_cmd = twist_cmd_rec;
     auto pose_cmd = pose_cmd_rec;
     double gait_duration = partial_durations_rec[0] + partial_durations_rec[1];
     double stance_duration = partial_durations_rec[0];
     auto gait_periods = periods_rec;
-
-    cmd_mutex.unlock();
-
-    state_mutex.lock();
     TrajectoryPoint current_state = current_trajectory_point_rec;
-    state_mutex.unlock();
+
+    mutex.unlock();
 
     if (current_state.stamp.time == 0 || twist_cmd.stamp.time == 0) return;
 
@@ -171,7 +164,7 @@ void MPCController::onFrame()
     std::array<Eigen::Vector3d, 4> foot_r_world;
     for (uint32_t i = 0; i < 4; i++)
     {
-        if (!tfGetTransform(foot_link_names[i], reference_link, 0, tf_request)) return;
+        if (!tfGetTransform(foot_link_names[i], base_link_name, 0, tf_request)) return;
         foot_r_world[i] = current_rotation * tf_request.tf.translation();
     }
 

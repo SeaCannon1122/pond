@@ -56,6 +56,12 @@ class cfg:
         },
     ]
     debug_bridges = [
+        ###### base_link_trajectory_point ######
+        {   "direction" : "POND_TO_ROS",
+
+            "pond" : {"channel" : "base_link_trajectory_point",         "type" : "TrajectoryPoint"},
+            "ros"  : {"topic"   : "debug/base_link_trajectory_point",   "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+        },
         ########## gaits ##########
         {   "direction" : "POND_TO_ROS", "rate" : int(0.1 / walk.cfg.frame_dt),
 
@@ -83,7 +89,7 @@ class cfg:
         ###### target_trajectory_states ######
         {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "target_trajectory_states/out",   "type" :  "std::vector<TrajectoryPoint>"},
+            "pond" : {"channel" : "target_trajectory_states/out",   "type" : "std::vector<TrajectoryPoint>"},
             "ros"  : {"topic"   : "debug/target_trajectory_states", "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
         ###### motor_feedbacks ######
