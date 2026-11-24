@@ -11,9 +11,10 @@ add_library(quadruped_controllers-pond_bundle SHARED
     debug_distributor.cpp
     leg_torque_controller.cpp
     mpc_controller.cpp
-    command_controller.cpp
+    input_synchronizer.cpp
     foot_contact_detector.cpp
     robot_trajectory_planner.cpp
+    state_estimator.cpp
 )
 
 target_link_libraries(quadruped_controllers-pond_bundle qpOASES)

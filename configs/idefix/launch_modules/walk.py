@@ -30,7 +30,7 @@ class cfg:
     trajectory_params = {
         "base_link_name" : "base_link",
 
-        "foot_base_offset" : [0.16, 0.15, -0.17], # [0.15, 0.12, -0.17], [0.16, 0.15, -0.17],
+        "foot_base_offset" : [0.15, 0.13, -0.17], # [0.15, 0.12, -0.17], [0.16, 0.15, -0.17],
 
         "step_height" : 0.035,
         "max_step_length" : 1.0,
@@ -86,10 +86,12 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
     if mpc_mode:
         pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
 
-    pm.load_module("command_controller", "quadruped_controllers/command_controller", cfg.thread_name, cfg.cmd_params)
+    pm.load_module("input_synchronizer", "quadruped_controllers/input_synchronizer", cfg.thread_name, cfg.cmd_params)
 
     pm.load_module("debug_distributor", "quadruped_controllers/debug_distributor", cfg.thread_name, cfg.kinematics_params)
     pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
+
+    pm.load_module("state_estimator", "quadruped_controllers/state_estimator", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
 
@@ -102,7 +104,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
         },
     )
 
-    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : False})
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : True})
     
     pm.load_module("swing_trajectory_controller", "quadruped_controllers/swing_trajectory_controller", cfg.thread_name, cfg.trajectory_params)
 
@@ -119,10 +121,11 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
             "frame_time_log" : False,
 
             "stage_names" : 
-                ["feed_commands"] +
+                ["feed_external_inputs"] +
                 ["read_servo_feedback"] +
                 ["distribute_debug_motor_feedback"] +
                 ["convert_from_motor_feedback"] +
+                ["estimate_state"] +
                 ["detect_foot_contacts"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
@@ -136,8 +139,8 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
                 ["joint_positions", "joint_velocities", "joint_target_torques" if mpc_mode else "joint_target_positions"] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states", "robot_trajectory_point"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states", "robot_trajectory_point", "imu_data", "imu_info"],
 
-            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, False]
+            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, False, False, False]
         }
     )

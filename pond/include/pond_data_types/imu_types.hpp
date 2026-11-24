@@ -8,6 +8,7 @@ struct ImuData
     Stamp stamp;
     Eigen::Vector3d ang_vel;
     Eigen::Vector3d lin_acc;
+    Sophus::SO3d orientation;
 };
 
 struct ImuInfo

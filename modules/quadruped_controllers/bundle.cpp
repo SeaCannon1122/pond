@@ -7,9 +7,10 @@ EXTERN_POND_MODULE(MotorAbstractor);
 EXTERN_POND_MODULE(DebugDistributor);
 EXTERN_POND_MODULE(LegTorqueController);
 EXTERN_POND_MODULE(MPCController);
-EXTERN_POND_MODULE(CommandController);
+EXTERN_POND_MODULE(InputSynchronizer);
 EXTERN_POND_MODULE(FootContactDetector);
 EXTERN_POND_MODULE(RobotTrajectoryPlanner);
+EXTERN_POND_MODULE(StateEstimator);
 
 POND_BUNDLE_DECLARE(
     "Controllers for a quadruped robodog",
@@ -20,7 +21,8 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(DebugDistributor),
     POND_MODULE(LegTorqueController),
     POND_MODULE(MPCController),
-    POND_MODULE(CommandController),
+    POND_MODULE(InputSynchronizer),
     POND_MODULE(FootContactDetector),
-    POND_MODULE(RobotTrajectoryPlanner)
+    POND_MODULE(RobotTrajectoryPlanner),
+    POND_MODULE(StateEstimator)
 )

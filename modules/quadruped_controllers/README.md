@@ -4,7 +4,7 @@ This bundle contains the modules for locomotion of the quadruped robots "idefix"
 
 ## motor_joint_updater
 
-## command_controller
+## input_synchronizer
 Captures asynchronous commands and feeds them into a control loop at the start of a frame
 
 ## gait_scheduler
