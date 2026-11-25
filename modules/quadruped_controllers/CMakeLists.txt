@@ -15,6 +15,7 @@ add_library(quadruped_controllers-pond_bundle SHARED
     foot_contact_detector.cpp
     robot_trajectory_planner.cpp
     state_estimator.cpp
+    zero_state_estimator.cpp
 )
 
 target_link_libraries(quadruped_controllers-pond_bundle qpOASES)

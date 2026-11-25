@@ -1,5 +1,9 @@
 project(pond_manager_py)
 
+if(POLICY CMP0148)
+  cmake_policy(SET CMP0148 NEW)
+endif()
+
 find_package(pybind11 REQUIRED)
 
 pybind11_add_module(_pond bindings.cpp)

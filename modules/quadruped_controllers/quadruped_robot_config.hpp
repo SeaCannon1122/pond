@@ -14,7 +14,7 @@ struct SegmentData
 struct LegConfig
 {
     Eigen::Vector3d origin_pos;
-
+    double foot_radius;
     SegmentData segments[3];
 };
 
@@ -38,7 +38,7 @@ public:
         for (uint32_t l = 0; l < 4; l++)
         {
             GetJointInfoRequest joint_requests[3];
-            GetFrameTransformRequest tf_requests[4];
+            GetFrameTransformRequest tf_requests[5];
 
             for (uint32_t i = 0; i < 3; i++)
             {
@@ -53,13 +53,15 @@ public:
             if (!module.tfGetTransform(joint_requests[1].parent_link_name, joint_requests[0].child_link_name, 0, tf_requests[0])) return false;
             if (!module.tfGetTransform(joint_requests[2].parent_link_name, joint_requests[1].child_link_name, 0, tf_requests[1])) return false;
             if (!module.tfGetTransform(foot_link_names[l], joint_requests[2].child_link_name, 0, tf_requests[2])) return false;
+            if (!module.tfGetTransform(foot_link_names[l]+"_outer", foot_link_names[l], 0, tf_requests[3])) return false;
 
             legs[l].segments[0].offset = (tf_requests[0].tf * joint_requests[1].tf).translation();
             legs[l].segments[1].offset = (tf_requests[1].tf * joint_requests[2].tf).translation();
             legs[l].segments[2].offset = (tf_requests[2].tf).translation();
+            legs[l].foot_radius = tf_requests[3].tf.translation().norm();
 
-            if (!module.tfGetTransform(joint_requests[0].parent_link_name, base_link_name, 0, tf_requests[3])) return false;
-            legs[l].origin_pos = tf_requests[3].tf * joint_requests[0].tf * Eigen::Vector3d::Zero();
+            if (!module.tfGetTransform(joint_requests[0].parent_link_name, base_link_name, 0, tf_requests[4])) return false;
+            legs[l].origin_pos = tf_requests[4].tf * joint_requests[0].tf * Eigen::Vector3d::Zero();
 
             GetLinkInfoRequest link_requests[3];
             for (uint32_t i = 0; i < 3; i++)

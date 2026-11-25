@@ -73,7 +73,7 @@ pond_result MotorAbstractor::onStartupTF(const std::vector<void*>& args)
     cmd_stage_callback = createCallback<void>(cmd_info, [this](void** data)
         {
             std::array<Eigen::Vector3d, 4>** positions_or_torques = (std::array<Eigen::Vector3d, 4>**)*data;
-            if (*positions_or_torques == NULL) POND_LOG_RETURN("%s/%s is NULL", cmd_stage_name.c_str(), (torque_mode ? "/joint_target_torques" : "/joint_target_positions"));
+            if (*positions_or_torques == NULL) POND_LOG_RETURN("%s/%s is NULL", cmd_stage_name.c_str(), (torque_mode ? "joint_target_torques" : "joint_target_positions"));
 
             bool disable_flag = disable_rec.load();
 

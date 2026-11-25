@@ -1,11 +1,16 @@
+#include "pond/h/module.h"
+#include <Eigen/src/Core/Matrix.h>
+#include <Eigen/src/Geometry/Quaternion.h>
 #include <pond/pond.hpp>
 #include <pond_data_types/motor_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
+#include <pond_data_types/imu_types.hpp>
 
 #include <mujoco/mujoco.h>
 #include <simulate/glfw_adapter.h>
 #include <simulate/simulate.h>
 #include <simulate/array_safety.h>
+#include <sophus/so3.hpp>
 
 namespace mj  = ::mujoco;
 namespace mju = ::mujoco::sample_util;
@@ -25,6 +30,13 @@ struct link_state_distributor
   int link_id;
   pond::DistributorTyped<TrajectoryPoint> d;
   TrajectoryPoint frame;
+};
+
+struct imu_distributor
+{
+  int acc_id, gyro_id, quat_id, acc_addr, gyro_addr, quat_addr;
+  ImuData data; ImuInfo info;
+  pond::DistributorTyped<ImuData, ImuInfo> d;
 };
 
 struct actuator_group
@@ -60,6 +72,7 @@ private:
 
   std::vector<actuator_group> actuators_groups;
   std::vector<link_state_distributor> link_state_distributors;
+  std::vector<imu_distributor> imu_distributors;
   std::mutex interface_mutex;
   double last_update_time = 0;
 
@@ -168,6 +181,7 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
     
     if ((lsd.link_id = mj_name2id(m, mjOBJ_BODY, name.c_str())) == -1)
     {
+      mj_deleteData(d);
       mj_deleteModel(m);
       for (auto& l: link_state_distributors) l.d.destroy();
       POND_LOG_RETURN_ERROR("Link '%s' does not exist", name.c_str());
@@ -176,6 +190,46 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
     lsd.d = createDistributorTyped<TrajectoryPoint>({name+"_trajectory_point"});
 
     link_state_distributors.push_back(lsd);
+  }
+
+  auto imu_names = parameter("imus").asStringArray().get({});
+  
+  for (auto& name : imu_names)
+  {
+    imu_distributor imud;
+
+    imud.acc_id  = mj_name2id(m, mjOBJ_SENSOR, (name+".acc").c_str());
+    imud.gyro_id = mj_name2id(m, mjOBJ_SENSOR, (name+".gyro").c_str());
+    imud.quat_id = mj_name2id(m, mjOBJ_SENSOR, (name+".quat").c_str());
+
+    if (imud.acc_id < 0 || imud.gyro_id < 0 || imud.quat_id < 0)
+    {
+      if (imud.acc_id < 0)  POND_LOG("Accelerometer %s.acc does not exist", name.c_str());
+      if (imud.gyro_id < 0) POND_LOG("Gyroscope %s.gyro does not exist", name.c_str());
+      if (imud.quat_id < 0) POND_LOG("Orientation sensor %s.quat does not exist", name.c_str());
+
+      mj_deleteData(d);
+      mj_deleteModel(m);
+      for (auto& imu: imu_distributors) imu.d.destroy();
+      for (auto& l: link_state_distributors) l.d.destroy();
+      return POND_ERROR;
+    }
+
+    imud.acc_addr  = m->sensor_adr[imud.acc_id];
+    imud.gyro_addr = m->sensor_adr[imud.gyro_id];
+    imud.quat_addr = m->sensor_adr[imud.quat_id];
+
+    imud.info.ang_vel.noise                 = Eigen::Vector3d::Ones() * m->sensor_noise[imud.gyro_id];
+    imud.info.ang_vel.covariance.diagonal() = Eigen::Vector3d::Ones() * m->sensor_noise[imud.gyro_id] * m->sensor_noise[imud.gyro_id];
+
+    imud.info.lin_acc.noise                 = Eigen::Vector3d::Ones() * m->sensor_noise[imud.acc_id];
+    imud.info.lin_acc.covariance.diagonal() = Eigen::Vector3d::Ones() * m->sensor_noise[imud.acc_id] * m->sensor_noise[imud.acc_id];
+
+    imud.info.stamp.frame_id = imud.data.stamp.frame_id = name;
+
+    imud.d = createDistributorTyped<ImuData, ImuInfo>({name+"/data", name+"/info"});
+
+    imu_distributors.push_back(imud);
   }
 
   auto space = parameterSpace("actuator_groups");
@@ -261,12 +315,15 @@ pond_result Mujoco::onStartup(const std::vector<void*>& args)
 
     continue;
   failiure:
+    mj_deleteData(d);
     mj_deleteModel(m);
     for (uint32_t i = 0; i < gi; i++)
     {
       actuators_groups[i].command_callback.destroy();
       actuators_groups[i].feedback_callback.destroy();
     }
+    for (auto& imu: imu_distributors) imu.d.destroy();
+    for (auto& l: link_state_distributors) l.d.destroy();
     return POND_ERROR;
   }
 
@@ -417,6 +474,18 @@ void Mujoco::onFrame()
   }
 
   double time_after_frame = pond::get_time(), hw_time_after_frame = pond::get_monotonic_time();
+
+  for (auto& imud : imu_distributors)
+  {
+    imud.data.ang_vel = Eigen::Vector3d(d->sensordata[imud.gyro_addr], d->sensordata[imud.gyro_addr+1], d->sensordata[imud.gyro_addr+2]);
+    imud.data.lin_acc = Eigen::Vector3d(d->sensordata[imud.acc_addr], d->sensordata[imud.acc_addr+1], d->sensordata[imud.acc_addr+2]);
+    imud.data.orientation.setQuaternion(Eigen::Quaterniond(d->sensordata[imud.quat_addr], d->sensordata[imud.quat_addr+1], d->sensordata[imud.quat_addr+2], d->sensordata[imud.quat_addr+3]));
+
+    imud.info.stamp.time    = imud.data.stamp.time    = time_after_frame;
+    imud.info.stamp.hw_time = imud.data.stamp.hw_time = hw_time_after_frame;
+
+    imud.d.distribute(&imud.data, &imud.info);
+  }
 
   for (auto& lsd : link_state_distributors)
   {

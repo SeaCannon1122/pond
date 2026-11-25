@@ -62,6 +62,12 @@ class cfg:
             "pond" : {"channel" : "base_link_trajectory_point",         "type" : "TrajectoryPoint"},
             "ros"  : {"topic"   : "debug/base_link_trajectory_point",   "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
+        ###### estimated_trajectory_point ######
+        {   "direction" : "POND_TO_ROS",
+
+            "pond" : {"channel" : "robot_trajectory_point/out",         "type" : "TrajectoryPoint"},
+            "ros"  : {"topic"   : "debug/estimated_trajectory_point",   "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+        },
         ########## gaits ##########
         {   "direction" : "POND_TO_ROS", "rate" : int(0.1 / walk.cfg.frame_dt),
 

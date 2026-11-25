@@ -184,6 +184,7 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
                 P.block<2,2>(0, 0) /= 10.0;
             }
 
+            trajectory_point.stamp.time = imu_data_in[0]->stamp.time;
             trajectory_point.pose = Sophus::SE3d(imu_data_in[0]->orientation, x_hat.segment<3>(0));
             trajectory_point.lin_vel = x_hat.segment<3>(3);
         }

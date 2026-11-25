@@ -1,5 +1,7 @@
 project(mujoco-pond_bundle)
 
+set(OpenGL_GL_PREFERENCE GLVND)
+
 find_package(mujoco REQUIRED)
 find_package(glfw3 REQUIRED)
 

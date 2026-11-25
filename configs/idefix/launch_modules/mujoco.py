@@ -30,6 +30,7 @@ def mujoco(pm: Manager, torque_mode: bool):
                 },
             ],
             "link_state_distributors" : ["base_link"],
+            "imus" : ["imu"],
             "initial_joint_states": [
                 {
                     "name": walk.cfg.joint_names[3 * leg_i + joint_i],

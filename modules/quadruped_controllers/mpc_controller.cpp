@@ -3,6 +3,8 @@
 #include <pond_data_types/command_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
 
+#include "pond/h/module.h"
+#include "quadruped_robot_config.hpp"
 #include <qpOASES.hpp>
 
 using Vector13 = Eigen::Vector<double, 13>;
@@ -23,6 +25,8 @@ public:
     virtual void onFrame() override;
 
 private:
+    QuadrupedRobotConfig cfg;
+
     pond::Callback update_callback;
     pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
     std::vector<Eigen::Vector3d> forces;
@@ -33,9 +37,7 @@ private:
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
     TrajectoryPoint current_trajectory_point_rec;
     std::mutex mutex;
-
-    std::vector<std::string> foot_link_names; std::string base_link_name;
-
+    
     bool debug_log;
 
     double robot_mass, robot_mu;
@@ -61,11 +63,7 @@ POND_MODULE_CPP_DECLARE(MPCController, "mpc_controller", "model predictive contr
 
 pond_result MPCController::onStartupTF(const std::vector<void*>& args)
 {
-    auto foot_link_names_o = parameter("foot_link_names").asStringArray().getStrict(4, 4);
-    base_link_name = parameter("base_link_name").asString().get("base_link");
-    if (!foot_link_names_o) return POND_ERROR;
-
-    foot_link_names = *foot_link_names_o;
+    if (!cfg.init(*this)) return POND_ERROR;
 
     debug_log     = parameter("debug_log")    .asBool()       .get(false);
     robot_mass    = parameter("robot.mass")   .asDouble()     .get(5);
@@ -164,8 +162,8 @@ void MPCController::onFrame()
     std::array<Eigen::Vector3d, 4> foot_r_world;
     for (uint32_t i = 0; i < 4; i++)
     {
-        if (!tfGetTransform(foot_link_names[i], base_link_name, 0, tf_request)) return;
-        foot_r_world[i] = current_rotation * tf_request.tf.translation();
+        if (!tfGetTransform(cfg.foot_link_names[i], cfg.base_link_name, 0, tf_request)) return;
+        foot_r_world[i] = current_rotation * tf_request.tf.translation() + Eigen::Vector3d(0,0, -cfg.legs[i].foot_radius);
     }
 
     double start_time = pond::get_monotonic_time();

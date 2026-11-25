@@ -20,7 +20,7 @@ class cfg:
 
     cmd_params = {
         "timeout": 0.5,
-        "stage_name": "feed_commands",
+        "stage_name": "feed_external_inputs",
 
         "bounds.velocity": [0.2, 0.2, 0.3],
         "bounds.height": [0.04, 0.3, 0.18],
@@ -52,10 +52,11 @@ class cfg:
         "oob_spring_frequency" : 100.0
     }
 
-    frame_dt = 0.004
+    frame_dt = 0.001
 
     mpc_parameters = {
         "foot_link_names" : foot_link_names,
+        "joint_names" : joint_names,
         "base_link_name" : "base_link",
         "debug_log": False,
         "robot": {
@@ -79,19 +80,20 @@ class cfg:
         }
     }
 
-def walk(pm: Manager, mpc_mode: bool, hardware: bool):
+def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
     pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
     pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
 
     if mpc_mode:
         pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
 
-    pm.load_module("input_synchronizer", "quadruped_controllers/input_synchronizer", cfg.thread_name, cfg.cmd_params)
+    pm.load_module("input_synchronizer", "quadruped_controllers/input_synchronizer", cfg.thread_name, {**cfg.cmd_params, "external_trajectory_point": not estimator})
 
     pm.load_module("debug_distributor", "quadruped_controllers/debug_distributor", cfg.thread_name, cfg.kinematics_params)
     pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
-    pm.load_module("state_estimator", "quadruped_controllers/state_estimator", cfg.thread_name, cfg.kinematics_params)
+    if estimator:
+        pm.load_module("state_estimator", "quadruped_controllers/state_estimator", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
 
@@ -104,7 +106,7 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
         },
     )
 
-    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : True})
+    pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : False})
     
     pm.load_module("swing_trajectory_controller", "quadruped_controllers/swing_trajectory_controller", cfg.thread_name, cfg.trajectory_params)
 
@@ -123,16 +125,15 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
             "stage_names" : 
                 ["feed_external_inputs"] +
                 ["read_servo_feedback"] +
-                ["distribute_debug_motor_feedback"] +
                 ["convert_from_motor_feedback"] +
-                ["estimate_state"] +
+               (["estimate_state"] if estimator else []) +
                 ["detect_foot_contacts"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
                 ["evaluate_swing_trajectories"] +
                (["calculate_torque"] if mpc_mode else ["calculate_joint_angles"]) +
                 ["convert_to_motor_commands"] +
-                ["distribute_debug_motor_commands"] +
+                ["debug_distribute"] +
                 ["write_servo_commands"],
 
             "data_ids" :
@@ -141,6 +142,6 @@ def walk(pm: Manager, mpc_mode: bool, hardware: bool):
                 ["joint_positions", "joint_velocities", "joint_target_torques" if mpc_mode else "joint_target_positions"] +
                 ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states", "robot_trajectory_point", "imu_data", "imu_info"],
 
-            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, False, False, False]
+            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, True, False, False]
         }
     )

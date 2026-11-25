@@ -1,5 +1,7 @@
 project(orb_slam3-pond_bundle)
 
+set(OpenGL_GL_PREFERENCE GLVND)
+
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Pangolin REQUIRED)

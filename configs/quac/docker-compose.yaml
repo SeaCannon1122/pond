@@ -1,0 +1,33 @@
+services:
+  quac:
+    build:
+      context: ../..
+      dockerfile: configs/quac/dockerfile
+    image: quac_pond:latest
+    container_name: quac
+    restart: "no"
+    
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - .:/pond/configs/quac
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      DISPLAY: ${DISPLAY:-null}
+      QT_X11_NO_MITSHM: 1
+
+      POND_QUAC_CONFIG_PATH : /pond/configs/quac/
+
+      POND_BUNDLE_PATH: /pond/modules/build/pond_bundles
+      PYTHONPATH : /pond/pond/build/python:${PYTHONPATH}
+          
+    stdin_open: true
+    tty: true
+    stop_signal: SIGINT
+    network_mode: "host"
+
+    working_dir: /pond/configs/quac
+    command: python3 launch.py -docker

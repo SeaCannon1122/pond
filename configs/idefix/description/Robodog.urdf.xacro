@@ -26,7 +26,7 @@
     </link>
   </xacro:macro>
 
-  <xacro:macro name="sphere_link" params="name radius color mass">
+  <xacro:macro name="foot_link" params="name radius color mass">
     <link name="${name}">
       <xacro:inertial_sphere mass="${mass}" radius="${radius}">
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -39,6 +39,14 @@
         <material name="${color}"/>
       </collision>
     </link>
+
+    <joint name="${name}_outer_joint" type="fixed">
+      <origin xyz="0 0 ${-radius}" rpy="0 0 0"/>
+      <parent link="${name}"/>
+      <child link="${name}_outer"/>
+    </joint>
+
+    <link name="${name}_outer"></link>
   </xacro:macro>
 
   <!-- Macros for joints -->
@@ -82,10 +90,10 @@
   <xacro:box_link name="FL_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
   <xacro:box_link name="BL_lower_leg" mass = "0.15" size_x="0.021" size_y="0.009487" size_z="0.110" xyz="0 0 -0.053" color="black"/>
 
-  <xacro:sphere_link name="FR_paw" mass = "0.05" radius="0.015" color="white"/>
-  <xacro:sphere_link name="BR_paw" mass = "0.05" radius="0.015" color="white"/>
-  <xacro:sphere_link name="FL_paw" mass = "0.05" radius="0.015" color="white"/>
-  <xacro:sphere_link name="BL_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:foot_link name="FR_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:foot_link name="BR_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:foot_link name="FL_paw" mass = "0.05" radius="0.015" color="white"/>
+  <xacro:foot_link name="BL_paw" mass = "0.05" radius="0.015" color="white"/>
 
   <!-- Joints -->
   <xacro:joint_fixed name="joint_body1" xyz="0.1305 0 0" parent="base_link" child="connector_front"/>

@@ -35,6 +35,8 @@
 
       <!--<joint name="chassis_z" type="slide" axis="0 0 1"/>--> 
 
+      <site name="imu_site" pos="0.0 0 0.0" quat="1 0 0 0"/>
+
       <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="5.0" diaginertia="0.0048 0.00403333 0.00403333"/>
 
       <geom size="0.108 0.057 0.0375" pos="0 0 0" type="box"/>
@@ -108,5 +110,11 @@
       </body>
     </body>
   </worldbody>
+
+  <sensor>
+    <accelerometer name="imu.acc"                    site="imu_site" noise="0.05"  cutoff="0"/>
+    <gyro          name="imu.gyro"                   site="imu_site" noise="0.01"  cutoff="0"/>
+    <framequat     name="imu.quat" objtype="site" objname="imu_site" noise="0.001" cutoff="0"/>
+  </sensor>
 
 </mujoco>

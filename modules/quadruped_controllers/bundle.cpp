@@ -11,6 +11,7 @@ EXTERN_POND_MODULE(InputSynchronizer);
 EXTERN_POND_MODULE(FootContactDetector);
 EXTERN_POND_MODULE(RobotTrajectoryPlanner);
 EXTERN_POND_MODULE(StateEstimator);
+EXTERN_POND_MODULE(ZeroStateEstimator);
 
 POND_BUNDLE_DECLARE(
     "Controllers for a quadruped robodog",
@@ -24,5 +25,6 @@ POND_BUNDLE_DECLARE(
     POND_MODULE(InputSynchronizer),
     POND_MODULE(FootContactDetector),
     POND_MODULE(RobotTrajectoryPlanner),
-    POND_MODULE(StateEstimator)
+    POND_MODULE(StateEstimator),
+    POND_MODULE(ZeroStateEstimator)
 )
