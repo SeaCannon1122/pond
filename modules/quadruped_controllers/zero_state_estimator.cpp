@@ -50,9 +50,9 @@ pond_result ZeroStateEstimator::onStartupTF(const std::vector<void*>& args)
         {"estimate_state/joint_positions", "estimate_state/joint_velocities", "estimate_state/imu_data", "estimate_state/robot_trajectory_point"},
         [this](std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, ImuData** imu_data_in, TrajectoryPoint** trajectory_point_out)
         {
-            if (*joint_positions_in == NULL) POND_LOG_RETURN("detect_foot_contacts/joint_positions is NULL");
-            if (*joint_velocities_in == NULL) POND_LOG_RETURN("detect_foot_contacts/joint_velocities is NULL");
-            if (*imu_data_in == NULL) POND_LOG_RETURN("detect_foot_contacts/imu_data is NULL");
+            if (*joint_positions_in == NULL) POND_LOG_RETURN("estimate_state/joint_positions is NULL");
+            if (*joint_velocities_in == NULL) POND_LOG_RETURN("estimate_state/joint_velocities is NULL");
+            if (*imu_data_in == NULL) POND_LOG_RETURN("estimate_state/imu_data is NULL");
             *trajectory_point_out = &trajectory_point;
 
             double avg_leg_height = 0;

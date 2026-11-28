@@ -82,7 +82,7 @@ class cfg:
 
 def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
     pm.set_thread_frame_time(cfg.thread_name, cfg.frame_dt)
-    pm.set_thread_frame_time("mpc_thread", 1.0/80.0)
+    pm.set_thread_frame_time("mpc_thread", 1.0/50.0)
 
     if mpc_mode:
         pm.load_module("mpc_controller", "quadruped_controllers/mpc_controller", "mpc_thread", cfg.mpc_parameters)
@@ -102,7 +102,7 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
     )
 
     if estimator:
-        pm.load_module("state_estimator", "quadruped_controllers/zero_state_estimator", cfg.thread_name, cfg.kinematics_params)
+        pm.load_module("state_estimator", "quadruped_controllers/state_estimator", cfg.thread_name, cfg.kinematics_params)
 
     pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
     pm.load_module("robot_trajectory_planner", "quadruped_controllers/robot_trajectory_planner", cfg.thread_name)
@@ -146,6 +146,6 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
 
             "data_out" : (len(cfg.motor_names)*2)*[False] +
                 [False, False, False] +
-                [True, True, True, False, True, True, False, False, True]
+                [True, True, True, False, True, True, True, False, True]
         }
     )

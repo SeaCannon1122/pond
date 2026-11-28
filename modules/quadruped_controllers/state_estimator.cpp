@@ -1,5 +1,6 @@
 // logic copied from https://github.com/mit-biomimetics/Cheetah-Software/blob/master/common/src/Controllers/PositionVelocityEstimator.cpp
 
+#include <Eigen/src/Core/Matrix.h>
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
 
@@ -61,6 +62,7 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
     frame_dt = parameter("frame_dt").asDouble().get(0.001);
 
     x_hat.setZero();
+    x_hat[2] = 0.18;
 
     ps.setZero(); vs.setZero();
     A.setIdentity();
@@ -83,14 +85,13 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
     
     P = Matrix18x18::Identity() * 100.0;
 
-    stage_callback = createCallback<std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, ImuData*, ImuInfo*, TrajectoryPoint*>(
-        {"estimate_state/joint_positions", "estimate_state/joint_velocities", "estimate_state/imu_data", "estimate_state/imu_info", "estimate_state/robot_trajectory_point"},
-        [this](std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, ImuData** imu_data_in, ImuInfo** imu_info_in, TrajectoryPoint** trajectory_point_out)
+    stage_callback = createCallback<std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, ImuData*, TrajectoryPoint*>(
+        {"estimate_state/joint_positions", "estimate_state/joint_velocities", "estimate_state/imu_data", "estimate_state/robot_trajectory_point"},
+        [this](std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, ImuData** imu_data_in, TrajectoryPoint** trajectory_point_out)
         {
-            if (*joint_positions_in == NULL) POND_LOG_RETURN("detect_foot_contacts/joint_positions is NULL");
-            if (*joint_velocities_in == NULL) POND_LOG_RETURN("detect_foot_contacts/joint_velocities is NULL");
-            if (*imu_data_in == NULL) POND_LOG_RETURN("detect_foot_contacts/imu_data is NULL");
-            if (*imu_info_in == NULL) POND_LOG_RETURN("detect_foot_contacts/imu_info is NULL");
+            if (*joint_positions_in == NULL) POND_LOG_RETURN("estimate_state/joint_positions is NULL");
+            if (*joint_velocities_in == NULL) POND_LOG_RETURN("estimate_state/joint_velocities is NULL");
+            if (*imu_data_in == NULL) POND_LOG_RETURN("estimate_state/imu_data is NULL");
             *trajectory_point_out = &trajectory_point;
 
             Matrix18x18 Q = Matrix18x18::Identity();
@@ -132,14 +133,14 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
                     jacobian.col(2) = (R[1] * Eigen::Vector3d::UnitY()).cross(p[3] - p[2]);
                 }
 
-                Eigen::Vector3d p_foot = p[3] + cfg.legs[i].origin_pos;
+                Eigen::Vector3d p_foot = p[3] + cfg.legs[i].origin_pos - Eigen::Vector3d(0, 0, cfg.legs[i].foot_radius);
                 Eigen::Vector3d v_foot = jacobian * joint_velocities_in[0][0][i];
 
                 Eigen::Vector3d p_f = Rbod * p_foot;
                 Eigen::Vector3d dp_f = Rbod * (imu_data_in[0]->ang_vel.cross(p_foot) + v_foot);
 
                 double trust = 1.0, trust_window = 0.2;
-                double phase = fmin(/*MISSING contact estimate*/ 1.0, 1.0);
+                double phase = fmin(/*MISSING contact estimate*/ 0.5, 1.0);
 
                 if      (phase <        trust_window ) trust =        phase  / trust_window;
                 else if (phase > (1.0 - trust_window)) trust = (1.0 - phase) / trust_window;
@@ -186,7 +187,4 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
     return POND_SUCCESS;
 }
 
-void StateEstimator::onShutdownTF()
-{
-    stage_callback.destroy();
-}
+void StateEstimator::onShutdownTF() { stage_callback.destroy();}

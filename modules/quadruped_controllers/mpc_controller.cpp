@@ -101,7 +101,7 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
             if (*partial_durations_in == NULL)  POND_LOG_RETURN("update_mpc/partial_gait_durations  is NULL");
             if (*target_trajectory_in == NULL)  POND_LOG_RETURN("update_mpc/robot_target_trajectory is NULL");
             // trajectory starts at current state
-            if (target_trajectory_in[0]->size() < mpc_N+1) POND_LOG_RETURN("update_mpc/robot_trajectory_point.size (%d) < mpc_N+1 (%d)", target_trajectory_in[0]->size(), mpc_N+1);
+            if (target_trajectory_in[0]->size() < mpc_N+1) POND_LOG_RETURN("update_mpc/robot_target_trajectory.size (%d) < mpc_N+1 (%d)", target_trajectory_in[0]->size(), mpc_N+1);
             // TODO (maybe): check time deltas
             
             std::lock_guard<std::mutex> lock(mutex);

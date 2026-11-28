@@ -8,7 +8,7 @@ def mujoco(pm: Manager, torque_mode: bool):
 
     ctrl_type = "torque" if torque_mode else "position"
     
-    pm.set_thread_frame_time("simulation_thread", 0.001)
+    pm.set_thread_frame_time("simulation_thread", 0.004)
 
     with open(config_prefix + "description/mujoco_robot.xml", "r") as f_src:
         with open(config_prefix + "build/mujoco_robot.xml", "w") as f_dst:
