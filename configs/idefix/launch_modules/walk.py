@@ -92,11 +92,6 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
     pm.load_module("debug_distributor", "quadruped_controllers/debug_distributor", cfg.thread_name, cfg.kinematics_params)
     pm.load_module("motor_abstractor", "quadruped_controllers/motor_abstractor", cfg.thread_name, {**cfg.kinematics_params, "torque_mode": mpc_mode}, {"set_robot_joints" : "set_robot_joints_high_rate"})
 
-    if estimator:
-        pm.load_module("state_estimator", "quadruped_controllers/state_estimator", cfg.thread_name, cfg.kinematics_params)
-
-    pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
-
     pm.load_module(
         "robot_joint_rate_reducer", "utility/channel_filter", cfg.thread_name,
         {
@@ -105,6 +100,12 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
             "channels_out" : ["set_robot_joints"],
         },
     )
+
+    if estimator:
+        pm.load_module("state_estimator", "quadruped_controllers/zero_state_estimator", cfg.thread_name, cfg.kinematics_params)
+
+    pm.load_module("foot_contact_detector", "quadruped_controllers/foot_contact_detector", cfg.thread_name, cfg.kinematics_params)
+    pm.load_module("robot_trajectory_planner", "quadruped_controllers/robot_trajectory_planner", cfg.thread_name)
 
     pm.load_module("gait_scheduler", "quadruped_controllers/gait_scheduler", cfg.thread_name, {"only_swing" : False})
     
@@ -128,6 +129,7 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
                 ["convert_from_motor_feedback"] +
                (["estimate_state"] if estimator else []) +
                 ["detect_foot_contacts"] +
+                ["plan_trajectory"] +
                 ["schedule_gaits"] +
                (["update_mpc"] if mpc_mode else []) + 
                 ["evaluate_swing_trajectories"] +
@@ -140,8 +142,10 @@ def walk(pm: Manager, mpc_mode: bool, estimator: bool, hardware: bool):
                 [motor+"_command" for motor in cfg.motor_names] +
                 [motor+"_feedback" for motor in cfg.motor_names] +
                 ["joint_positions", "joint_velocities", "joint_target_torques" if mpc_mode else "joint_target_positions"] +
-                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_vel", "cmd_pose", "target_trajectory_states", "robot_trajectory_point", "imu_data", "imu_info"],
+                ["gait_phases", "gait_periods", "partial_gait_durations", "cmd_trajectory_point", "robot_target_trajectory", "target_swing_trajectory_points", "robot_trajectory_point", "imu_data", "ground_forces"],
 
-            "data_out" : (len(cfg.motor_names)*2)*[False] + [False, False, False, True, True, True, False, False, True, True, False, False]
+            "data_out" : (len(cfg.motor_names)*2)*[False] +
+                [False, False, False] +
+                [True, True, True, False, True, True, False, False, True]
         }
     )

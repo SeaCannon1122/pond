@@ -110,8 +110,7 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
             Eigen::Vector4d pzs = Eigen::Vector4d::Zero();
             Eigen::Vector4d trusts = Eigen::Vector4d::Zero();
 
-            Eigen::Vector3d p0; p0 << x_hat[0], x_hat[1], x_hat[2];
-            Eigen::Vector3d v0; v0 << x_hat[3], x_hat[4], x_hat[5];
+            Eigen::Vector3d p0 = x_hat.segment<3>(0), v0 = x_hat.segment<3>(3);
 
             for (uint32_t i = 0, i1 = 0; i < 4; i++, i1 = 3*i)
             {
@@ -128,15 +127,9 @@ pond_result StateEstimator::onStartupTF(const std::vector<void*>& args)
                     R[2] = R[1] * Sophus::SO3d::rotY(joint_positions_in[0][0][i][2]);
                     p[3] = p[2] + R[2] * cfg.legs[i].segments[2].offset;
 
-                    Eigen::Vector3d w[3] = {
-                            Eigen::Vector3d::UnitX(),
-                        R[0] * Eigen::Vector3d::UnitY(),
-                        R[1] * Eigen::Vector3d::UnitY()
-                    };
-
-                    jacobian.col(0) = w[0].cross(p[3] - p[0]);
-                    jacobian.col(1) = w[1].cross(p[3] - p[1]);
-                    jacobian.col(2) = w[2].cross(p[3] - p[2]);
+                    jacobian.col(0) = (       Eigen::Vector3d::UnitX()).cross(p[3] - p[0]);
+                    jacobian.col(1) = (R[0] * Eigen::Vector3d::UnitY()).cross(p[3] - p[1]);
+                    jacobian.col(2) = (R[1] * Eigen::Vector3d::UnitY()).cross(p[3] - p[2]);
                 }
 
                 Eigen::Vector3d p_foot = p[3] + cfg.legs[i].origin_pos;

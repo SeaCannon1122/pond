@@ -1,5 +1,5 @@
 #include <pond/pond.hpp>
-#include <pond_data_types/command_types.hpp>
+#include <pond_data_types/trajectory_types.hpp>
 #include <pond_data_types/transform_types.hpp>
 
 enum GaitType
@@ -45,12 +45,11 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
     periods.resize(4);
     partial_durations.resize(2);
 
-    schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<bool>*, TwistCommand*, FrameTransform*>(
-        {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/cmd_vel", "schedule_gaits/cmd_pose"},
-        [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TwistCommand** twist_cmd_in, FrameTransform** pose_cmd_in)
+    schedule_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<bool>*, TrajectoryPoint*>(
+        {"schedule_gaits/gait_periods", "schedule_gaits/partial_gait_durations", "schedule_gaits/gait_phases", "schedule_gaits/cmd_trajectory_point"},
+        [this](std::vector<double>** periods_out, std::vector<double>** partial_durations_out, std::vector<bool>** phases_out, TrajectoryPoint** cmd_point_in)
         {
-            if (*twist_cmd_in == NULL) POND_LOG_RETURN("schedule_gaits/cmd_vel is NULL");
-            if (*pose_cmd_in == NULL) POND_LOG_RETURN("schedule_gaits/cmd_pose is NULL");
+            if (*cmd_point_in == NULL) POND_LOG_RETURN("schedule_gaits/cmd_trajectory_point is NULL");
 
             *periods_out = &periods;
             *phases_out = &phases;
@@ -61,7 +60,7 @@ pond_result GaitScheduler::onStartup(const std::vector<void*>& args)
 
             for (uint32_t i = 0; i < 4; i++) periods[i] = time_now;
 
-            bool walk = (std::abs(twist_cmd_in[0]->lin[0]) > 0.001 || std::abs(twist_cmd_in[0]->lin[1]) > 0.001 || std::abs(twist_cmd_in[0]->ang[2]) > 0.001);
+            bool walk = (std::abs(cmd_point_in[0]->lin_vel[0]) > 0.001 || std::abs(cmd_point_in[0]->lin_vel[1]) > 0.001 || std::abs(cmd_point_in[0]->ang_vel[2]) > 0.001);
 
             if (walk) switch (gait_type.load())
             {

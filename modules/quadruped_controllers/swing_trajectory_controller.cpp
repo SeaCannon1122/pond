@@ -1,6 +1,5 @@
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
-#include <pond_data_types/command_types.hpp>
 
 #include "swing_trajectory.hpp"
 
@@ -54,33 +53,28 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
     stage_callback = createCallback<
         std::vector<double>*, 
         std::vector<double>*, 
-        TwistCommand*, 
-        FrameTransform*,
+        TrajectoryPoint*,
         std::vector<TrajectoryPoint>*
     >(
         {
             "evaluate_swing_trajectories/gait_periods",
             "evaluate_swing_trajectories/partial_gait_durations",
-            "evaluate_swing_trajectories/cmd_vel",
-            "evaluate_swing_trajectories/cmd_pose",
-            "evaluate_swing_trajectories/target_trajectory_states",
+            "evaluate_swing_trajectories/cmd_trajectory_point",
+            "evaluate_swing_trajectories/target_swing_trajectory_points",
         },
         [this](
             std::vector<double>** periods_in,
             std::vector<double>** partial_durations_in,
-            TwistCommand** twist_cmd_in,
-            FrameTransform** pose_tf_in,
+            TrajectoryPoint** cmd_point_in,
             std::vector<TrajectoryPoint>** target_trajectory_states_out
         )
         {
             if (*periods_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/gait_periods is NULL");
             if (*partial_durations_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/partial_gait_durations is NULL");
-            if (*twist_cmd_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/cmd_vel is NULL");
-            if (*pose_tf_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/cmd_pose is NULL");
+            if (*cmd_point_in == NULL) POND_LOG_RETURN("evaluate_swing_trajectories/cmd_trajectory_point is NULL");
 
             *target_trajectory_states_out = &trajectory_states;
 
-            TwistCommand twist_cmd = **twist_cmd_in;
             double T_st = partial_durations_in[0][0][0], T_sw = partial_durations_in[0][0][1];
             double gait_duration = T_st + T_sw;
             
@@ -90,8 +84,8 @@ pond_result SwingTrajectoryController::onStartupTF(const std::vector<void*>& arg
                 {
                     for (uint32_t i = 0; i < 4; i++) foot_velocities[i] =
                     {
-                        twist_cmd.lin[0] - twist_cmd.ang[2] * foot_base_positions[i][1], 
-                        twist_cmd.lin[1] + twist_cmd.ang[2] * foot_base_positions[i][0]
+                        cmd_point_in[0]->lin_vel[0] - cmd_point_in[0]->ang_vel[2] * foot_base_positions[i][1], 
+                        cmd_point_in[0]->lin_vel[1] + cmd_point_in[0]->ang_vel[2] * foot_base_positions[i][0]
                     };
                     
                     double max_velocity = 0.0;

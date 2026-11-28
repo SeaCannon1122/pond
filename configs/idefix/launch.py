@@ -24,7 +24,7 @@ def main():
 
     mujoco(pm, mpc_mode)
 
-    walk(pm, mpc_mode, True, False)
+    walk(pm, mpc_mode, False, False)
 
     ros2_bridge(pm)
 

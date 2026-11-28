@@ -22,14 +22,10 @@ public:
     virtual pond_result onStartupTF(const std::vector<void*>& args) override;
     virtual void onShutdownTF() override;
 private:
-
     bool calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity);
 
-    pond::Callback force_callback, stage_callback;
-    std::vector<Eigen::Vector3d> forces_buf;
-    std::mutex mutex;
-
     QuadrupedRobotConfig cfg;
+    pond::Callback stage_callback;
 
     double natural_frequency, oob_spring_frequency, max_swing_torque, determinant_threshold;
 
@@ -45,25 +41,26 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
     oob_spring_frequency = parameter("oob_spring_frequency").asDouble().get(2.0);
     max_swing_torque = parameter("max_swing_torque").asDouble().get(1.0);
 
-    forces_buf.resize(4, Eigen::Vector3d::Zero());
-
     if (!cfg.init(*this)) return POND_ERROR;
     for (uint32_t l = 0; l < 4; l++) last_oob_free_joint_positions[l] = Eigen::Vector3d(0, 0, cfg.legs[l].segments[2].joint_max); 
 
-    stage_callback = createCallback<std::vector<bool>*, std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*>({
-            "calculate_torque/gait_phases", "calculate_torque/target_trajectory_states", "calculate_torque/joint_positions", "calculate_torque/joint_velocities", "calculate_torque/joint_target_torques"
-        }, [this](std::vector<bool>** gait_phases, std::vector<TrajectoryPoint>** ref_states, std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, std::array<Eigen::Vector3d, 4>** joint_target_torques_out) {
+    stage_callback = createCallback<
+        std::vector<bool>*, std::vector<TrajectoryPoint>*, std::vector<Eigen::Vector3d>*,
+        std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*, std::array<Eigen::Vector3d, 4>*
+    >({
+        "calculate_torque/gait_phases", "calculate_torque/target_swing_trajectory_points", "calculate_torque/ground_forces",
+        "calculate_torque/joint_positions", "calculate_torque/joint_velocities", "calculate_torque/joint_target_torques"
+    }, [this](
+        std::vector<bool>** gait_phases, std::vector<TrajectoryPoint>** ref_states, std::vector<Eigen::Vector3d>** ground_forces_in,
+        std::array<Eigen::Vector3d, 4>** joint_positions_in, std::array<Eigen::Vector3d, 4>** joint_velocities_in, std::array<Eigen::Vector3d, 4>** joint_target_torques_out) {
 
-        if (*gait_phases == NULL) POND_LOG_RETURN("calculate_torque/gait_phases is NULL");
-        if (*ref_states == NULL) POND_LOG_RETURN("calculate_torque/target_trajectory_states is NULL");
-        if (*joint_positions_in == NULL) POND_LOG_RETURN("calculate_torque/joint_positions is NULL");
+        if (*gait_phases == NULL)         POND_LOG_RETURN("calculate_torque/gait_phases is NULL");
+        if (*ref_states == NULL)          POND_LOG_RETURN("calculate_torque/target_swing_trajectory_points is NULL");
+        if (*ground_forces_in == NULL)    POND_LOG_RETURN("calculate_torque/ground_forces is NULL");
+        if (*joint_positions_in == NULL)  POND_LOG_RETURN("calculate_torque/joint_positions is NULL");
         if (*joint_velocities_in == NULL) POND_LOG_RETURN("calculate_torque/joint_velocities is NULL");
 
         *joint_target_torques_out = &target_torques;
-
-        mutex.lock();
-        std::vector<Eigen::Vector3d> forces = forces_buf;
-        mutex.unlock();
 
         for (uint32_t i = 0; i < 4; i++)
         {
@@ -118,7 +115,7 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
 
                 for (uint32_t j = 0; j < 3; j++) torque[j] = std::clamp(torque[j], -max_swing_torque, max_swing_torque);
             }
-            else if (oob == 0) torque = dynamics.jacobian.transpose() * (-forces[i]);
+            else if (oob == 0) torque = -dynamics.jacobian.transpose() * ground_forces_in[0][0][i];
             
             for (uint32_t j = 0; j < 3; j++)
             {
@@ -135,19 +132,10 @@ pond_result LegTorqueController::onStartupTF(const std::vector<void*>& args)
         }
     });
 
-    force_callback = createCallback<std::vector<Eigen::Vector3d>>({"ground_forces"}, [this](std::vector<Eigen::Vector3d>* forces_in) {
-        std::lock_guard<std::mutex> lock(mutex);
-        forces_buf = *forces_in;
-    });
-
     return POND_SUCCESS;
 }
 
-void LegTorqueController::onShutdownTF()
-{
-    stage_callback.destroy();
-    force_callback.destroy();
-}
+void LegTorqueController::onShutdownTF() { stage_callback.destroy(); }
 
 bool LegTorqueController::calculate_leg_dynamics(uint32_t leg_i, leg_dynamics& dynamics, const Eigen::Vector3d& q, const Eigen::Vector3d& q_dot, const Eigen::Vector3d& gravity)
 {

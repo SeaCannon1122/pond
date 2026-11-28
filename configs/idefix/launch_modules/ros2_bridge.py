@@ -92,11 +92,11 @@ class cfg:
             "pond" : {"channel" : "debug/foot_poses",               "type" : "std::vector<FrameTransform>"},
             "ros"  : {"topic"   : "debug/foot_poses",               "type" : "geometry_msgs::msg::PoseArray"}  
         },
-        ###### target_trajectory_states ######
+        ###### target_swing_trajectory_points ######
         {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),
 
-            "pond" : {"channel" : "target_trajectory_states/out",   "type" : "std::vector<TrajectoryPoint>"},
-            "ros"  : {"topic"   : "debug/target_trajectory_states", "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
+            "pond" : {"channel" : "target_swing_trajectory_points/out",   "type" : "std::vector<TrajectoryPoint>"},
+            "ros"  : {"topic"   : "debug/target_swing_trajectory_points", "type" : "trajectory_msgs::msg::MultiDOFJointTrajectoryPoint"}  
         },
         ###### motor_feedbacks ######
         {   "direction" : "POND_TO_ROS", "rate" : int(0.005 / walk.cfg.frame_dt),

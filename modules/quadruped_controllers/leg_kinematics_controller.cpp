@@ -25,10 +25,10 @@ pond_result LegKinematicsController::onStartupTF(const std::vector<void*>& args)
     if (!cfg.init(*this)) return POND_ERROR;
 
     stage_callback = createCallback<std::vector<TrajectoryPoint>*, std::array<Eigen::Vector3d, 4>*>(
-        {"calculate_joint_angles/target_trajectory_states", "calculate_joint_angles/joint_target_positions"},
+        {"calculate_joint_angles/target_swing_trajectory_points", "calculate_joint_angles/joint_target_positions"},
         [this](std::vector<TrajectoryPoint>** trajectory_states_in, std::array<Eigen::Vector3d, 4>** joint_target_positions_out)
         {
-            if (*trajectory_states_in == NULL) POND_LOG_RETURN("calculate_joint_angles/target_trajectory_states is NULL");
+            if (*trajectory_states_in == NULL) POND_LOG_RETURN("calculate_joint_angles/target_swing_trajectory_points is NULL");
             *joint_target_positions_out = &target_positions;
 
             auto law_of_cosines = +[](double l1, double l2, double b, double* theta) -> bool

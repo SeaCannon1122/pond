@@ -1,11 +1,11 @@
 #include <pond/pond.hpp>
 #include <pond/hpp/module_base_tf.hpp>
-#include <pond_data_types/command_types.hpp>
 #include <pond_data_types/trajectory_types.hpp>
 
-#include "pond/h/module.h"
+#include "pond/hpp/module_base.hpp"
 #include "quadruped_robot_config.hpp"
 #include <qpOASES.hpp>
+#include <vector>
 
 using Vector13 = Eigen::Vector<double, 13>;
 using Matrix13 = Eigen::Matrix<double, 13, 13>;
@@ -23,30 +23,25 @@ public:
     virtual pond_result onStartupTF(const std::vector<void*>& args) override;
     virtual void onShutdownTF() override;
     virtual void onFrame() override;
+    void calculate_forces();
 
 private:
     QuadrupedRobotConfig cfg;
 
     pond::Callback update_callback;
-    pond::DistributorTyped<std::vector<Eigen::Vector3d>> force_distributor;
-    std::vector<Eigen::Vector3d> forces;
 
-    TwistCommand twist_cmd_rec;
-    FrameTransform pose_cmd_rec;
+    std::vector<Eigen::Vector3d> forces_send, forces;
+    std::vector<TrajectoryPoint> trajectory_rec;
     std::array<double, 2> partial_durations_rec = {1.0, 0.0};
     std::array<double, 4> periods_rec = {0.0, 0.0, 0.0, 0.0};
-    TrajectoryPoint current_trajectory_point_rec;
     std::mutex mutex;
     
     bool debug_log;
 
-    double robot_mass, robot_mu;
+    double robot_mass, robot_mu, mpc_alpha, mpc_dt;
     std::vector<double> robot_f_range;
     Eigen::Matrix3d robot_I_body;
-
-    double mpc_alpha, mpc_dt; uint32_t mpc_N, mpc_max_iter;
-
-    uint32_t nV;
+    uint32_t mpc_N, mpc_max_iter, nV;
 
     // work quantities
     std::vector<Matrix13> A_powers;
@@ -55,7 +50,6 @@ private:
 
     MatrixXdRM H, B_qp, A, Q;
     Eigen::VectorXd g, solution, errors, lbA, ubA, lb, ub;
-
     std::vector<std::array<bool, 4>> foot_contacts;
 };
 
@@ -98,78 +92,71 @@ pond_result MPCController::onStartupTF(const std::vector<void*>& args)
     A.resize(max_nC, nV);
     lbA.resize(max_nC); ubA.resize(max_nC); lb.resize(nV); ub.resize(nV);
         
-    forces.resize(4);
-    force_distributor = createDistributorTyped<std::vector<Eigen::Vector3d>>({"ground_forces"});
+    forces_send.resize(4, Eigen::Vector3d::Zero()); forces.resize(4);
 
-    update_callback = createCallback<std::vector<double>*, std::vector<double>*, TwistCommand*, FrameTransform*, TrajectoryPoint*>(
-        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/cmd_vel", "update_mpc/cmd_pose", "update_mpc/robot_trajectory_point"},
-        [this](std::vector<double>** periods_in, std::vector<double>** partial_durations_in, TwistCommand** twist_cmd_in, FrameTransform** pose_tf_in, TrajectoryPoint** trajectory_point_in)
-        {
-            if (*periods_in == NULL)            POND_LOG_RETURN("update_mpc/gait_periods is NULL");
-            if (*partial_durations_in == NULL)  POND_LOG_RETURN("update_mpc/partial_gait_durations is NULL");
-            if (*twist_cmd_in == NULL)          POND_LOG_RETURN("update_mpc/cmd_vel is NULL");
-            if (*pose_tf_in == NULL)            POND_LOG_RETURN("update_mpc/cmd_pose is NULL");
-            if (*trajectory_point_in == NULL)   POND_LOG_RETURN("update_mpc/robot_trajectory_point is NULL");
-
+    update_callback = createCallback<std::vector<double>*, std::vector<double>*, std::vector<TrajectoryPoint>*, std::vector<Eigen::Vector3d>*>(
+        {"update_mpc/gait_periods", "update_mpc/partial_gait_durations", "update_mpc/robot_target_trajectory", "update_mpc/ground_forces"},
+        [this](std::vector<double>** periods_in, std::vector<double>** partial_durations_in, std::vector<TrajectoryPoint>** target_trajectory_in, std::vector<Eigen::Vector3d>** forces_out){
+            if (*periods_in == NULL)            POND_LOG_RETURN("update_mpc/gait_periods            is NULL");
+            if (*partial_durations_in == NULL)  POND_LOG_RETURN("update_mpc/partial_gait_durations  is NULL");
+            if (*target_trajectory_in == NULL)  POND_LOG_RETURN("update_mpc/robot_target_trajectory is NULL");
+            // trajectory starts at current state
+            if (target_trajectory_in[0]->size() < mpc_N+1) POND_LOG_RETURN("update_mpc/robot_trajectory_point.size (%d) < mpc_N+1 (%d)", target_trajectory_in[0]->size(), mpc_N+1);
+            // TODO (maybe): check time deltas
+            
             std::lock_guard<std::mutex> lock(mutex);
 
             for (uint32_t i = 0; i < 2; i++) partial_durations_rec[i] = partial_durations_in[0][0][i];
             for (uint32_t i = 0; i < 4; i++) periods_rec[i] = periods_in[0][0][i];
 
-            twist_cmd_rec = **twist_cmd_in;
-            pose_cmd_rec = **pose_tf_in;
-            current_trajectory_point_rec = **trajectory_point_in;
+            trajectory_rec = **target_trajectory_in;
+            *forces_out = &forces_send;
         }
     );
 
     return POND_SUCCESS;
 }
 
-void MPCController::onShutdownTF()
-{
-    update_callback.destroy();
-    force_distributor.destroy();
-}
+void MPCController::onShutdownTF() { update_callback.destroy();}
 
 void MPCController::onFrame()
 {
-    double time_now = pond::get_time();
+    for (uint32_t i = 0; i < 4; i++) forces[i].setZero();
 
+    double start_time = pond::get_monotonic_time();
+    calculate_forces();
+    if (debug_log) POND_LOG("MPC iteration complete: %.2f ms", (pond::get_monotonic_time() - start_time)*1000.0);
+
+    std::lock_guard<std::mutex> lock(mutex);
+    forces_send = forces;
+}
+
+void MPCController::calculate_forces()
+{
     mutex.lock();
 
-    auto twist_cmd = twist_cmd_rec;
-    auto pose_cmd = pose_cmd_rec;
+    std::vector<TrajectoryPoint> target_traj = trajectory_rec;
     double gait_duration = partial_durations_rec[0] + partial_durations_rec[1];
     double stance_duration = partial_durations_rec[0];
     auto gait_periods = periods_rec;
-    TrajectoryPoint current_state = current_trajectory_point_rec;
 
     mutex.unlock();
 
-    if (current_state.stamp.time == 0 || twist_cmd.stamp.time == 0) return;
-
-    Eigen::Matrix3d current_rotation = current_state.pose.so3().matrix();
-    Eigen::Vector3d current_angles = { // roll pitch yaw
-        std::atan2(current_rotation(2,1), current_rotation(2,2)),
-        -std::asin(std::clamp(current_rotation(2,0), -1.0, 1.0)),
-        0
-    };
-
-    Eigen::Matrix3d pose_cmd_rotation = pose_cmd.tf.so3().matrix();
-    Eigen::Vector3d pose_cmd_angles = pose_cmd_rotation.eulerAngles(2, 1, 0).reverse();
+    if (target_traj.size() == 0) return;
 
     GetFrameTransformRequest tf_request;
     std::array<Eigen::Vector3d, 4> foot_r_world;
     for (uint32_t i = 0; i < 4; i++)
     {
         if (!tfGetTransform(cfg.foot_link_names[i], cfg.base_link_name, 0, tf_request)) return;
-        foot_r_world[i] = current_rotation * tf_request.tf.translation() + Eigen::Vector3d(0,0, -cfg.legs[i].foot_radius);
+        foot_r_world[i] = target_traj[0].pose.so3() * tf_request.tf.translation() + Eigen::Vector3d(0,0, -cfg.legs[i].foot_radius);
     }
 
-    double start_time = pond::get_monotonic_time();
+    double avg_yaw = 0;
+    for (uint32_t i = 1; i < mpc_N+1; i++) avg_yaw += target_traj[i].rpy[2] / (double)mpc_N;
 
     Matrix13 A_c = Matrix13::Zero();
-    A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(twist_cmd.ang[2] * mpc_dt * (double)mpc_N / 2.0).matrix().transpose();
+    A_c.block<3,3>(0,6) = Sophus::SO3d::rotZ(avg_yaw).matrix().transpose();
     A_c.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
     A_c(11,12) = -1.0; 
 
@@ -178,48 +165,30 @@ void MPCController::onFrame()
     A_powers[0] = Matrix13::Identity();
     for (uint32_t n = 0; n < mpc_N; n++) A_powers[n+1] = A_powers[n] * A_hat;
     
-    double yaw_integrated = 0;
-    auto yaw_integrated_rot = Sophus::SO3d::rotZ(yaw_integrated);
-    auto rotated_cmd_lin = yaw_integrated_rot * twist_cmd.lin;
-    Eigen::Vector3d pos_integrated = Eigen::Vector3d::Zero();
-    
     for (uint32_t n = 0; n < mpc_N; n++)
     {
-        Eigen::Vector3d delta_pos = rotated_cmd_lin * mpc_dt;
-
         Matrix13x12 B_c = Matrix13x12::Zero();
-
-        Eigen::Matrix3d I_hat_inv = (yaw_integrated_rot.matrix() * robot_I_body * yaw_integrated_rot.matrix().transpose()).inverse();
+        auto yaw_rot = Sophus::SO3d::rotZ(target_traj[n].rpy[2]).matrix();
+        Eigen::Matrix3d I_hat_inv = (yaw_rot * robot_I_body * yaw_rot.transpose()).inverse();
 
         for (uint32_t i = 0; i < 4; i++)
         {
             auto& r = foot_r_world[i];
-
             Eigen::Matrix3d r_cross; r_cross << 0, -r[2], r[1], r[2], 0, -r[0], -r[1], r[0], 0;
             
             B_c.block<3,3>(6, 3*i) = I_hat_inv * r_cross;
             B_c.block<3,3>(9, 3*i).setIdentity();
             B_c.block<3,3>(9, 3*i) /= robot_mass;
 
-            r -= delta_pos;
+            r -= target_traj[n+1].pose.translation() - target_traj[n].pose.translation();
         }
         
-        yaw_integrated += twist_cmd.ang[2] * mpc_dt;
-        pos_integrated += delta_pos;
-        yaw_integrated_rot = Sophus::SO3d::rotZ(yaw_integrated);
-        rotated_cmd_lin = yaw_integrated_rot * twist_cmd.lin;
-
         B_hat_sequence[n] = mpc_dt*B_c + 0.5*mpc_dt*mpc_dt*A_c*B_c;
 
-        x_ref_sequence[n] <<
-            pose_cmd_angles[0], pose_cmd_angles[1], yaw_integrated,
-            pos_integrated[0], pos_integrated[1], pose_cmd.tf.translation().z(),
-            twist_cmd.ang,
-            rotated_cmd_lin[0], rotated_cmd_lin[1], 0.0,
-            G_ACCEL;
+        x_ref_sequence[n] << target_traj[n+1].rpy, target_traj[n+1].pose.translation(), target_traj[n+1].ang_vel, target_traj[n+1].lin_vel, G_ACCEL;
     }
 
-    Vector13 x_current; x_current << current_angles[0], current_angles[1], 0, 0, 0, current_state.pose.translation().z(), current_state.ang_vel, current_state.lin_vel, G_ACCEL;
+    Vector13 x_current; x_current << target_traj[0].rpy, target_traj[0].pose.translation(), target_traj[0].ang_vel, target_traj[0].lin_vel, G_ACCEL;
 
     B_qp.setZero();
     for (uint32_t n = 0; n < mpc_N; n++) for (uint32_t j = 0; j <= n; j++)
@@ -246,10 +215,6 @@ void MPCController::onFrame()
     {
         if (H_nan) POND_LOG("ERROR H contains NaN!");
         if (g_nan) POND_LOG("ERROR g contains NaN!");
-
-        for (uint32_t i = 0; i < 4; i++) forces[i].setZero();
-        force_distributor.distribute(&forces);
-
         return;
     }
 
@@ -270,15 +235,15 @@ void MPCController::onFrame()
             // 4)  f_y ≤ μ·f_z      5) -f_y ≤ μ·f_z
 
             Eigen::Vector3d A_vals[] = {
-                {0, 0, 1}, {0, 0, 1}, 
+                {0, 0, 1},         {0, 0, 1}, 
                 {1, 0, -robot_mu}, {-1, 0, -robot_mu},
                 {0, 1, -robot_mu}, {0, -1, -robot_mu}
             };
 
             Eigen::Vector2d bounds[] = {
                 {robot_f_range[0], qpOASES::INFTY}, {-qpOASES::INFTY, robot_f_range[1]},
-                {-qpOASES::INFTY, 0}, {-qpOASES::INFTY, 0},
-                {-qpOASES::INFTY, 0}, {-qpOASES::INFTY, 0},
+                {-qpOASES::INFTY, 0},               {-qpOASES::INFTY, 0},
+                {-qpOASES::INFTY, 0},               {-qpOASES::INFTY, 0},
             };
 
             for (uint32_t i = 0; i < 6; i++, constraint_idx++)
@@ -290,9 +255,6 @@ void MPCController::onFrame()
         else lb[idx] = ub[idx] = lb[idx+1] = ub[idx+1] = lb[idx+2] = ub[idx+2] = 0.0; // Set force for airborne feet to 0
     }
 
-    // === 3. SOLVE QP ===
-    double qp_start_time = pond::get_monotonic_time();
-
     qpOASES::QProblem qp_solver(nV, nC);
     qpOASES::int_t nWSR = mpc_max_iter;
     
@@ -303,13 +265,17 @@ void MPCController::onFrame()
     options.enableFlippingBounds = qpOASES::BT_FALSE;
     qp_solver.setOptions(options);
 
-    qpOASES::returnValue status = qp_solver.init(
-        H.data(), g.data(), A.data(),
-        lb.data(), ub.data(), lbA.data(), ubA.data(), nWSR,
-        NULL, NULL, NULL, NULL, NULL, NULL
-    );
+    double qp_start_time = pond::get_monotonic_time();
+
+    qpOASES::returnValue status = qp_solver.init(H.data(), g.data(), A.data(), lb.data(), ub.data(), lbA.data(), ubA.data(), nWSR, NULL, NULL, NULL, NULL, NULL, NULL);
     
-    if (status == qpOASES::SUCCESSFUL_RETURN || status == qpOASES::RET_MAX_NWSR_REACHED) qp_solver.getPrimalSolution(solution.data());
+    if (debug_log) POND_LOG("QP solve time: %.2f ms (%d iterations)", (pond::get_monotonic_time() - qp_start_time)*1000.0, nWSR);
+
+    if (status == qpOASES::SUCCESSFUL_RETURN || status == qpOASES::RET_MAX_NWSR_REACHED)
+    {
+        qp_solver.getPrimalSolution(solution.data());
+        if (debug_log && status == qpOASES::RET_MAX_NWSR_REACHED) POND_LOG("Max iterations reached (%d)", mpc_max_iter);
+    }
     else
     {
         POND_LOG("ERROR QP failed! Status: %d - %s", status, qpOASES::MessageHandling::getErrorCodeMessage(status));
@@ -323,15 +289,10 @@ void MPCController::onFrame()
             double fallback_norm = solution.norm();
             POND_LOG("Eigen fallback succeeded, solution norm: %.4f", fallback_norm);
         }
-        else POND_LOG("ERROR Eigen LLT decomposition failed");
+        else POND_LOG_RETURN("ERROR Eigen LLT decomposition failed");
     }
-    
     if (double solution_norm = solution.norm(); solution_norm < 1e-10) POND_LOG("Solution is all zeros (norm=%.2e)", solution_norm);
-    
-    if (debug_log) POND_LOG("QP solve time: %.2f ms (%d iterations)", (pond::get_monotonic_time() - qp_start_time)*1000.0, nWSR);
 
-    for (uint32_t i = 0; i < 4; i++) forces[i] = solution.segment<3>(3 * i);
-    force_distributor.distribute(&forces);
-
-    if (debug_log) POND_LOG("MPC iteration complete: %.2f ms", (pond::get_monotonic_time() - start_time)*1000.0);
+    Sophus::SO3d world_to_body = target_traj[0].pose.so3().inverse();
+    for (uint32_t i = 0; i < 4; i++) forces[i] = world_to_body * solution.segment<3>(3 * i);
 }
